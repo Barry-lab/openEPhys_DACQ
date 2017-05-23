@@ -1,0 +1,278 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Setup for Open Ephys Recordings and Analysis &mdash; Recording PC Setup 0.1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="Recording PC Setup 0.1 documentation" href="#"/>
+        <link rel="next" title="Recording PC setup for Data Acquisition" href="recordingPCandOpenEphysGUI.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="#" class="icon icon-home"> Recording PC Setup
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="recordingPCandOpenEphysGUI.html">Recording PC setup for Data Acquisition</a></li>
+<li class="toctree-l1"><a class="reference internal" href="raspberryPiSetup.html">Raspberry Pi tracking and related networking setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howToUseTheseScripts.html">Tutorial for using Open Ephys Scripts</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="#">Recording PC Setup</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="#">Docs</a> &raquo;</li>
+      
+    <li>Setup for Open Ephys Recordings and Analysis</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="_sources/index.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="setup-for-open-ephys-recordings-and-analysis">
+<h1>Setup for Open Ephys Recordings and Analysis<a class="headerlink" href="#setup-for-open-ephys-recordings-and-analysis" title="Permalink to this headline">¶</a></h1>
+<p>This document details every step required for setting up a PC for electrophysiological data collection using Open Ephys Acquisition Board and separate tracking system using Raspberry Pis.</p>
+<p>To allow recreating this setup, this document is an attempt to detail every single step, every line of code required to get things running. Therefore, it is definitely painfully long to work through for an advanced user, if not amusing at times. But the hope is that based on this, anyone could set it up.</p>
+<p>Occasionally the document includes instructions in double brackets, where the steps may not me necessary but were made by me during the setup process. E.g. <em>((Do this, in case otherwise something will not work later on))</em>.</p>
+<p>All terminal commands written here should be run while in home directory, unless instructed to call on a specific file. This ensures a sensible folder structure is created.</p>
+<p>The instructions can be worked through in the order they are presented in the below table to set up the system from ground up.</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="recordingPCandOpenEphysGUI.html">Recording PC setup for Data Acquisition</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#setting-up-the-operating-system">Setting up the Operating System</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-ubuntu">Install Ubuntu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#fix-slow-shutdown-issue">Fix slow shutdown issue</a></li>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#connect-to-the-local-network">Connect to the local network</a></li>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#update-the-system">Update the system</a></li>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-additional-drivers">Install additional drivers</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#other-useful-steps">Other useful steps</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-git-for-using-github">Install git for using github</a></li>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#connect-to-a-network-drive">Connect to a network drive</a></li>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-google-chrome">Install Google Chrome</a></li>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-sublime-text-3-for-editing-scripts">Install Sublime Text 3 for editing scripts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-sphinx-for-editing-readthedocs-files">Install Sphinx for editing ReadTheDocs files</a></li>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-qt-designer-for-editing-guis">Install QT Designer for editing GUIs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#turn-off-screen-lock">Turn off screen lock</a></li>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-convenient-brightness-controller">Install convenient brightness controller</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-open-ephys-gui">Install Open Ephys GUI</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-dependencies">Install Dependencies</a></li>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-open-ephys">Install Open Ephys</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#intan-headstage-setup">Intan Headstage setup</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#reference-and-ground">Reference and Ground</a></li>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-leds-on-intan-headstage-for-tracking">Install LEDs on Intan Headstage for tracking</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#setup-recording-pc-for-using-recording-manager">Setup Recording PC for using Recording Manager</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-the-dependencies-for-the-scripts">Install the dependencies for the scripts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#make-changes-in-the-scripts-to-suit-your-pc">Make changes in the scripts to suit your PC</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="raspberryPiSetup.html">Raspberry Pi tracking and related networking setup</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="raspberryPiSetup.html#setting-up-raspberry-pi-with-camera-for-tracking">Setting up Raspberry Pi with camera for tracking</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="raspberryPiSetup.html#assembling-raspberry-pi-camera-module-and-coaxial-cable-plug">Assembling Raspberry Pi Camera Module and Coaxial Cable Plug</a></li>
+<li class="toctree-l3"><a class="reference internal" href="raspberryPiSetup.html#installing-raspberry-pi-os-raspbian">Installing Raspberry Pi OS: Raspbian</a></li>
+<li class="toctree-l3"><a class="reference internal" href="raspberryPiSetup.html#configuring-raspberry-pi">Configuring Raspberry Pi</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="raspberryPiSetup.html#setting-up-raspberry-pi-networking-with-recording-pc">Setting up Raspberry Pi networking with recording PC</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="raspberryPiSetup.html#id1">Configuring Raspberry Pi</a></li>
+<li class="toctree-l3"><a class="reference internal" href="raspberryPiSetup.html#configuring-the-recording-pc">Configuring the Recording PC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="raspberryPiSetup.html#configure-ssh-keys-to-avoid-password-requests">Configure SSH keys to avoid Password requests</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="raspberryPiSetup.html#making-copies-of-raspberry-pis">Making copies of Raspberry Pis</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCforDataProcessing.html#install-matlab">Install MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCforDataProcessing.html#install-klustakwik">Install Klustakwik</a></li>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCforDataProcessing.html#install-scripts-from-github">Install Scripts from GitHub</a></li>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCforDataProcessing.html#install-google-chrome-to-use-waveform-gui">Install Google Chrome to use Waveform GUI</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="howToUseTheseScripts.html">Tutorial for using Open Ephys Scripts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="howToUseTheseScripts.html#using-openephysgui">Using OpenEphysGUI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howToUseTheseScripts.html#using-recording-manager">Using Recording Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howToUseTheseScripts.html#camera-settings-and-calibration">Camera Settings and Calibration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howToUseTheseScripts.html#processing">Processing</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="recordingPCandOpenEphysGUI.html" class="btn btn-neutral float-right" title="Recording PC setup for Data Acquisition" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Sander Tanni.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'0.1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
