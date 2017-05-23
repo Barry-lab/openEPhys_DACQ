@@ -1,4 +1,5 @@
 # openEPhys_DACQ
-Find main README files in the /README/_build/html/index.html (which can be viewed with a browser)
+This repository holds the necessary code and instructions on how to use the OpenEphysGUI based electrophysiological recording system along with LED tracking system (using Raspberry Pis) on a Linux PC.
 
-**If you are new** a good starting point is …
+There is extensive documentation in the README folder. You can download it and view it by opening in a web browser the file **/README/_build/html/index.html**
+This documentation explains everything from installing the Operating System on the Recording PC and adding LEDs to the headstages to how to detect waveforms in the recorded signal.
