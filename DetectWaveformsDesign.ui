@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1100</width>
-    <height>854</height>
+    <width>1132</width>
+    <height>955</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -106,7 +106,7 @@
                 <number>50</number>
                </property>
                <property name="value">
-                <number>-200</number>
+                <number>-300</number>
                </property>
               </widget>
              </item>
@@ -125,7 +125,7 @@
                 <number>50</number>
                </property>
                <property name="value">
-                <number>200</number>
+                <number>300</number>
                </property>
               </widget>
              </item>
@@ -254,7 +254,7 @@
                 <number>50</number>
                </property>
                <property name="value">
-                <number>-200</number>
+                <number>-300</number>
                </property>
               </widget>
              </item>
@@ -273,7 +273,7 @@
                 <number>50</number>
                </property>
                <property name="value">
-                <number>200</number>
+                <number>300</number>
                </property>
               </widget>
              </item>
@@ -402,7 +402,7 @@
                 <number>50</number>
                </property>
                <property name="value">
-                <number>-200</number>
+                <number>-300</number>
                </property>
               </widget>
              </item>
@@ -421,7 +421,7 @@
                 <number>50</number>
                </property>
                <property name="value">
-                <number>200</number>
+                <number>300</number>
                </property>
               </widget>
              </item>
@@ -550,7 +550,7 @@
                 <number>50</number>
                </property>
                <property name="value">
-                <number>-200</number>
+                <number>-300</number>
                </property>
               </widget>
              </item>
@@ -569,7 +569,7 @@
                 <number>50</number>
                </property>
                <property name="value">
-                <number>200</number>
+                <number>300</number>
                </property>
               </widget>
              </item>
@@ -633,7 +633,7 @@
      <widget class="QFrame" name="f_buttons_2">
       <property name="minimumSize">
        <size>
-        <width>165</width>
+        <width>180</width>
         <height>0</height>
        </size>
       </property>
@@ -656,7 +656,7 @@
           <string>Referencing</string>
          </property>
          <property name="checked">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
         </widget>
        </item>
@@ -776,6 +776,124 @@
         </widget>
        </item>
        <item>
+        <widget class="QFrame" name="frame_2">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>60</height>
+          </size>
+         </property>
+         <property name="frameShape">
+          <enum>QFrame::StyledPanel</enum>
+         </property>
+         <property name="frameShadow">
+          <enum>QFrame::Raised</enum>
+         </property>
+         <layout class="QGridLayout" name="gridLayout_3">
+          <property name="margin">
+           <number>0</number>
+          </property>
+          <property name="spacing">
+           <number>0</number>
+          </property>
+          <item row="0" column="0">
+           <widget class="QPlainTextEdit" name="plainTextEdit_5">
+            <property name="minimumSize">
+             <size>
+              <width>100</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>95</width>
+              <height>29</height>
+             </size>
+            </property>
+            <property name="lineWrapMode">
+             <enum>QPlainTextEdit::WidgetWidth</enum>
+            </property>
+            <property name="readOnly">
+             <bool>true</bool>
+            </property>
+            <property name="plainText">
+             <string>d.Threshold:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QPlainTextEdit" name="pt_default_threshold">
+            <property name="minimumSize">
+             <size>
+              <width>35</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>29</height>
+             </size>
+            </property>
+            <property name="plainText">
+             <string>-4.00</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QPlainTextEdit" name="plainTextEdit_6">
+            <property name="minimumSize">
+             <size>
+              <width>100</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>95</width>
+              <height>29</height>
+             </size>
+            </property>
+            <property name="lineWrapMode">
+             <enum>QPlainTextEdit::WidgetWidth</enum>
+            </property>
+            <property name="readOnly">
+             <bool>true</bool>
+            </property>
+            <property name="plainText">
+             <string>d.VoltRange:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QPlainTextEdit" name="pt_default_voltage_range">
+            <property name="minimumSize">
+             <size>
+              <width>35</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>29</height>
+             </size>
+            </property>
+            <property name="plainText">
+             <string>300</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <layout class="QHBoxLayout" name="horizontalLayout_3" stretch="1,1">
          <item>
           <widget class="QPushButton" name="pb_prev">
@@ -851,7 +969,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1100</width>
+     <width>1132</width>
      <height>25</height>
     </rect>
    </property>

@@ -36,7 +36,26 @@ CentralIP = RPiSettings['centralIP']
 PosPort = RPiSettings['pos_port']
 StopPort = RPiSettings['stop_port']
 RPiIP = RPiSettings['RPiIP'][RPi_number]
-LED_max_distance = RPiSettings['LED_max_distance']
+LED_separation = RPiSettings['LED_separation']
+LED_max_distance = LED_separation * 1.25
+LED_radius = LED_separation / 2 # Later converted to pixel value
+# Load the Calibration Matrix
+with open('calibrationTmatrix.p', 'rb') as file:
+    calibrationTmatrix = pickle.load(file)
+# Simple stupid code to figure out how many pixels provides required LED radius in centimeters
+tmp_dists = [0]
+npix = 0
+tmp_loc = np.reshape(np.array([0, 0],dtype=np.float32),(1,1,2))
+tmp_dist0 = cv2.perspectiveTransform(tmp_loc, calibrationTmatrix) # Use transformation matrix to map pixel values to position in real world
+while npix < np.amin(imageres) and tmp_dists[-1] < LED_radius:
+    npix += 1
+    tmp_loc = np.reshape(np.array([0, npix],dtype=np.float32),(1,1,2))
+    tmp_dist1 = cv2.perspectiveTransform(tmp_loc, calibrationTmatrix) # Use transformation matrix to map pixel values to position in real world
+    distance = euclidean(np.array(tmp_dist0[0,0,0].astype('float'), tmp_dist0[0,0,1].astype('float')), \
+                         np.array(tmp_dist1[0,0,0].astype('float'), tmp_dist1[0,0,1].astype('float')))
+    tmp_dists.append(distance)
+best_npix = np.argmin(np.abs(np.array(tmp_dists) - LED_radius)) + 1
+LED_radius_pix = best_npix
 
 # Set up ZeroMQ
 # Set IP addresses and ports for sending position data and receiving stop command
@@ -77,12 +96,6 @@ def piStim():
 class Tracking(picamera.array.PiRGBAnalysis):
     # This class is the target output of frames captures with the camera
     # It is based on picamera.array.PiRGBAnalysis class, where many other functions are defined
-    def __init__(self, parent=None):
-        super(Tracking, self).__init__(parent)
-        # Get calibration data
-        with open('calibrationTmatrix.p', 'rb') as file:
-            self.calibrationTmatrix = pickle.load(file)
-
     def analyse(self, frame):
         # Each time a frame is catpured, this function is called on that frame
         piStim() # Send TTL pulse
@@ -92,20 +105,20 @@ class Tracking(picamera.array.PiRGBAnalysis):
         gray = cv2.GaussianBlur(gray, (smoothradius, smoothradius), 0) # Smooth the image
         (minVal, maxVal_1, minLoc, maxLoc_1) = cv2.minMaxLoc(gray) # Find coordinates of pixel with highest value
         maxLoc_1 = np.reshape(np.array([[maxLoc_1[0], maxLoc_1[1]]],dtype=np.float32),(1,1,2))
-        XYcoord_1 = cv2.perspectiveTransform(maxLoc_1, self.calibrationTmatrix) # Use transformation matrix to map pixel values to position in real world
+        XYcoord_1 = cv2.perspectiveTransform(maxLoc_1, calibrationTmatrix) # Use transformation matrix to map pixel values to position in real world
         if doubleLED:
             # Find the location of second brightest point
-            gray = cv2.circle(gray, (maxLoc_1[0,0,0], maxLoc_1[0,0,1]), 2 * smoothradius, 0, -1) # Make are at bright LED dark
+            gray = cv2.circle(gray, (maxLoc_1[0,0,0], maxLoc_1[0,0,1]), LED_radius_pix, 0, -1) # Make are at bright LED dark
             (minVal, maxVal_2, minLoc, maxLoc_2) = cv2.minMaxLoc(gray) # Find coordinates of pixel with highest value
             maxLoc_2 = np.reshape(np.array([[maxLoc_2[0], maxLoc_2[1]]],dtype=np.float32),(1,1,2))
-            XYcoord_2 = cv2.perspectiveTransform(maxLoc_2, self.calibrationTmatrix) # Use transformation matrix to map pixel values to position in real world
+            XYcoord_2 = cv2.perspectiveTransform(maxLoc_2, calibrationTmatrix) # Use transformation matrix to map pixel values to position in real world
             distance = euclidean(np.array(XYcoord_1[0,0,0].astype('float'), XYcoord_1[0,0,1].astype('float')), \
                                  np.array(XYcoord_2[0,0,0].astype('float'), XYcoord_2[0,0,1].astype('float')))
             if distance < LED_max_distance: # If 2nd LED is detected close enough
                 # Set data into compact format
-                linedata = [RPi_number, currenttime, frametime, XYcoord_2[0,0,0].astype('float'), \
-                            XYcoord_2[0,0,1].astype('float'), XYcoord_1[0,0,0].astype('float'), \
-                            XYcoord_1[0,0,1].astype('float'), maxVal_2, maxVal_1]
+                linedata = [RPi_number, currenttime, frametime, XYcoord_1[0,0,0].astype('float'), \
+                            XYcoord_1[0,0,1].astype('float'), XYcoord_2[0,0,0].astype('float'), \
+                            XYcoord_2[0,0,1].astype('float'), maxVal_1, maxVal_2]
             else: # If second LED is too far away to be real, move bright LED to primary position
                 linedata = [RPi_number, currenttime, frametime, XYcoord_1[0,0,0].astype('float'), \
                             XYcoord_1[0,0,1].astype('float'), None, None, maxVal_1, None]
@@ -124,9 +137,9 @@ class Tracking(picamera.array.PiRGBAnalysis):
         # Save frames as jpg images if requested. Slows framerate.
         if save_frames:
             # Paint circles at locations of detected LEDs with radius of the st.dev of smoothing step
-            frame = cv2.circle(frame, (maxLoc_1[0,0,0], maxLoc_1[0,0,1]), smoothradius, (255, 0, 0), 2)
+            frame = cv2.circle(frame, (maxLoc_1[0,0,0], maxLoc_1[0,0,1]), LED_radius_pix, (255, 0, 0), 2)
             if doubleLED:
-                frame = cv2.circle(frame, (maxLoc_2[0,0,0], maxLoc_2[0,0,1]), smoothradius, (0, 255, 0), 2)
+                frame = cv2.circle(frame, (maxLoc_2[0,0,0], maxLoc_2[0,0,1]), LED_radius_pix, (0, 255, 0), 2)
             cv2.imwrite('frame{}.jpg'.format(currenttime),frame)
 
 # Here is the actual core of the script

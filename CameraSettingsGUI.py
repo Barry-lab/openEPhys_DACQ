@@ -146,7 +146,8 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
                        'corner_offset': [float(str(self.pt_offset_x.toPlainText())), float(str(self.pt_offset_y.toPlainText()))], 
                        'calibration_square': float(str(self.pt_calibration_square.toPlainText())), 
                        'camera_iso': int(str(self.pt_camera_iso.toPlainText())), 
-                       'LED_max_distance': float(str(self.pt_LED_max_distance.toPlainText())), 
+                       'LED_separation': float(str(self.pt_LED_separation.toPlainText())), 
+                       'LED_angle': float(str(self.pt_LED_angle.toPlainText())), 
                        'shutter_speed': int(str(self.pt_shutter_speed.toPlainText())), 
                        'exposure_setting': str(self.lw_exposure_settings.currentItem().text()), 
                        'exposure_settings_selection': self.lw_exposure_settings.currentRow(), 
@@ -268,10 +269,12 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         self.pt_offset_x.setPlainText(str(RPiSettings['corner_offset'][0]))
         self.pt_offset_y.setPlainText(str(RPiSettings['corner_offset'][1]))
         self.pt_calibration_square.setPlainText(str(RPiSettings['calibration_square']))
+        self.pt_smooth_r.setPlainText(str(RPiSettings['smoothing_radius']))
+        self.pt_LED_separation.setPlainText(str(RPiSettings['LED_separation']))
+        self.pt_LED_angle.setPlainText(str(RPiSettings['LED_angle']))
         self.pt_camera_iso.setPlainText(str(RPiSettings['camera_iso']))
         self.pt_shutter_speed.setPlainText(str(RPiSettings['shutter_speed']))
         self.lw_exposure_settings.setCurrentRow(RPiSettings['exposure_settings_selection'])
-        self.pt_smooth_r.setPlainText(str(RPiSettings['smoothing_radius']))
         CamRes = RPiSettings['resolution']
         CamResStr = str(CamRes[0]) + ', ' + str(CamRes[1])
         self.pt_resolution.setPlainText(CamResStr)

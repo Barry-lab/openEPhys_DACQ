@@ -91,7 +91,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         super(RecordingManager, self).__init__(parent=parent)
         self.setupUi(self)
         # Set GUI environment
-        self.scripts_root = os.path.expanduser('~') + '/OpenEphysScripts'
+        self.scripts_root = os.path.expanduser('~') + '/openEPhys_DACQ'
         self.pt_root_folder.setPlainText(os.path.expanduser('~') + '/RecordingData')
         self.file_server_path = '/media/QNAP/room418'
         self.RecGUI_dataFolder = str(self.pt_root_folder.toPlainText()) + '/RecordingManagerData'
@@ -102,6 +102,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_load.clicked.connect(lambda:self.load_settings())
         self.pb_root_folder.clicked.connect(lambda:self.root_folder_browse())
         self.pb_badChan.clicked.connect(lambda:self.load_last_badChan())
+        self.pb_make_date_folder.clicked.connect(lambda:self.make_date_folder())
         self.pb_auto_rec_folder.clicked.connect(lambda:self.auto_rec_folder())
         self.pb_manual_rec_folder.clicked.connect(lambda:self.manual_rec_folder())
         self.pb_cam_set.clicked.connect(lambda:self.camera_settings())
@@ -146,15 +147,26 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
     def load_last_badChan(self):
         # Find the latest recording data in this animals path and load badChan into current GUI
         dir_animal = str(self.pt_root_folder.toPlainText()) + '/' + str(self.pt_animal.toPlainText())
-        if os.path.isdir(dir_animal):
+        if len(str(self.pt_animal.toPlainText())) > 0 and os.path.isdir(dir_animal):
             latest_date_folder = findLatestDateFolder(dir_animal)
             latest_folder = findLatestTimeFolder(dir_animal + '/' + latest_date_folder)
             full_path = dir_animal + '/' + latest_date_folder + '/' + latest_folder
-            with open(self.full_path + '/RecGUI_Settings.p','rb') as file:
+            with open(full_path + '/RecGUI_Settings.p','rb') as file:
                 RecGUI_Settings = pickle.load(file)
             self.pt_badChan.setPlainText(RecGUI_Settings['badChan'])
         else:
             self.pt_badChan.setPlainText('Could not find Animal Data!')
+
+    def make_date_folder(self):
+        dir_animal = str(self.pt_root_folder.toPlainText()) + '/' + str(self.pt_animal.toPlainText())
+        if len(str(self.pt_animal.toPlainText())) > 0 and os.path.isdir(dir_animal):
+            date_dir = dir_animal + '/' + datetime.now().strftime('%d-%m-%y')
+            if not os.path.exists(date_dir):
+                os.makedirs(date_dir)
+            else:
+                show_message('ERROR! Date Folder already exists for ' + str(self.pt_animal.toPlainText()))
+        else:
+            show_message('ERROR! Animal folder not found.')
 
     def load_settings(self, selected_file=None):
         if not selected_file: # Get user to select settings to load if not given
@@ -171,7 +183,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pt_experiment_id.setPlainText(RecGUI_Settings['experiment_id'])
         self.pt_experimenter.setPlainText(RecGUI_Settings['experimenter'])
         self.pt_badChan.setPlainText(RecGUI_Settings['badChan'])
-        self.pt_led_angle.setPlainText(RecGUI_Settings['led_angle'])
         self.pt_rec_folder.setPlainText(RecGUI_Settings['rec_folder'])
         self.rb_posPlot_yes.setChecked(RecGUI_Settings['PosPlot'])
         # Update RPi Camera Settings
@@ -245,7 +256,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
                            'experiment_id': str(self.pt_experiment_id.toPlainText()), 
                            'experimenter': str(self.pt_experimenter.toPlainText()), 
                            'badChan': str(self.pt_badChan.toPlainText()), 
-                           'led_angle': str(self.pt_led_angle.toPlainText()),
                            'rec_folder': str(self.pt_rec_folder.toPlainText()), 
                            'PosPlot': self.rb_posPlot_yes.isChecked()}
 
@@ -372,7 +382,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         with open(self.TEMPfolder + '/RPi/RPiSettings.p','rb') as file:
             RPiSettings = pickle.load(file)
         from CumulativePosPlot import PosPlot
-        self.PosPlot = PosPlot(RPiSettings)
+        self.PosPlot = PosPlot(RPiSettings=RPiSettings)
         self.PosPlot.window.show()
 
 

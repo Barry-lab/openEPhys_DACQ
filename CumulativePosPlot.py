@@ -37,6 +37,8 @@ class PosPlot(object):
         margin_y = self.RPiSettings['arena_size'][1] * 0.05
         self.plotWidget.setXRange(-margin_x, self.RPiSettings['arena_size'][0] + margin_x)
         self.plotWidget.setYRange(-margin_y, self.RPiSettings['arena_size'][1] + margin_y)
+        # Invert Y-axis #### This messes up the arrow direction
+        # self.plotWidget.invertY(True)
         # Put plot into plot window
         self.window.setCentralWidget(self.plotWidget)
         # Draw arena boundaries
@@ -90,7 +92,7 @@ class PosPlot(object):
                 self.plotWidget.addItem(self.arrow)
             else:
                 # Compute arrow angle with to align the line connecting the points
-                head_angle = angle_clockwise(position, positions_2) + 90
+                head_angle = angle_clockwise(position, positions_2) + 90 + self.RPiSettings['LED_angle']
                 # Draw the arro with the head/tip at the location of primary LED
                 self.arrow = pg.ArrowItem(pos=(position[0], position[1]), angle=head_angle, headLen=30, tailLen=15,headWidth=30,tailWidth=5)
                 self.plotWidget.addItem(self.arrow)

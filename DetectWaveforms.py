@@ -46,6 +46,11 @@ def show_message(message, message_more=None):
     msg.exec_()
 
 
+def chunks(input_list, chunk_size):
+    for nchunk in range(0, len(input_list), chunk_size):
+        yield input_list[nchunk:nchunk + chunk_size]
+
+
 class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
     def __init__(self, parent=None):
         super(DetectWaveforms, self).__init__(parent=parent)
@@ -54,8 +59,8 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
         self.highpass_frequency = 600
         self.waveform_width = [0.0002, 0.0008] # [before, after] waveform width in seconds
         self.waveform_exemption = 0.001 # duration of exemption of other threshold crossings on tetrode in seconds
-        self.default_std_multiplier = float(-4.00)
-        self.default_waveform_range = 500 # Set default waveform range in microvolts
+        self.pt_default_threshold.setPlainText(str(-4.00))
+        self.default_waveform_range = 300 # Set default waveform range in microvolts
         self.tetrode_groups = [np.arange(16), np.arange(16) + 16]
         self.channel_groups = [np.arange(64), np.arange(64) + 64]
         self.waveform_max_threshold = 5 # Set median multiplier to remove noise
@@ -210,6 +215,10 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
             for channels in self.tetrode_channels_int:
                 self.spiketimes.append([[]] * len(channels))
             self.load_data()
+            # Spikes detected counter
+            self.spikes_detected = []
+            for channels in self.tetrode_channels_int:
+                self.spikes_detected.append([False] * len(channels))
 
 
     def Referencing(self):
@@ -220,8 +229,9 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
         # Arrange channel numbers as they appear on tetrodes
         tet_chans = np.arange(len(self.LFPs) * 4, dtype=np.int16).reshape(len(self.LFPs), 4)
         other_mean_lfp = [None] * len(self.LFPs)
+        other_median_lfp = [None] * len(self.LFPs)
         for ntet in range(len(self.LFPs)): # Find mean of other channels separately for each tetrode
-            print('Referencing tetrode ' + str(ntet) + ' out of ' + str(len(self.LFPs)))
+            print('Referencing tetrode ' + str(ntet + 1) + ' out of ' + str(len(self.LFPs)))
             # Find out which group this tetrode belongs to
             for ngroup in range(len(self.tetrode_groups)):
                 if sum(self.tetrode_groups[ngroup] == ntet) > 0:
@@ -242,6 +252,7 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
             dont_use_chans = np.in1d(tet_chans, dont_use_chans)
             otherchans = np.invert(dont_use_chans.reshape(tet_chans.shape))
             otherchan_idx = np.where(otherchans) # Get the indices of channels to use
+
             # Compute the mean of the other channels, using their indices to find them in the LFPs lists
             other_mean_lfp[ntet] = (np.zeros(self.n_samples, dtype=np.float32))
             otherchan_total = np.sum(otherchans)
@@ -249,11 +260,28 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
                 sub_ntet = otherchan_idx[0][nchan]
                 sub_nchan = otherchan_idx[1][nchan]
                 other_mean_lfp[ntet] = other_mean_lfp[ntet] + np.float32(self.LFPs[sub_ntet][sub_nchan])
-            other_mean_lfp[ntet] = np.float32(other_mean_lfp[ntet]) / otherchan_total
+            other_mean_lfp[ntet] = np.float32(other_mean_lfp[ntet]) / otherchan_total            
         # Substract the mean of other channels on other tetrodes from each channel on each tetrode
         for ntet in range(len(self.LFPs)):
             for nchan in range(4):
-                self.LFPs[ntet][nchan] = np.int16(np.float32(self.LFPs[ntet][nchan]) - other_mean_lfp[ntet])
+                if np.sum(np.array(self.badChan) == tet_chans[ntet,nchan]) == 0:
+                    self.LFPs[ntet][nchan] = np.int16(np.float32(self.LFPs[ntet][nchan]) - other_mean_lfp[ntet])
+
+        #     # Compute the median of other channels
+        #     other_median_lfp[ntet] = np.zeros(self.n_samples, dtype=np.int16)
+        #     otherchan_total = np.sum(otherchans)
+        #     for chunk in chunks(range(self.n_samples), 10 ** 6):
+        #         chunk_LFPs = np.zeros((otherchan_total, len(chunk)), dtype=np.int16)
+        #         for nchan in range(otherchan_total):
+        #             sub_ntet = otherchan_idx[0][nchan]
+        #             sub_nchan = otherchan_idx[1][nchan]
+        #             chunk_LFPs[nchan,:] = self.LFPs[sub_ntet][sub_nchan][chunk]
+        #         other_median_lfp[ntet][chunk] = np.median(chunk_LFPs, axis=0)
+        # # Substract the mean of other channels on other tetrodes from each channel on each tetrode
+        # for ntet in range(len(self.LFPs)):
+        #     for nchan in range(4):
+        #         if np.sum(np.array(self.badChan) == tet_chans[ntet,nchan]) == 0:
+        #             self.LFPs[ntet][nchan] = self.LFPs[ntet][nchan] - other_median_lfp[ntet]
 
 
     def load_data(self):
@@ -266,6 +294,9 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
                 fullfilepath = self.fpath + '/' + self.fileNames[self.channel_numbers_int.index(chan_nr)]
                 OEdict = OpenEphys.loadContinuous(fullfilepath, dtype=np.int16, verbose=False)
                 self.LFPs[ntet][ntchan] = OEdict['data']
+                if np.sum(np.array(self.badChan) == chan_nr) > 0:
+                    print(str(chan_nr) + ' set to zero')
+                    self.LFPs[ntet][ntchan] = np.zeros(self.LFPs[ntet][ntchan].shape, dtype=np.int16)
                 self.bitVolts = OEdict['header']['bitVolts']
                 self.samplingRate = OEdict['header']['sampleRate']
                 self.n_samples = self.LFPs[ntet][ntchan].size
@@ -359,7 +390,7 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
                 self.gb_IDs[ntchan].setHidden(False)
                 # If threshold has not been set previously, start from default
                 if not self.std_multiplier[ntet][ntchan]:
-                    self.std_th_IDs[ntchan].setValue(self.default_std_multiplier)
+                    self.std_th_IDs[ntchan].setValue(float(str(self.pt_default_threshold.toPlainText())))
                 # Otherwise, load previously set values
                 else:
                     self.std_th_IDs[ntchan].setValue(self.std_multiplier[ntet][ntchan])
@@ -438,7 +469,10 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
             # Keep copy of windows in self for use when plotting or saving waveforms
             self.waveform_windows[ntet][ntchan] = windows
             self.spiketimes[ntet][ntchan] = spiketimes
-        if len(spiketimes) == 0:
+        if len(spiketimes) > 0:
+            self.spikes_detected[ntet][ntchan] = True
+        else:
+            self.spikes_detected[ntet][ntchan] = False
             print('No spikes detected on tetrode ' + str(ntet) + ' channel ' + str(ntchan))
             # If no spikes were detected, but std_multiplier had been previously set,
             # recover previously set std_multiplier.
@@ -566,9 +600,11 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
         for ntet in range(len(self.waveform_windows)):
             # Optain spiketimes and waveform windows for all spikes detected on the tetrode
             spiketimes = self.spiketimes[ntet]
-            spiketimes = list(filter(lambda x: x != None, spiketimes))
             waveform_windows = self.waveform_windows[ntet]
-            waveform_windows = list(filter(lambda x: x != None, waveform_windows))
+            no_spikes_chans = np.where(np.invert(np.array(self.spikes_detected[ntet])))[0]
+            for sub_nchan in no_spikes_chans[::-1]:
+                del spiketimes[sub_nchan]
+                del waveform_windows[sub_nchan]
             # Only continue if spikes were detected on any of the channels on this tetrode
             if len(spiketimes) > 0:
                 spiketimes = np.concatenate(spiketimes, axis=0)
@@ -646,6 +682,7 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
             # Plot data for all requested tetrode channels
             ntet = int(ntet_str[plot_chan_nr]) - 1
             nchan = int(nchan_str[plot_chan_nr]) - 1
+            print('Plotting channel ' + self.tetrode_channels_str[ntet][nchan])
             lfp_trace = np.float32(self.LFPs[ntet][nchan]) * self.bitVolts
             tracesPlot.plot(timestamps, lfp_trace, pen=linecolors[plot_chan_nr])
 

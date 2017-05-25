@@ -458,18 +458,18 @@ cd RecordingData
 mkdir RecordingManagerData
 </pre></div>
 </div>
-<p>Obtain Barry-lab repository <code class="docutils literal"><span class="pre">OpenEphysScripts</span></code> manually and place them it in your home folder in a folder of the same name, or run the following terminal command:</p>
+<p>Obtain Barry-lab repository <code class="docutils literal"><span class="pre">openEPhys_DACQ</span></code> manually and place them it in your home folder in a folder of the same name, or run the following terminal command:</p>
 <div class="highlight-none"><div class="highlight"><pre>cd ~/
-git clone https://github.com/Barry-lab/OpenEphysScripts
+git clone https://github.com/Barry-lab/openEPhys_DACQ
 </pre></div>
 </div>
 <p>You will need a github.com username and password that has access to the repository.</p>
 </div>
 <div class="section" id="make-changes-in-the-scripts-to-suit-your-pc">
 <h3>Make changes in the scripts to suit your PC<a class="headerlink" href="#make-changes-in-the-scripts-to-suit-your-pc" title="Permalink to this headline">¶</a></h3>
-<p>Open <code class="docutils literal"><span class="pre">~/OpenEphysScripts/RecordingManager.py</span></code> with text editor like SublimeText and edit the following lines in the <em>RecordingManager</em> class <em>__init__</em> function:</p>
+<p>Open <code class="docutils literal"><span class="pre">~/openEPhys_DACQ/RecordingManager.py</span></code> with text editor like SublimeText and edit the following lines in the <em>RecordingManager</em> class <em>__init__</em> function:</p>
 <div class="highlight-none"><div class="highlight"><pre># Set GUI environment
-self.scripts_root = os.path.expanduser(&#39;~&#39;) + &#39;/OpenEphysScripts&#39;
+self.scripts_root = os.path.expanduser(&#39;~&#39;) + &#39;/openEPhys_DACQ&#39;
 self.pt_root_folder.setPlainText(os.path.expanduser(&#39;~&#39;) + &#39;/RecordingData&#39;)
 self.file_server_path = &#39;/media/qnap/room418&#39;
 </pre></div>
@@ -477,7 +477,7 @@ self.file_server_path = &#39;/media/qnap/room418&#39;
 <p>, such that they would reflect the folder structure on your Recording PC. Note that <code class="docutils literal"><span class="pre">os.path.expanduser('~')</span></code> refers to your Home folder. If you set everything up as instructed in the documentation, nothing but file server path should need changing.</p>
 <p>Similarly as you did for the OpenEphysGUI, you can create a shortcut for RecordingManager.py application in the home folder. Use terminal command <code class="docutils literal"><span class="pre">gedit</span> <span class="pre">~/RecordingManager</span></code> to create the file and add these lines to the file:</p>
 <div class="highlight-none"><div class="highlight"><pre>#!/bin/bash
-cd ~/OpenEphysScripts
+cd ~/openEPhys_DACQ
 python RecordingManager.py
 </pre></div>
 </div>

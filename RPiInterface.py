@@ -8,7 +8,6 @@ from sshScripts import ssh
 import json
 import threading
 import numpy as np
-import time
 
 def RPiStarter(RPiSettings):
     # This function starts the tracking.py script in all RPis in the RPiSettings input

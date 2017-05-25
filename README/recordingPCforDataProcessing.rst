@@ -41,11 +41,11 @@ Use the following terminal commands to install Klustakwik
 Install Scripts from GitHub
 ---------------------------
 
-You have likely already downloaded the scripts for processing Open Ephys recording from GitHub, if you worked through this guide: :ref:`RecordingManagerSetup`. In that case, you should have in your *Home* folder a folder called ``OpenEphysScripts`` in which there are also scripts for processing recorded data. If not, use the referred guide to download the files into folder structure just described.
+You have likely already downloaded the scripts for processing Open Ephys recording from GitHub, if you worked through this guide: :ref:`RecordingManagerSetup`. In that case, you should have in your *Home* folder a folder called ``openEPhys_DACQ`` in which there are also scripts for processing recorded data. If not, use the referred guide to download the files into folder structure just described.
 
 You will need to download *scikit-learn* package for python to use these scripts. To do so, use the following terminal command ``pip install -U scikit-learn``.
 
-You will should not need to do this step if you installed Klustakwik to the location ``~/Programs/klustakwik/`` as you would have if you followed the commands above to the letter. Edit file ``ApplyKlustakwikScripts.py`` to specify to location of the *Klustakwik* install. Open the file with text editor, e.g. with terminal command ``gedit ~/OpenEphysScripts/ApplyKlustakwikScripts.py`` and find the line where ``kk_path`` is specified (probably line 132). It should say something like ``kk_path = r'/home/room418/Programs/klustakwik/KlustaKwik'``. Edit the path to where you installed Klustakwik.
+You will should not need to do this step if you installed Klustakwik to the location ``~/Programs/klustakwik/`` as you would have if you followed the commands above to the letter. Edit file ``ApplyKlustakwikScripts.py`` to specify to location of the *Klustakwik* install. Open the file with text editor, e.g. with terminal command ``gedit ~/openEPhys_DACQ/ApplyKlustakwikScripts.py`` and find the line where ``kk_path`` is specified (probably line 132). It should say something like ``kk_path = r'/home/room418/Programs/klustakwik/KlustaKwik'``. Edit the path to where you installed Klustakwik.
 
 Install Google Chrome to use Waveform GUI
 -----------------------------------------

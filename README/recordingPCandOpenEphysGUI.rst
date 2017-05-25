@@ -406,24 +406,24 @@ Create folder structure in the home folder with the following terminal commands:
 	cd RecordingData
 	mkdir RecordingManagerData
 
-Obtain Barry-lab repository ``OpenEphysScripts`` manually and place them it in your home folder in a folder of the same name, or run the following terminal command:
+Obtain Barry-lab repository ``openEPhys_DACQ`` manually and place them it in your home folder in a folder of the same name, or run the following terminal command:
 
 .. code-block:: none
 
 	cd ~/
-	git clone https://github.com/Barry-lab/OpenEphysScripts
+	git clone https://github.com/Barry-lab/openEPhys_DACQ
 
 You will need a github.com username and password that has access to the repository.
 
 Make changes in the scripts to suit your PC
 -------------------------------------------
 
-Open ``~/OpenEphysScripts/RecordingManager.py`` with text editor like SublimeText and edit the following lines in the *RecordingManager* class *__init__* function:
+Open ``~/openEPhys_DACQ/RecordingManager.py`` with text editor like SublimeText and edit the following lines in the *RecordingManager* class *__init__* function:
 
 .. code-block:: none
 
 	# Set GUI environment
-	self.scripts_root = os.path.expanduser('~') + '/OpenEphysScripts'
+	self.scripts_root = os.path.expanduser('~') + '/openEPhys_DACQ'
 	self.pt_root_folder.setPlainText(os.path.expanduser('~') + '/RecordingData')
 	self.file_server_path = '/media/qnap/room418'
 
@@ -434,7 +434,7 @@ Similarly as you did for the OpenEphysGUI, you can create a shortcut for Recordi
 .. code-block:: none
 
 	#!/bin/bash
-	cd ~/OpenEphysScripts
+	cd ~/openEPhys_DACQ
 	python RecordingManager.py
 
 Run this terminal command to make the file executable
