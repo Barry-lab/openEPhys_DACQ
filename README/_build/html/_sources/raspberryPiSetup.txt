@@ -42,7 +42,7 @@ Connect to RPi a keyboard, mouse and monitor.
 
 This tutorial instructs you to connect the RPi to the internet using the same network connection as is used for your recording PC, if you used the following method to set it up: :ref:`RecPCnetworkInterfaces`. This means you will not be able to use the Recording PC to access the internet, while you work through the part "Install necessary libraries on Raspberry Pi". If you can use another means of achieving network connection on the RPi, you can ignore steps in this part relating to **interfaces** file. Otherwise, connect the RPi to the network with the same ethernet cable as you were so far using on the Recording PC.
 
-Add :download:`this script (install-opencv.sh) <../RecordingPCsetup/install-opencv.sh>` and the file ``/etc/network/interfaces`` (as set up on the Recording PC in this guide: :ref:`RecPCnetworkInterfaces`) to the RPi *Home folder* with a USB stick.
+Add :download:`this script (install-opencv.sh) </install-opencv.sh>` and the file ``/etc/network/interfaces`` (as set up on the Recording PC in this guide: :ref:`RecPCnetworkInterfaces`) to the RPi *Home folder* with a USB stick.
 
 You may need to edit the ``interfaces`` file in your RPi home folder. Run the terminal command ``ifconfig`` on the RPi and make a note of the first device on the list. Devices are aligned to the left column. This is likely ``eth0``. Replace the device name ``enp2s0`` in the ``interfaces file`` with the device you saw in ``ifconfig`` output. You can use a simple text editor by double clicking on the ``interfaces`` file in your home folder, making the changes and saving it.
 

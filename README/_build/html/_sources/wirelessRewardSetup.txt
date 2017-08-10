@@ -58,7 +58,7 @@ Save the file and reboot the RPi Zero.
 
 If you have assembled the RPi Zero with Picon Zero, you are able to test if everything is running smoothly by entering terminal command ``i2cdetect -y 1``. You should see an output table with empty values everywhere but one element, which should say ``22``.
 
-Finally, :download:`this script (openPinchValve.py) <../RecordingPCsetup/openPinchValve.py>` to the  RPi Zero home folder ``/home/pi``. The script is called by Recording PC to open the valve for a specified amount of time.
+Finally, :download:`this script (openPinchValve.py) </openPinchValve.py>` to the  RPi Zero home folder ``/home/pi``. The script is called by Recording PC to open the valve for a specified amount of time.
 
 Setting up Raspberry Pi Zero networking with Recording PC
 =========================================================
