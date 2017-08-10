@@ -1,0 +1,311 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>FEEDER setup &mdash; Recording PC Setup 0.1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="Recording PC Setup 0.1 documentation" href="index.html"/>
+        <link rel="prev" title="Tutorial for using Open Ephys Scripts" href="howToUseTheseScripts.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html" class="icon icon-home"> Recording PC Setup
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="recordingPCandOpenEphysGUI.html">Recording PC setup for Data Acquisition</a></li>
+<li class="toctree-l1"><a class="reference internal" href="raspberryPiSetup.html">Raspberry Pi tracking and related networking setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howToUseTheseScripts.html">Tutorial for using Open Ephys Scripts</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">FEEDER setup</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#setting-up-raspberry-pi-zero-software">Setting up Raspberry Pi Zero software</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#installing-raspberry-pi-os-raspbian">Installing Raspberry Pi OS: Raspbian</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-necessary-software-on-rpi-zero">Install necessary software on RPi Zero</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#setting-up-raspberry-pi-zero-networking-with-recording-pc">Setting up Raspberry Pi Zero networking with Recording PC</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#setting-up-networking-with-rpi-zero-and-recording-pc">Setting up Networking with RPi Zero and Recording PC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#setting-a-static-ip-address-on-the-rpi-zero">Setting a static IP address on the RPi Zero</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#configuring-ssh-on-rpi-zero">Configuring SSH on RPi Zero</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#assembling-all-parts-of-wireless-reward-module">Assembling all parts of Wireless Reward Module</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">Recording PC Setup</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="index.html">Docs</a> &raquo;</li>
+      
+    <li>FEEDER setup</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="_sources/wirelessRewardSetup.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="feeder-setup">
+<span id="wirelessrewardsetup"></span><h1>FEEDER setup<a class="headerlink" href="#feeder-setup" title="Permalink to this headline">¶</a></h1>
+<p>FEEDER - Food Ejector Executing Directions Established via Radio
+or Wireless Reward Module.</p>
+<div class="section" id="setting-up-raspberry-pi-zero-software">
+<h2>Setting up Raspberry Pi Zero software<a class="headerlink" href="#setting-up-raspberry-pi-zero-software" title="Permalink to this headline">¶</a></h2>
+<p>It is advisable to follow through this part first, before assembling the FEEDER. This way it is more convenient to plug the RPi Zero to the power socket, keyboard, mouse and monitor for working through the following steps.</p>
+<p>This tutorial is based on setting up <a class="reference external" href="https://www.raspberrypi.org/products/raspberry-pi-zero-w/">Raspberry Pi Zero W</a> with Recording PC that has a wireless networking adapter and a Wi-Fi router.</p>
+<p>If you are setting up multiple Pi Zeros, you can make copies after you have set up the software and networking on the first one. To make copies of a configured RPi, use this guide: <a class="reference internal" href="raspberryPiSetup.html#duplicatingrpis"><span>Making copies of Raspberry Pis</span></a>. Ensure to change the static IP information on each new copy, as instructed in the guide.</p>
+<div class="section" id="installing-raspberry-pi-os-raspbian">
+<h3>Installing Raspberry Pi OS: Raspbian<a class="headerlink" href="#installing-raspberry-pi-os-raspbian" title="Permalink to this headline">¶</a></h3>
+<p>Download <strong>Raspbian Jessie With Pixel</strong> (Here used version 4.9) from <a class="reference external" href="ttps://www.raspberrypi.org/downloads/raspbian/">Raspberry website</a>. Unpack the downloaded <em>.zip</em> file with <code class="docutils literal"><span class="pre">Archive</span> <span class="pre">Manager</span></code> to get access to the <em>.img</em> file.</p>
+<p>Download <strong>Etcher</strong> from this <a class="reference external" href="https://etcher.io/">website</a>. Unpack the downloaded <em>.zip</em> and run (double-click) the Etcher <em>.AppImage</em>. Select the Raspbian <em>.img</em> file and your inserted microSD card. Write the image (<em>Flash</em> button).</p>
+<p>Insert the microSD card into Raspberry Pi.</p>
+</div>
+<div class="section" id="install-necessary-software-on-rpi-zero">
+<h3>Install necessary software on RPi Zero<a class="headerlink" href="#install-necessary-software-on-rpi-zero" title="Permalink to this headline">¶</a></h3>
+<p>Connect your Raspberry Pi Zero W with a keyboard/mouse, monitor and power socket. Note, RPi Zero has no regular USB output, therefore you will need to use an adaptor to connect the keyboard and mouse. You will also need a mini HDMI to HDMI adaptor to connect your monitor.</p>
+<p>You need to connect your RPi Zero to the internet to install the necessary software. This can be done using a Wi-Fi connection, for example, a Wi-Fi hotspot created by your laptop or smartphone. Preferably use a network you can delete later, so that the RPi Zero would not be confused about which network to connect to: the one with internet connection or the one you set up to talk to the Recording PC. You can connect your RPi Zero to a Wi-Fi network as a common laptop. As you boot up the RPi Zero, look for the networking icon on top right and connect with the correct password for the network.</p>
+<p>To update the RPi Zero software with the following terminal commands:</p>
+<div class="highlight-none"><div class="highlight"><pre>sudo apt-get update        # Fetches the list of available updates
+sudo apt-get upgrade       # Strictly upgrades the current packages
+sudo apt-get dist-upgrade  # Installs updates (new ones)
+</pre></div>
+</div>
+<p>Install the necessary libraries for working with the Picon Zero controller with the following terminal commands:</p>
+<div class="highlight-none"><div class="highlight"><pre>sudo apt-get install python-smbus python3-smbus python-dev python3-dev
+wget -q http://4tronix.co.uk/piconzero/piconzero.py -O piconzero.py
+</pre></div>
+</div>
+<p>You will need to edit the file <code class="docutils literal"><span class="pre">/boot/config.txt</span></code>. Do this with terminal command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">leafpad</span> <span class="pre">/boot/config.txt</span></code> and add the following lines to the end of this file:</p>
+<div class="highlight-none"><div class="highlight"><pre>dtparam=i2c1=on
+dtparam=i2c_arm=on
+</pre></div>
+</div>
+<p>Save the file and reboot the RPi Zero.</p>
+<p>If you have assembled the RPi Zero with Picon Zero, you are able to test if everything is running smoothly by entering terminal command <code class="docutils literal"><span class="pre">i2cdetect</span> <span class="pre">-y</span> <span class="pre">1</span></code>. You should see an output table with empty values everywhere but one element, which should say <code class="docutils literal"><span class="pre">22</span></code>.</p>
+<p>Finally, <code class="xref download docutils literal"><span class="pre">this</span> <span class="pre">script</span> <span class="pre">(openPinchValve.py)</span></code> to the  RPi Zero home folder <code class="docutils literal"><span class="pre">/home/pi</span></code>. The script is called by Recording PC to open the valve for a specified amount of time.</p>
+</div>
+</div>
+<div class="section" id="setting-up-raspberry-pi-zero-networking-with-recording-pc">
+<h2>Setting up Raspberry Pi Zero networking with Recording PC<a class="headerlink" href="#setting-up-raspberry-pi-zero-networking-with-recording-pc" title="Permalink to this headline">¶</a></h2>
+<p>There are many ways the netowork could be set up. In our case, we have a wireless card in Recording PC, but it is too weak to create a reliable hotspot. Therefore we have set up a standard router to which we connect the Recording PC and RPi Zeros, both via Wi-Fi.</p>
+<div class="section" id="setting-up-networking-with-rpi-zero-and-recording-pc">
+<h3>Setting up Networking with RPi Zero and Recording PC<a class="headerlink" href="#setting-up-networking-with-rpi-zero-and-recording-pc" title="Permalink to this headline">¶</a></h3>
+<p>Turn on the router and connect to it with the Recording PC using the router&#8217;s ID (SSID, the Wi-Fi network name) and password, which are likely printed on the router.</p>
+<p>You may wish to change the router&#8217;s ID and the password through its graphical interface. You can access this by entering the router&#8217;s IP in the browser address bar, after you have joined the Wi-Fi network. In our case the router&#8217;s user&#8217;s manual specified that the default IP for the router would be <code class="docutils literal"><span class="pre">192.168.0.1</span></code>. The username and password should also be printed on the router. In our case we changed the SSID (Wi-Fi network name) to <code class="docutils literal"><span class="pre">r418</span></code> and the password to randomly generated long string. After these changes you will need to reconnect to the router with the Recording PC.</p>
+<p>Connect to the Wi-Fi network <code class="docutils literal"><span class="pre">r418</span></code> with the RPi Zero using the graphical interface. Click on the network connections icon on top right of the screen and select <code class="docutils literal"><span class="pre">r418</span></code>. Use the same password that was used by Recording PC to connect. To ensure RPi Zero connects to Wi-Fi automatically, you should edit the network interfaces file with terminal command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">leafpad</span> <span class="pre">/etc/network/interfaces</span></code> and find the line that says <code class="docutils literal"><span class="pre">allow-hotplug</span> <span class="pre">wlan0</span></code> and add just before it a line that says <code class="docutils literal"><span class="pre">auto</span> <span class="pre">wlan0</span></code>, such that it would read:</p>
+<div class="highlight-none"><div class="highlight"><pre>auto wlan0
+allow-hotplug wlan0
+</pre></div>
+</div>
+</div>
+<div class="section" id="setting-a-static-ip-address-on-the-rpi-zero">
+<h3>Setting a static IP address on the RPi Zero<a class="headerlink" href="#setting-a-static-ip-address-on-the-rpi-zero" title="Permalink to this headline">¶</a></h3>
+<p>The following instructions are based on this <a class="reference external" href="https://www.youtube.com/watch?v=r3UIQXn8Zp0">video guide</a>.</p>
+<p>To set static IP address, you need to make changes to <code class="docutils literal"><span class="pre">/etc/dhcpcd.conf</span></code>. For that you need to clarify the identity of the correct wireless device on your RPi Zero. Enter into terminal <code class="docutils literal"><span class="pre">ifconfig</span></code> and you should see network identities. It is most likely <code class="docutils literal"><span class="pre">wlan0</span></code> that has inforamtion such as <code class="docutils literal"><span class="pre">Link</span> <span class="pre">encap:Ethernet</span></code>. You also need the IP address of the Wi-Fi router. This is the IP address you typed into your browser to find access the router&#8217;s graphical interface. Alternatively, you can find the router&#8217;s IP by entering the terminal command <code class="docutils literal"><span class="pre">ip</span> <span class="pre">route</span> <span class="pre">show</span></code>. This should output information on your current connection and should show the Wi-Fi hotspot IP address as something like: <code class="docutils literal"><span class="pre">default</span> <span class="pre">via</span> <span class="pre">192.168.0.1</span></code>.</p>
+<p>Now open <code class="docutils literal"><span class="pre">dhcpcd.conf</span></code> with terminal command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">leafpad</span> <span class="pre">/etc/dhcpcd.conf</span></code>. Add to the very end of the file the following lines:</p>
+<div class="highlight-none"><div class="highlight"><pre>interface wlan0
+
+static ip_address=192.168.0.101/24
+static routers=192.168.0.1
+static domain_name_servers=192.168.0.1
+</pre></div>
+</div>
+<p>Here you want to use the correct device identity that you found on the RPi Zero with <code class="docutils literal"><span class="pre">ifconfig</span></code> command, e.g. <code class="docutils literal"><span class="pre">wlan0</span></code>. Set the <code class="docutils literal"><span class="pre">router</span></code> and <code class="docutils literal"><span class="pre">domain_name_server</span></code> values to the IP of the router that you found. Finally, the <code class="docutils literal"><span class="pre">ip_address</span></code> should be the same as the router, only the final value should be different, as in this example it is <code class="docutils literal"><span class="pre">101</span></code>. If you have multipe RPi Zeros, set this to different value on each, e.g. 101, 102, 103 etc. The <code class="docutils literal"><span class="pre">/24</span></code> indicates the port number. Keep this the same in all cases.</p>
+<p>As you save the changes to <code class="docutils literal"><span class="pre">dhcpcd.conf</span></code> and reboot your RPi Zero, it should connect to the Wi-Fi hotspot automatically and have the IP address you assigned. You can check this now with the <code class="docutils literal"><span class="pre">ifconfig</span></code> terminal command on the RPi Zero.</p>
+<p>You should do this also on the Recording PC. You can follow the same exact steps, except using <em>gedit</em> instead of <em>leafpad</em> to edit the <code class="docutils literal"><span class="pre">/etc/dhcpcd.conf</span></code>. The terminal command would be <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">gedit</span> <span class="pre">/etc/dhcpcd.conf</span></code>.</p>
+<p>Now each time you connect the RPi Zero to a power supply, thereby powering it on, it should connect to the Wi-Fi network <code class="docutils literal"><span class="pre">r418</span></code> and have the IP you set.</p>
+</div>
+<div class="section" id="configuring-ssh-on-rpi-zero">
+<h3>Configuring SSH on RPi Zero<a class="headerlink" href="#configuring-ssh-on-rpi-zero" title="Permalink to this headline">¶</a></h3>
+<p>SSH needs to be enabled on RPi Zero. You can do this by accessing RPi settings via terminal command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">raspi-config</span></code> and choosing <em>Interfacing Options</em> with arrow keys and pressing Enter. Select <em>SSH</em> option and choose to <em>Enable</em> it. Restart RPi Zero.</p>
+<p>The SSH login may be slow. This can be fixed by editing the <code class="docutils literal"><span class="pre">sshd_config</span></code> file. Open it with terminal command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">leafpad</span> <span class="pre">/etc/ssh/sshd_config</span></code> and add this line to the very end:</p>
+<div class="highlight-none"><div class="highlight"><pre>UseDNS no
+</pre></div>
+</div>
+<p>Restart the RPi Zero</p>
+<p>The following instructions allow connecting with the RPi via SSH without entering password each time. This is necessary for scripts on Recording PC. The instructions are based on <a class="reference external" href="https://www.raspberrypi.org/documentation/remote-access/ssh/passwordless.md">this guide</a>. If you have previously generated the SSH key on the Recording PC, you can skip the first step of generating a new key.</p>
+<p>Generate a new SSH key on Recording PC with terminal command <code class="docutils literal"><span class="pre">ssh-keygen</span> <span class="pre">-t</span> <span class="pre">rsa</span> <span class="pre">-C</span> <span class="pre">recpc&#64;pi</span></code>. Use the default location to save the key by pressing Enter. Leave the passphrase empty by pressing Enter.</p>
+<p>Open terminal on Recording PC and enter the connect to your RPi using SSH with command <code class="docutils literal"><span class="pre">ssh</span> <span class="pre">pi&#64;192.168.0.101</span></code> and enter <code class="docutils literal"><span class="pre">raspberry</span></code> as password. Enter this command in the terminal where you opened the SSH connection <code class="docutils literal"><span class="pre">install</span> <span class="pre">-d</span> <span class="pre">-m</span> <span class="pre">700</span> <span class="pre">~/.ssh</span></code>.</p>
+<p>Now exit the SSH session or open a new terminal on Recording PC and enter this command <code class="docutils literal"><span class="pre">cat</span> <span class="pre">~/.ssh/id_rsa.pub</span> <span class="pre">|</span> <span class="pre">ssh</span> <span class="pre">pi&#64;192.168.0.101</span> <span class="pre">'cat</span> <span class="pre">&gt;&gt;</span> <span class="pre">.ssh/authorized_keys'</span></code>. Use the correct IP address (the numbers: <code class="docutils literal"><span class="pre">192.168.0.101</span></code>) in that command for the IP address of the RPi you are connecting to. Enter the password <code class="docutils literal"><span class="pre">raspberry</span></code> for your RPi.</p>
+<p>Now your RPi should be able to connect to the RPi via SSH without a password.</p>
+<p>Now the RPi Zero software and networking is fully configured and after assembling the FEEDER, it will be ready to use with the Recording PC.</p>
+</div>
+</div>
+<div class="section" id="assembling-all-parts-of-wireless-reward-module">
+<h2>Assembling all parts of Wireless Reward Module<a class="headerlink" href="#assembling-all-parts-of-wireless-reward-module" title="Permalink to this headline">¶</a></h2>
+<p>The materials you need for the FEEDER:</p>
+<p>Raspberry Pi Zero
+Picon Zero
+Current Converter and Battery Guard - HUBOSD eco X Type w/STOSD8 &amp; XT60
+LiPo battery with high current output
+Solenoid Pinch Valve</p>
+<p>Ensure you use the correct motor to match the command in openPinchValve.py, set motor 1.</p>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+      
+        <a href="howToUseTheseScripts.html" class="btn btn-neutral" title="Tutorial for using Open Ephys Scripts" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Sander Tanni.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'0.1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
