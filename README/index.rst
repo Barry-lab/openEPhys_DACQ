@@ -18,3 +18,4 @@ The instructions can be worked through in the order they are presented in the be
 	raspberryPiSetup
 	recordingPCforDataProcessing
 	howToUseTheseScripts
+	wirelessRewardSetup

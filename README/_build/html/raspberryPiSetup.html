@@ -87,11 +87,11 @@
 <li class="toctree-l2"><a class="reference internal" href="#setting-up-raspberry-pi-with-camera-for-tracking">Setting up Raspberry Pi with camera for tracking</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#assembling-raspberry-pi-camera-module-and-coaxial-cable-plug">Assembling Raspberry Pi Camera Module and Coaxial Cable Plug</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#installing-raspberry-pi-os-raspbian">Installing Raspberry Pi OS: Raspbian</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#configuring-raspberry-pi">Configuring Raspberry Pi</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-necessary-libraries-on-raspberry-pi">Install necessary libraries on Raspberry Pi</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#setting-up-raspberry-pi-networking-with-recording-pc">Setting up Raspberry Pi networking with recording PC</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id1">Configuring Raspberry Pi</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#configuring-raspberry-pi">Configuring Raspberry Pi</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#configuring-the-recording-pc">Configuring the Recording PC</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#configure-ssh-keys-to-avoid-password-requests">Configure SSH keys to avoid Password requests</a></li>
 </ul>
@@ -101,6 +101,7 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="howToUseTheseScripts.html">Tutorial for using Open Ephys Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="wirelessRewardSetup.html">FEEDER setup</a></li>
 </ul>
 
             
@@ -165,10 +166,10 @@
 <p>Download <strong>Etcher</strong> from this <a class="reference external" href="https://etcher.io/">website</a>. Unpack the downloaded <em>.zip</em> and run (double-click) the Etcher <em>.AppImage</em>. Select the Raspbian <em>.img</em> file and your inserted microSD card. Write the image (<em>Flash</em> button).</p>
 <p>Insert the microSD card into Raspberry Pi.</p>
 </div>
-<div class="section" id="configuring-raspberry-pi">
-<h3>Configuring Raspberry Pi<a class="headerlink" href="#configuring-raspberry-pi" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="install-necessary-libraries-on-raspberry-pi">
+<h3>Install necessary libraries on Raspberry Pi<a class="headerlink" href="#install-necessary-libraries-on-raspberry-pi" title="Permalink to this headline">¶</a></h3>
 <p>Connect to RPi a keyboard, mouse and monitor.</p>
-<p>This tutorial instructs you to connect the RPi to the internet using the same network connection as is used for your recording PC, if you used the following method to set it up: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span>Connect to the local network</span></a>. This means you will not be able to use the Recording PC to access the internet, while you work through the part &#8220;Configuring Raspberry Pi&#8221;. If you can use another means of achieving network connection on the RPi, you can ignore steps in this part relating to <strong>interfaces</strong> file. Otherwise, connect the RPi to the network with the same ethernet cable as you were so far using on the Recording PC.</p>
+<p>This tutorial instructs you to connect the RPi to the internet using the same network connection as is used for your recording PC, if you used the following method to set it up: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span>Connect to the local network</span></a>. This means you will not be able to use the Recording PC to access the internet, while you work through the part &#8220;Install necessary libraries on Raspberry Pi&#8221;. If you can use another means of achieving network connection on the RPi, you can ignore steps in this part relating to <strong>interfaces</strong> file. Otherwise, connect the RPi to the network with the same ethernet cable as you were so far using on the Recording PC.</p>
 <p>Add <code class="xref download docutils literal"><span class="pre">this</span> <span class="pre">script</span> <span class="pre">(install-opencv.sh)</span></code> and the file <code class="docutils literal"><span class="pre">/etc/network/interfaces</span></code> (as set up on the Recording PC in this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span>Connect to the local network</span></a>) to the RPi <em>Home folder</em> with a USB stick.</p>
 <p>You may need to edit the <code class="docutils literal"><span class="pre">interfaces</span></code> file in your RPi home folder. Run the terminal command <code class="docutils literal"><span class="pre">ifconfig</span></code> on the RPi and make a note of the first device on the list. Devices are aligned to the left column. This is likely <code class="docutils literal"><span class="pre">eth0</span></code>. Replace the device name <code class="docutils literal"><span class="pre">enp2s0</span></code> in the <code class="docutils literal"><span class="pre">interfaces</span> <span class="pre">file</span></code> with the device you saw in <code class="docutils literal"><span class="pre">ifconfig</span></code> output. You can use a simple text editor by double clicking on the <code class="docutils literal"><span class="pre">interfaces</span></code> file in your home folder, making the changes and saving it.</p>
 <p>Apply the newly created <code class="docutils literal"><span class="pre">interfaces</span></code> file in the Raspberry Pi with terminal commands:</p>
@@ -216,9 +217,9 @@ sudo pip install pyzmq
 <div class="section" id="setting-up-raspberry-pi-networking-with-recording-pc">
 <h2>Setting up Raspberry Pi networking with recording PC<a class="headerlink" href="#setting-up-raspberry-pi-networking-with-recording-pc" title="Permalink to this headline">¶</a></h2>
 <p>This part describes setting up networking between the recording PC and one or multiple Raspberry Pis. This setup is based on having two network adapters on the Recording PC. One of them connected to the internet, as in this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span>Connect to the local network</span></a>. The other can be a USB network adapter or a PCIe card that is then connected to the RPi or to a network switch that has multiple RPis connected to it. (Ubuntu should recognise and automatically install any necessary drivers for a network adapter. This can be verified if a new device shows up in <code class="docutils literal"><span class="pre">ifconfig</span></code>) When connecting multiple RPis, the setup is identical, only that each RPi has a different static IP address assigned (see below on how to change <code class="docutils literal"><span class="pre">dhcpcd.conf</span></code>).</p>
-<div class="section" id="id1">
-<h3>Configuring Raspberry Pi<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h3>
-<p>SSH needs to be enabled. You can do this by accessing RPi settings via terminal command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">raspi-config</span></code> and choosing <em>Interfacing Options</em> with arrow keys and pressing Enter. Select <em>Camera</em> option and choose to <em>Enable</em> it. Do the same for the <em>SSH</em> option. It should prompt you to restart the RPi as you exit.</p>
+<div class="section" id="configuring-raspberry-pi">
+<h3>Configuring Raspberry Pi<a class="headerlink" href="#configuring-raspberry-pi" title="Permalink to this headline">¶</a></h3>
+<p>SSH needs to be enabled. You can do this by accessing RPi settings via terminal command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">raspi-config</span></code> and choosing <em>Interfacing Options</em> with arrow keys and pressing Enter. Select <em>SSH</em> option and choose to <em>Enable</em> it. Reboot Raspberry Pi.</p>
 <p>Restore the original interfaces file with the following commands</p>
 <div class="highlight-none"><div class="highlight"><pre>sudo mv /etc/network/interfaces /etc/network/interfaces_MainLine
 sudo mv /etc/network/interfaces_old /etc/network/interfaces
@@ -247,7 +248,7 @@ auto eth0
 </div>
 <div class="section" id="configuring-the-recording-pc">
 <h3>Configuring the Recording PC<a class="headerlink" href="#configuring-the-recording-pc" title="Permalink to this headline">¶</a></h3>
-<p>These instructions are based on <a class="reference external" href="https://www.thomas-krenn.com/en/wiki/Two_Default_Gateways_on_One_System">this blong post</a>.</p>
+<p>These instructions are based on <a class="reference external" href="https://www.thomas-krenn.com/en/wiki/Two_Default_Gateways_on_One_System">this blog post</a>.</p>
 <p>Changes need to be made to the <code class="docutils literal"><span class="pre">interfaces</span></code> file. Open this using terminal command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">gedit</span> <span class="pre">/etc/network/interfaces</span></code>. Add the following lines to the end of the file:</p>
 <div class="highlight-none"><div class="highlight"><pre># Network adapter interfacing with RPis
 allow-hotplug eth1
@@ -279,7 +280,7 @@ post-up ip rule add to 10.0.0.10/32 table rt2
 </div>
 </div>
 <div class="section" id="making-copies-of-raspberry-pis">
-<h2>Making copies of Raspberry Pis<a class="headerlink" href="#making-copies-of-raspberry-pis" title="Permalink to this headline">¶</a></h2>
+<span id="duplicatingrpis"></span><h2>Making copies of Raspberry Pis<a class="headerlink" href="#making-copies-of-raspberry-pis" title="Permalink to this headline">¶</a></h2>
 <p>Once one Raspberry Pi has been set up and configured based on the instructions above, it is best to set the others up as simple copies of the first one. To do this, you can use linux built in method to make a virtual copy of the SD drive on your Recording PC or other computer that has SD card reader and then rewrite it onto a new SD card using <strong>Etcher</strong> as during the initial installation of Raspbian. You will only need to make one change separately for each RPi.</p>
 <p>Insert your SD card and find out its identifier in Ubuntu using the terminal command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">fdisk</span> <span class="pre">-l</span></code>. If you are unsure of which device name (something like <code class="docutils literal"><span class="pre">/dev/mmcblk0</span></code>) is your RPi SD card, you can check be removing and re-inserting to establish which drive/card appears and disapperas. Drive/card identifiers can have endings indicating paritions, in this case you may have <code class="docutils literal"><span class="pre">/dev/mmcblk0p0</span></code> and <code class="docutils literal"><span class="pre">/dev/mmcblk0p1</span></code>. When using the drive identifier in the commands, leave out the <code class="docutils literal"><span class="pre">p0</span></code> or <code class="docutils literal"><span class="pre">p1</span></code> ending, as you want to copy all partitions on the card.</p>
 <p>Before you continue, make sure you have unmounted all partitions of the SD card. Using your correct drive identifier, use the following terminal commands:</p>
@@ -295,7 +296,7 @@ sudo umount /dev/mmcblk0
 <p>This should put the virtual copy to your home folder and name it <code class="docutils literal"><span class="pre">RPi-SDcard-Copy.img</span></code>. If you wish to save it elsewhere, you can specify the full path including the file name, instead of the <code class="docutils literal"><span class="pre">~/RPi-SDcard-Copy.img</span></code> in the above command.</p>
 <p>Now remove the original RPi SD card from the computer and replace it with a new one. You can now proceed to write the newly made copy of the original SD card onto the new SD card using Etcher, as you did at this part of the guide: <a class="reference internal" href="#installingraspbian"><span>Installing Raspberry Pi OS: Raspbian</span></a>. You just need to choose the newly created <code class="docutils literal"><span class="pre">RPi-SDcard-Copy.img</span></code> to write instead of the Raspbian OS <em>.img</em> file you used when installing Raspbian originally.</p>
 <p>Once the writing is done, you need to access the newly created SD card. You may need to re-insert it to remount it (Always use eject option if possible, before removing SD cards). You need to edit the <code class="docutils literal"><span class="pre">/etc/dhcpcd.conf</span></code> file on the SD card. Navigate to the SD card directory, go to <code class="docutils literal"><span class="pre">etc</span></code> folder. Open terminal in that folder by right clicking into the folder and choosing <em>Open in Terminal</em>. Use this command to open the file in text editor `` sudo gedit dhcpcd.conf``. You need to change one of the lines you added to the <code class="docutils literal"><span class="pre">dhcpcd.conf</span></code> file originally when setting up networking for the RPi. Find the line that says <code class="docutils literal"><span class="pre">static</span> <span class="pre">ip_address=10.0.0.20/24</span></code>. Edit the IP address to what the address you wish the RPi with this SD card would have, e.g. <code class="docutils literal"><span class="pre">static</span> <span class="pre">ip_address=10.0.0.21/24</span></code>. Save the text file.</p>
-<p>You can now remove the SD card (safely with after ejecting in Ubuntu) and simply plug it into a new Raspberry Pi. It should work perfectly as the one before, only you will need to use the newly set IP address to connect to it. At first time of running, it may say <em>The authenticity of host &#8216;10.0.0.21 (10.0.0.21)&#8217; can&#8217;t be established. -//- Are you sure you want to continue connecting (yes/no)?*</em> Type <strong>yes</strong> and hit Enter.</p>
+<p>You can now remove the SD card (safely with after ejecting in Ubuntu) and simply plug it into a new Raspberry Pi. It should work perfectly as the one before, only you will need to use the newly set IP address to connect to it. Make sure you test if the SSH connection can be established, with terminal command from Recording PC <code class="docutils literal"><span class="pre">ssh</span> <span class="pre">pi&#64;10.0.0.21</span></code>. At first time of running, it may say <em>The authenticity of host &#8216;10.0.0.21 (10.0.0.21)&#8217; can&#8217;t be established. -//- Are you sure you want to continue connecting (yes/no)?*</em> Type <strong>yes</strong> and hit Enter.</p>
 </div>
 </div>
 

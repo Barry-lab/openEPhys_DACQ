@@ -35,12 +35,12 @@ Download **Etcher** from this `website <https://etcher.io/>`_. Unpack the downlo
 
 Insert the microSD card into Raspberry Pi.
 
-Configuring Raspberry Pi
-------------------------
+Install necessary libraries on Raspberry Pi
+-------------------------------------------
 
 Connect to RPi a keyboard, mouse and monitor.
 
-This tutorial instructs you to connect the RPi to the internet using the same network connection as is used for your recording PC, if you used the following method to set it up: :ref:`RecPCnetworkInterfaces`. This means you will not be able to use the Recording PC to access the internet, while you work through the part "Configuring Raspberry Pi". If you can use another means of achieving network connection on the RPi, you can ignore steps in this part relating to **interfaces** file. Otherwise, connect the RPi to the network with the same ethernet cable as you were so far using on the Recording PC.
+This tutorial instructs you to connect the RPi to the internet using the same network connection as is used for your recording PC, if you used the following method to set it up: :ref:`RecPCnetworkInterfaces`. This means you will not be able to use the Recording PC to access the internet, while you work through the part "Install necessary libraries on Raspberry Pi". If you can use another means of achieving network connection on the RPi, you can ignore steps in this part relating to **interfaces** file. Otherwise, connect the RPi to the network with the same ethernet cable as you were so far using on the Recording PC.
 
 Add :download:`this script (install-opencv.sh) <../RecordingPCsetup/install-opencv.sh>` and the file ``/etc/network/interfaces`` (as set up on the Recording PC in this guide: :ref:`RecPCnetworkInterfaces`) to the RPi *Home folder* with a USB stick.
 
@@ -106,7 +106,7 @@ This part describes setting up networking between the recording PC and one or mu
 Configuring Raspberry Pi
 ------------------------
 
-SSH needs to be enabled. You can do this by accessing RPi settings via terminal command ``sudo raspi-config`` and choosing *Interfacing Options* with arrow keys and pressing Enter. Select *Camera* option and choose to *Enable* it. Do the same for the *SSH* option. It should prompt you to restart the RPi as you exit.
+SSH needs to be enabled. You can do this by accessing RPi settings via terminal command ``sudo raspi-config`` and choosing *Interfacing Options* with arrow keys and pressing Enter. Select *SSH* option and choose to *Enable* it. Reboot Raspberry Pi.
 
 Restore the original interfaces file with the following commands
 
@@ -147,7 +147,7 @@ Now after you restart the RPi, it should be ready for connecting to the Recordin
 Configuring the Recording PC
 ----------------------------
 
-These instructions are based on `this blong post <https://www.thomas-krenn.com/en/wiki/Two_Default_Gateways_on_One_System>`_.
+These instructions are based on `this blog post <https://www.thomas-krenn.com/en/wiki/Two_Default_Gateways_on_One_System>`_.
 
 Changes need to be made to the ``interfaces`` file. Open this using terminal command ``sudo gedit /etc/network/interfaces``. Add the following lines to the end of the file:
 
@@ -188,6 +188,8 @@ Now exit the SSH session or open a new terminal on Recording PC and enter this c
 
 Now your RPi should be able to connect to the RPi via SSH without a password.
 
+.. _duplicatingRPis:
+
 Making copies of Raspberry Pis
 ==============================
 
@@ -215,4 +217,4 @@ Now remove the original RPi SD card from the computer and replace it with a new 
 
 Once the writing is done, you need to access the newly created SD card. You may need to re-insert it to remount it (Always use eject option if possible, before removing SD cards). You need to edit the ``/etc/dhcpcd.conf`` file on the SD card. Navigate to the SD card directory, go to ``etc`` folder. Open terminal in that folder by right clicking into the folder and choosing *Open in Terminal*. Use this command to open the file in text editor `` sudo gedit dhcpcd.conf``. You need to change one of the lines you added to the ``dhcpcd.conf`` file originally when setting up networking for the RPi. Find the line that says ``static ip_address=10.0.0.20/24``. Edit the IP address to what the address you wish the RPi with this SD card would have, e.g. ``static ip_address=10.0.0.21/24``. Save the text file.
 
-You can now remove the SD card (safely with after ejecting in Ubuntu) and simply plug it into a new Raspberry Pi. It should work perfectly as the one before, only you will need to use the newly set IP address to connect to it. At first time of running, it may say *The authenticity of host '10.0.0.21 (10.0.0.21)' can't be established. -//- Are you sure you want to continue connecting (yes/no)?** Type **yes** and hit Enter.
+You can now remove the SD card (safely with after ejecting in Ubuntu) and simply plug it into a new Raspberry Pi. It should work perfectly as the one before, only you will need to use the newly set IP address to connect to it. Make sure you test if the SSH connection can be established, with terminal command from Recording PC ``ssh pi@10.0.0.21``. At first time of running, it may say *The authenticity of host '10.0.0.21 (10.0.0.21)' can't be established. -//- Are you sure you want to continue connecting (yes/no)?** Type **yes** and hit Enter.
