@@ -59,7 +59,7 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
         self.highpass_frequency = 600
         self.waveform_width = [0.0002, 0.0008] # [before, after] waveform width in seconds
         self.waveform_exemption = 0.001 # duration of exemption of other threshold crossings on tetrode in seconds
-        self.pt_default_threshold.setPlainText(str(-4.00))
+        self.pt_default_threshold.setPlainText(str(-5.00))
         self.default_waveform_range = 300 # Set default waveform range in microvolts
         self.tetrode_groups = [np.arange(16), np.arange(16) + 16]
         self.channel_groups = [np.arange(64), np.arange(64) + 64]
@@ -294,12 +294,13 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
                 fullfilepath = self.fpath + '/' + self.fileNames[self.channel_numbers_int.index(chan_nr)]
                 OEdict = OpenEphys.loadContinuous(fullfilepath, dtype=np.int16, verbose=False)
                 self.LFPs[ntet][ntchan] = OEdict['data']
-                if np.sum(np.array(self.badChan) == chan_nr) > 0:
-                    print(str(chan_nr) + ' set to zero')
-                    self.LFPs[ntet][ntchan] = np.zeros(self.LFPs[ntet][ntchan].shape, dtype=np.int16)
                 self.bitVolts = OEdict['header']['bitVolts']
                 self.samplingRate = OEdict['header']['sampleRate']
                 self.n_samples = self.LFPs[ntet][ntchan].size
+                # Set data to zero if BadChan
+                if np.sum(np.array(self.badChan) == chan_nr) > 0:
+                    print(str(chan_nr) + ' set to zero')
+                    self.LFPs[ntet][ntchan] = np.zeros(self.LFPs[ntet][ntchan].shape, dtype=np.int16)
         # Perform referencing (common average) if box checked
         if self.cb_reference.isChecked() == True:
             self.Referencing()
@@ -451,19 +452,14 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
             windows = np.delete(windows, np.where(idx_delete)[0], axis=0)
             spiketimes = np.delete(spiketimes, np.where(idx_delete)[0], axis=0)
             # Remove spikes that have waveforms with ridiculous amplitudes
-            # Median (min and max peak) multiplied by this value is the threshold where spikes get removed as noise
-            median_multiplier = self.waveform_max_threshold
+            noise_threshold_int = np.int16(float(str(self.pt_noise_threshold.toPlainText())) * 1000 / self.bitVolts)
             idx_delete = np.zeros(spiketimes.size, dtype=bool)
             for sub_ntchan in range(len(self.LFPs[ntet])):
                 waves = self.LFPs[ntet][sub_ntchan][windows]
-                mintrace = np.median(waves.min(axis=1))
-                maxtrace = np.median(waves.max(axis=1))
-                idx_delete = np.logical_or(idx_delete, np.any(waves < mintrace * median_multiplier, axis=1))
-                idx_delete = np.logical_or(idx_delete, np.any(waves > maxtrace * median_multiplier, axis=1))
+                idx_delete = np.logical_or(idx_delete, np.any(np.abs(waves) > noise_threshold_int, axis=1))
             percentage_too_big = np.sum(idx_delete, dtype=np.float32) / idx_delete.size
             if percentage_too_big > 5:
-                print('Caution! ' + str(percentage_too_big) + ' percent of waveforms deemed to have too big amplitude')
-                print('Consider increasing median_multiplier')
+                print('Caution! ' + str(percentage_too_big) + ' percent of waveforms in noise level')
             windows = np.delete(windows, np.where(idx_delete)[0], axis=0)
             spiketimes = np.delete(spiketimes, np.where(idx_delete)[0], axis=0)
             # Keep copy of windows in self for use when plotting or saving waveforms
