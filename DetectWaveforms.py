@@ -59,17 +59,16 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
         self.highpass_frequency = 600
         self.waveform_width = [0.0002, 0.0008] # [before, after] waveform width in seconds
         self.waveform_exemption = 0.001 # duration of exemption of other threshold crossings on tetrode in seconds
-        self.pt_default_threshold.setPlainText(str(-5.00))
+        self.pt_default_threshold.setPlainText(str(-75))
         self.default_waveform_range = 300 # Set default waveform range in microvolts
         self.tetrode_groups = [np.arange(16), np.arange(16) + 16]
         self.channel_groups = [np.arange(64), np.arange(64) + 64]
-        self.waveform_max_threshold = 5 # Set median multiplier to remove noise
         # Set links to GUI objects
         self.axesIDs = [[self.ax_Ch1_1,self.ax_Ch1_2,self.ax_Ch1_3,self.ax_Ch1_4],\
                        [self.ax_Ch2_1,self.ax_Ch2_2,self.ax_Ch2_3,self.ax_Ch2_4],\
                        [self.ax_Ch3_1,self.ax_Ch3_2,self.ax_Ch3_3,self.ax_Ch3_4],\
                        [self.ax_Ch4_1,self.ax_Ch4_2,self.ax_Ch4_3,self.ax_Ch4_4]]
-        self.std_th_IDs = [self.dsb_std_Ch1,self.dsb_std_Ch2,self.dsb_std_Ch3,self.dsb_std_Ch4]
+        self.thresholdBoxes = [self.sb_Ch1_threshold,self.sb_Ch2_threshold,self.sb_Ch3_threshold,self.sb_Ch4_threshold]
         self.ymin_IDs = [self.sb_min_Ch1,self.sb_min_Ch2,self.sb_min_Ch3,self.sb_min_Ch4]
         self.ymax_IDs = [self.sb_max_Ch1,self.sb_max_Ch2,self.sb_max_Ch3,self.sb_max_Ch4]
         self.gbChIDs = [self.gb_Ch1,self.gb_Ch2,self.gb_Ch3,self.gb_Ch4]
@@ -198,10 +197,6 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
             self.thresholds = []
             for channels in self.tetrode_channels_int:
                 self.thresholds.append([[]] * len(channels))
-            # Create empty list structure for std multiplier values
-            self.std_multiplier = []
-            for channels in self.tetrode_channels_int:
-                self.std_multiplier.append([[]] * len(channels))
             # Create empty list structure for plot minval values
             self.minvals = []
             for channels in self.tetrode_channels_int:
@@ -326,14 +321,8 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
             self.badChan = list(np.array(map(int, content)) - 1)
         else:
             self.badChan = []
-            
-            
-    def lw_item_changed(self):
-        # If tetrode selection has changed, load waveforms for that tetrode
-        ntet = self.lw_tetrodes.currentRow()
-        self.plot_tetrode(ntet)
-            
-            
+
+
     def initialize_lw_tetrodes(self):
         # Populates the listbox with tetrode numbres and corresponding channel numbers
         self.lw_tetrodes.clear()
@@ -347,8 +336,8 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
             itemstrings.append(string)
         # Populate the listbox
         self.lw_tetrodes.addItems(itemstrings)
-        # Connect the tetrode selection action to function lw_item_changed()
-        self.lw_tetrodes.itemSelectionChanged.connect(lambda:self.lw_item_changed())
+        # Connect the tetrode selection action to function update_plots()
+        self.lw_tetrodes.itemSelectionChanged.connect(lambda:self.update_plots())
         
         
     def next_channel(self):
@@ -382,43 +371,16 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
             idx_first = np.abs(lfp_timestamps - pos_timestamps[0]).argmin()
             idx_last = np.abs(lfp_timestamps - pos_timestamps[-1]).argmin()
             self.pos_edges = [idx_first, idx_last]
-        
-        
-    def plot_tetrode(self, ntet):
-        # Plots data for selected tetrode
-        for ntchan in range(4):
-            if ntchan + 1 <= len(self.tetrode_channels_int[ntet]):
-                self.gb_IDs[ntchan].setHidden(False)
-                # If threshold has not been set previously, start from default
-                if not self.std_multiplier[ntet][ntchan]:
-                    self.std_th_IDs[ntchan].setValue(float(str(self.pt_default_threshold.toPlainText())))
-                # Otherwise, load previously set values
-                else:
-                    self.std_th_IDs[ntchan].setValue(self.std_multiplier[ntet][ntchan])
-            # If a channel is missing, hide the plots
-            else:
-                self.gb_IDs[ntchan].setHidden(True)
-        self.update_plots()
-            
+
         
     def extract_waveforms(self, ntet, ntchan):
         # Extract the waveforms for this channel from the signal based on set threshold
-        # Get threshold multiplier value from GUI
-        prev_std_multiplier = self.std_multiplier[ntet][ntchan]
-        # Compute real threshold
-        std_multiplier = self.std_th_IDs[ntchan].value()
-        self.std_multiplier[ntet][ntchan] = std_multiplier
-        # Compute standard deviation to selected channels LFP
-        stdev = np.std(self.LFPs[ntet][ntchan])
-        self.stdevs[ntet][ntchan] = stdev
-        # Compute the threshold for spike detection based on st.dev and multiplier
-        self.thresholds[ntet][ntchan] = stdev * std_multiplier
-        # Detect spikes differently depending on whether the multiplier is negative or positive
-        if std_multiplier < 0:
-            spiketimes = self.LFPs[ntet][ntchan] < self.thresholds[ntet][ntchan]
+        # Detect spikes differently depending on whether the threshold is negative or positive
+        if self.thresholds[ntet][ntchan] < 0:
+            spiketimes = self.LFPs[ntet][ntchan] < np.int16(np.round((self.thresholds[ntet][ntchan] / self.bitVolts)))
             spiketimes = np.where(spiketimes)[0]
-        elif std_multiplier > 0:
-            spiketimes = self.LFPs[ntet][ntchan] > self.thresholds[ntet][ntchan]
+        elif self.thresholds[ntet][ntchan] > 0:
+            spiketimes = self.LFPs[ntet][ntchan] > np.int16(np.round((self.thresholds[ntet][ntchan] / self.bitVolts)))
             spiketimes = np.where(spiketimes)[0]
         else:
             # These items being None are used to identify that no spikes were detected on this channels
@@ -470,16 +432,6 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
         else:
             self.spikes_detected[ntet][ntchan] = False
             print('No spikes detected on tetrode ' + str(ntet) + ' channel ' + str(ntchan))
-            # If no spikes were detected, but std_multiplier had been previously set,
-            # recover previously set std_multiplier.
-            # If the channel has not been previously loaded and hence no multiplier set,
-            # reduce the std_multiplier by 1 until spikes are detected.
-            # if prev_std_multiplier == None:
-            #     self.std_th_IDs[ntchan].setValue(std_multiplier - 1 * np.sign(std_multiplier))
-            # else:
-            #     self.std_th_IDs[ntchan].setValue(prev_std_multiplier)
-            # Update plots, which causes the extract_waveforms function to be run again
-            # self.update_plots()
         
         
     def plot_waveforms(self, ntet, ntchan):
@@ -517,7 +469,7 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
                 xlims = [-winsize_before / self.samplingRate * 1000, winsize_after / self.samplingRate * 1000]
                 self.axesIDs[ntchan][nsubchan].setXRange(xlims[0], xlims[1], padding=0)
                 # Plot the threshold line
-                self.axesIDs[ntchan][ntchan].addLine(y=self.thresholds[ntet][ntchan] * self.bitVolts, pen=pg.mkPen('r'))
+                self.axesIDs[ntchan][ntchan].addLine(y=self.thresholds[ntet][ntchan], pen=pg.mkPen('r'))
                 # Update the title for this channel plots
                 num_waveforms = self.waveform_windows[ntet][ntchan].shape[0]
                 Ch_str = 'Channel: ' + self.tetrode_channels_str[ntet][ntchan] + ', waveforms: ' + str(num_waveforms)
@@ -557,6 +509,10 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
         # Extracts waveforms for current tetrode with current thresholds and plots them
         for ntchan in ntchans:
             ntet = self.lw_tetrodes.currentRow()
+            # If threshold has not been set previously, start from default
+            if not self.thresholds[ntet][ntchan]:
+                self.thresholds[ntet][ntchan] = np.int16(str(self.pt_default_threshold.toPlainText()))
+            self.thresholdBoxes[ntchan].setValue(self.thresholds[ntet][ntchan])
             self.extract_waveforms(ntet, ntchan)
             self.plot_waveforms(ntet, ntchan)
 
@@ -580,12 +536,8 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
         # Compute cursor location on y-axis
         y_coord = y_coord_pix * converter
         y_coord = self.ymax_IDs[ntchan].value() - y_coord
-        # Approximate st.dev multiplier for new threshold based on y_coord
-        new_std_multiplier = y_coord / self.stdevs[ntet][ntchan]
-        # Correct for the int16 to float32 voltage conversion
-        new_std_multiplier = new_std_multiplier / self.bitVolts
-        # Set new value to the std_multiplier option
-        self.std_th_IDs[ntchan].setValue(new_std_multiplier)
+        # Change the save threshold for this channel
+        self.thresholds[ntet][ntchan] = np.int16(y_coord)
         # Update plots
         self.update_plots([ntchan])
         
@@ -635,7 +587,7 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
                                  'nr_tetrode': self.tetrode_numbers_int[ntet], 
                                  'tetrode_channels': self.tetrode_channels_int[ntet], 
                                  'lfp_filename': full_filename, 
-                                 'std_multipliers': self.std_multiplier[ntet], 
+                                 'thresholds': self.thresholds[ntet], 
                                  'high_pass_frequency': self.highpass_frequency, 
                                  'waveform_width': self.waveform_width, 
                                  'waveform_exemption': self.waveform_exemption, 
