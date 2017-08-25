@@ -87,10 +87,10 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
         self.pb_prev.clicked.connect(lambda:self.previous_channel())
         self.pb_klustakwik.clicked.connect(lambda:self.start_klusta())
         self.cb_toggle_axes.stateChanged.connect(lambda:self.toggle_axes())
-        self.pb_update_ch1.clicked.connect(lambda:self.update_plots([0]))
-        self.pb_update_ch2.clicked.connect(lambda:self.update_plots([1]))
-        self.pb_update_ch3.clicked.connect(lambda:self.update_plots([2]))
-        self.pb_update_ch4.clicked.connect(lambda:self.update_plots([3]))
+        self.pb_update_ch1.clicked.connect(lambda:self.update_plots_button_press([0]))
+        self.pb_update_ch2.clicked.connect(lambda:self.update_plots_button_press([1]))
+        self.pb_update_ch3.clicked.connect(lambda:self.update_plots_button_press([2]))
+        self.pb_update_ch4.clicked.connect(lambda:self.update_plots_button_press([3]))
         # If below lines give errors, it is likely that necessary lines have not been added to
         # DetectWaveformsDesign.py. Search for file 'DetectWaveformsDesignAddOn.py'
         self.ax_Ch1_1.mouseClickObject.clicked.connect(lambda:self.mouseclick_on_plot(0))
@@ -262,6 +262,8 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
             for nchan in range(4):
                 if np.sum(np.array(self.badChan) == tet_chans[ntet,nchan]) == 0:
                     self.LFPs[ntet][nchan] = np.int16(np.float32(self.LFPs[ntet][nchan]) - other_mean_lfp[ntet])
+        
+        del other_mean_lfp
 
         #     # Compute the median of other channels
         #     other_median_lfp[ntet] = np.zeros(self.n_samples, dtype=np.int16)
@@ -525,6 +527,11 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
             self.thresholdBoxes[ntchan].setValue(self.thresholds[ntet][ntchan])
             self.extract_waveforms(ntet, ntchan)
             self.plot_waveforms(ntet, ntchan)
+
+
+    def update_plots_button_press(self, ntchan):
+        self.thresholds[ntet][ntchan] = np.int16(str(self.pt_default_threshold.toPlainText()))
+        self.update_plots(ntchans=ntchan):
 
     
     def mouseclick_on_plot(self,ntchan):
