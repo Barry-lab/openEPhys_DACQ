@@ -23,6 +23,7 @@ import pyqtgraph as pg
 import os
 import cPickle as pickle
 from scipy import signal
+from multiprocessing import Process
 
 
 def Filter(signal_in, sampling_rate=30000, highpass_frequency=600, filt_order=2):
@@ -279,6 +280,12 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
         #             self.LFPs[ntet][nchan] = self.LFPs[ntet][nchan] - other_median_lfp[ntet]
 
 
+    def filterThisChan(self, ntet, ntchan):
+        # This function is called in multiple threads to speed processing
+        self.LFPs[ntet][ntchan] = np.int16(Filter(np.float64(self.LFPs[ntet][ntchan]), 
+                                           highpass_frequency=self.highpass_frequency))
+
+
     def load_data(self):
         # Loads all files and performes necessary preprocessing
         # Load data for all channels into memory
@@ -303,14 +310,17 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
         if self.cb_filter.isChecked() == True:
             for ntet in range(len(self.LFPs)):
                 print('Filtering channels on tetrode ' + str(ntet + 1) + ' of ' + str(len(self.LFPs)))
+                FilteringThreads = []
                 for ntchan in range(len(self.LFPs[ntet])):
-                    self.LFPs[ntet][ntchan] = np.int16(Filter(np.float64(self.LFPs[ntet][ntchan]), 
-                                                              highpass_frequency=self.highpass_frequency))
+                    FilteringThreads.append(Process(target=self.filterThisChan, args=(ntet, ntchan)))
+                    FilteringThreads[ntchan].start()
+                for fThread in FilteringThreads:
+                    fThread.join()
         # Find position data edges, so spikes without position data could be ignored
         self.get_position_data_edges()
         print('Files loaded.')
 
-            
+
     def listBadChannels(self):
         # Find file BadChan in the directory and extract numbers from each row
         badChanFile = self.fpath + '/BadChan'
