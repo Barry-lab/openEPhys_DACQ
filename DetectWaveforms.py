@@ -623,8 +623,8 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
                     spiketimes = np.delete(spiketimes, np.where(idx_tooclose)[0], axis=0)
                     waveform_windows = np.delete(waveform_windows, np.where(idx_tooclose)[0], axis=0)
                 # Extract waveforms for all channels
-                waveforms = np.zeros((waveform_windows.shape[0],waveform_windows.shape[1],len(self.waveform_windows[ntet])), dtype=np.int16)
-                for ntchan in range(len(self.waveform_windows[ntet])):
+                waveforms = np.zeros((waveform_windows.shape[0],waveform_windows.shape[1],len(self.LFPs[ntet])), dtype=np.int16)
+                for ntchan in range(len(self.LFPs[ntet])):
                     waveforms[:,:,ntchan] = self.LFPs[ntet][ntchan][waveform_windows]
                     chan_nr = self.tetrode_channels_int[ntet][ntchan]
                 # Save waveforms to file
