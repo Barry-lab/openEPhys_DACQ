@@ -23,7 +23,7 @@ import pyqtgraph as pg
 import os
 import cPickle as pickle
 from scipy import signal
-from multiprocessing import Process
+# from multiprocessing import Process
 
 
 def Filter(signal_in, sampling_rate=30000, highpass_frequency=600, filt_order=2):
@@ -314,10 +314,11 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
                 print('Filtering channels on tetrode ' + str(ntet + 1) + ' of ' + str(len(self.LFPs)))
                 FilteringThreads = []
                 for ntchan in range(len(self.LFPs[ntet])):
-                    FilteringThreads.append(Process(target=self.filterThisChan, args=(ntet, ntchan)))
-                    FilteringThreads[ntchan].start()
-                for fThread in FilteringThreads:
-                    fThread.join()
+                    self.filterThisChan(ntet, ntchan)
+                #     FilteringThreads.append(Process(target=self.filterThisChan, args=(ntet, ntchan)))
+                #     FilteringThreads[ntchan].start()
+                # for fThread in FilteringThreads:
+                #     fThread.join()
         # Find position data edges, so spikes without position data could be ignored
         self.get_position_data_edges()
         print('Files loaded.')
@@ -531,7 +532,7 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
 
     def update_plots_button_press(self, ntchan):
         self.thresholds[ntet][ntchan] = np.int16(str(self.pt_default_threshold.toPlainText()))
-        self.update_plots(ntchans=ntchan):
+        self.update_plots(ntchans=ntchan)
 
     
     def mouseclick_on_plot(self,ntchan):
