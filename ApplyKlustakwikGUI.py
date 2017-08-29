@@ -13,7 +13,6 @@ import os
 import cPickle as pickle
 import ApplyKlustakwikScripts as AKS
 import createWaveformGUIdata as waveGUI
-import subprocess
 
 
 class ApplyKlustakwikGUI(QtGui.QMainWindow, ApplyKlustakwikGUIDesign.Ui_MainWindow):
@@ -179,8 +178,6 @@ class ApplyKlustakwikGUI(QtGui.QMainWindow, ApplyKlustakwikGUIDesign.Ui_MainWind
         tmpFileNames = waveGUI.getAllFiles(self.fpath, self.fileNames)
         speedcut = self.sb_speed_cut.value()
         waveGUI.createWaveformData(self.fpath, tmpFileNames, speedcut=speedcut)
-        # Opens recording folder with Ubuntu file browser
-        subprocess.Popen(['xdg-open', self.fpath + '/WaveformGUIdata'])
 
 
 # The following is the default ending for a QtGui application script

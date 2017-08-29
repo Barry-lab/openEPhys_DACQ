@@ -15,6 +15,7 @@ import re
 import shutil
 from scipy import interpolate
 from scipy.spatial.distance import euclidean
+import subprocess
 
 
 def getAllFiles(fpath, fileNames):
@@ -394,6 +395,8 @@ def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'
     print('Waveform data was generated for ' + str(len(waveform_data_dacq)) + ' tetrodes.')
     if idx_speedcut:
         print('Total of ' + str(nremoved) + ' spikes removed according to speed cut')
+    # Opens recording folder with Ubuntu file browser
+    subprocess.Popen(['xdg-open', fpath + '/' + subfolder])
         
         
 class FilePicker(QtGui.QWidget):
