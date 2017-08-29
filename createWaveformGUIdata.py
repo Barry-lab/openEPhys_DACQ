@@ -14,6 +14,7 @@ import cPickle as pickle
 import re
 import shutil
 from scipy import interpolate
+from scipy.spatial.distance import euclidean
 
 
 def getAllFiles(fpath, fileNames):
@@ -46,7 +47,7 @@ def interpolate_waveforms(waves, nr_targetbins=50):
     return new_waves
     
     
-def create_DACQ_waveform_data(waveform_data):
+def create_DACQ_waveform_data(waveform_data, idx_speedcut=None):
     # Create DACQ data tetrode format
     waveform_data_dacq = []
     dacq_waveform_dtype = [('ts', '>i'), ('waveform', '50b')]
@@ -54,7 +55,13 @@ def create_DACQ_waveform_data(waveform_data):
     dacq_waveform_waves_dtype = '>i1'
     dacq_sampling_rate = 96000
     openEphus_sampling_rate = waveform_data[0]['sampling_rate']
-    for tet_waveform_data in waveform_data:
+    for ntet in range(len(waveform_data)):
+        # Remove spikes under speedcut if asked to
+        tet_waveform_data = waveform_data[ntet]
+        if idx_speedcut:
+            tet_waveform_data['waveforms'] = np.delete(tet_waveform_data['waveforms'], idx_speedcut[ntet], 0)
+            tet_waveform_data['spiketimes'] = np.delete(tet_waveform_data['spiketimes'], idx_speedcut[ntet], 0)
+        # Get waveforms
         waves = np.array(tet_waveform_data['waveforms'])
         nspikes = waves.shape[0]
         # Set waveforms values on this tetrode to range -127 to 127
@@ -207,7 +214,53 @@ def getExperimentInfo(fpath):
     return experiment_info
 
 
-def createWaveformData(fpath, fileNames, subfolder='WaveformGUIdata'):
+def apply_speedcut(waveform_datas, speedcut, posfile):
+    pos_csv = np.genfromtxt(posfile, delimiter=',')
+    pos_timestamps = np.array(pos_csv[:,0], dtype=np.float32)
+    xy_pos = pos_csv[:,1:3]
+    # Compute distance travelled between each pos datapoint
+    distance = np.zeros(xy_pos.shape[0], dtype=np.float32)
+    for npos in range(xy_pos.shape[0] - 1):
+        distance[npos] = euclidean(xy_pos[npos,:], xy_pos[npos + 1,:])
+    # Compute total distance traveled in 1 second around each pos datapoint
+    winsize = float(1.0)
+    distance_sum = np.zeros(distance.shape, dtype=np.float32)
+    startpos = np.where(np.diff(pos_timestamps > (pos_timestamps[0] + (winsize / 2))))[0][0] + 1
+    endpos = np.where(np.diff(pos_timestamps < (pos_timestamps[-1] - (winsize / 2))))[0][0]
+    for npos in range(distance.size)[startpos:endpos]:
+        # Find beginning and end of window
+        pos_time = pos_timestamps[npos]
+        time_differences = np.abs(pos_timestamps - pos_time)
+        window_edges = np.where(np.diff(time_differences > winsize / 2))[0]
+        distance_sum[npos] = np.sum(distance[window_edges[0]:window_edges[1]])
+    distance_sum[:startpos] = distance_sum[startpos]
+    distance_sum[endpos:] = distance_sum[endpos - 1]
+    # Convert distance covered to speed cm/s
+    speed = distance_sum / winsize
+
+    # import matplotlib
+    # matplotlib.use('Agg')
+    # import matplotlib.pyplot as plt
+    # plt.plot(pos_timestamps, speed)
+    # plt.savefig('tmpfig')
+
+    # Create a list to complement waveform_datas that indictes which waveforms to cut
+    idx_speedcut = []
+    for n_data in range(len(waveform_datas)):
+        # Convert spike times to seconds
+        wave_timestamps = waveform_datas[n_data]['spiketimes'] / waveform_datas[n_data]['sampling_rate']
+        # Get speed for each waveform at closest pos datapoint
+        wave_speeds = np.zeros(wave_timestamps.size)
+        for nwave in range(wave_speeds.size):
+            pos_idx = np.abs(pos_timestamps - wave_timestamps[nwave]).argmin()
+            wave_speeds[nwave] = speed[pos_idx]
+        # Indices for waveforms at slower speeds than speedcut
+        idx_speedcut.append(np.where(wave_speeds < speedcut)[0])
+
+    return idx_speedcut
+
+
+def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'):
     print('Converting data')
     # Loads waveforms from Pickle files selected with the openFileDialog
     waveform_data = []
@@ -228,8 +281,14 @@ def createWaveformData(fpath, fileNames, subfolder='WaveformGUIdata'):
     fileNames['waveforms'] = [fileNames['waveforms'][x] for x in file_order]
     waveform_data = [waveform_data[x] for x in file_order]
     fileNames['clufiles'] = [fileNames['clufiles'][x] for x in file_order]
+    # Apply speed cut if requested
+    if speedcut > 0:
+        idx_speedcut = apply_speedcut(waveform_data, speedcut, fpath + '/' + fileNames['posfile'])
+        subfolder = subfolder + '_s' + str(speedcut)
+    else:
+        idx_speedcut = None
     # Convert data to DACQ format
-    waveform_data_dacq = create_DACQ_waveform_data(waveform_data)
+    waveform_data_dacq = create_DACQ_waveform_data(waveform_data, idx_speedcut)
     pos_data_dacq = create_DACQ_pos_data(fpath + '/' + fileNames['posfile'], duration)
     # Get headers for both datatypes
     header_wave, keyorder_wave = header_templates('waveforms')
@@ -316,12 +375,25 @@ def createWaveformData(fpath, fileNames, subfolder='WaveformGUIdata'):
         # Write the end token string
         f.write(DATA_END_TOKEN)
     # Copy over and rename CLU files for each tetrode
+    nremoved = 0
     for ntet in range(len(fileNames['clufiles'])):
         if not not fileNames['clufiles'][ntet]:
             sourcefile = fpath + '/' + fileNames['clufiles'][ntet]
             fname = fpath + '/' + subfolder + '/' + file_basename + '.clu.' + str(waveform_data[ntet]['nr_tetrode'] + 1)
             shutil.copy2(sourcefile, fname)
+        # Remove lines for spikes that are excluded with speed cut, by rewriting the file
+        if idx_speedcut:
+            with open(fname, 'rb') as file:
+                lines = file.readlines()
+            if len(idx_speedcut[ntet]) > 0:
+                for nspike in idx_speedcut[ntet][::-1]:
+                    del lines[nspike + 1]
+            with open(fname, 'wb') as file:
+                file.writelines(lines)
+            nremoved += len(idx_speedcut[ntet])
     print('Waveform data was generated for ' + str(len(waveform_data_dacq)) + ' tetrodes.')
+    if idx_speedcut:
+        print('Total of ' + str(nremoved) + ' spikes removed according to speed cut')
         
         
 class FilePicker(QtGui.QWidget):
@@ -341,10 +413,16 @@ class FilePicker(QtGui.QWidget):
                                 'created and put into subdirectory WaveformGUI.')
         self.vbox.addWidget(self.lbl)
         # Create a push button labelled 'choose' and add it to our layout
-        btn = QtGui.QPushButton('Choose file', self)
-        self.vbox.addWidget(btn)
+        self.btn = QtGui.QPushButton('Choose file', self)
+        self.vbox.addWidget(self.btn)
         # Connect the clicked signal to the get_fname handler
-        self.connect(btn, QtCore.SIGNAL('clicked()'), self.get_fname)
+        self.connect(self.btn, QtCore.SIGNAL('clicked()'), self.get_fname)
+        # Add spin box for showing speed limit
+        self.spinbox = QtGui.QSpinBox()
+        self.spinbox.setPrefix('Speed cut: ')
+        self.spinbox.setSuffix(' cm/s')
+        self.vbox.addWidget(self.spinbox)
+
 
     def get_fname(self):
         # Pops up a GUI to select a single file. All others with same prefix will be loaded
@@ -372,7 +450,8 @@ class FilePicker(QtGui.QWidget):
                     if fname.startswith(fprefix) and fname.endswith('.waveforms'):
                         self.fileNames.append(fname)
             fileNames = getAllFiles(self.fpath, self.fileNames)
-            createWaveformData(self.fpath, fileNames)
+            speedcut = self.spinbox.value()
+            createWaveformData(fpath=self.fpath, fileNames=fileNames, speedcut=speedcut)
             app.instance().quit()
 
 

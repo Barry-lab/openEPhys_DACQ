@@ -177,7 +177,8 @@ class ApplyKlustakwikGUI(QtGui.QMainWindow, ApplyKlustakwikGUIDesign.Ui_MainWind
     def waveformGUIdata(self):
         # Convert freshly created files to waveformGUIdata
         tmpFileNames = waveGUI.getAllFiles(self.fpath, self.fileNames)
-        waveGUI.createWaveformData(self.fpath, tmpFileNames)
+        speedcut = self.sb_speed_cut.value()
+        waveGUI.createWaveformData(self.fpath, tmpFileNames, speedcut=speedcut)
         # Opens recording folder with Ubuntu file browser
         subprocess.Popen(['xdg-open', self.fpath + '/WaveformGUIdata'])
 
