@@ -60,7 +60,7 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
         self.highpass_frequency = 600
         self.waveform_width = [0.0002, 0.0008] # [before, after] waveform width in seconds
         self.waveform_exemption = 0.001 # duration of exemption of other threshold crossings on tetrode in seconds
-        self.pt_default_threshold.setPlainText(str(-75))
+        self.pt_default_threshold.setPlainText(str(75))
         self.default_waveform_range = 300 # Set default waveform range in microvolts
         self.tetrode_groups = [np.arange(16), np.arange(16) + 16]
         self.channel_groups = [np.arange(64), np.arange(64) + 64]
@@ -297,7 +297,7 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
                 chan_nr = self.tetrode_channels_int[ntet][ntchan]
                 fullfilepath = self.fpath + '/' + self.fileNames[self.channel_numbers_int.index(chan_nr)]
                 OEdict = OpenEphys.loadContinuous(fullfilepath, dtype=np.int16, verbose=False)
-                self.LFPs[ntet][ntchan] = OEdict['data']
+                self.LFPs[ntet][ntchan] = -OEdict['data']
                 self.bitVolts = OEdict['header']['bitVolts']
                 self.samplingRate = OEdict['header']['sampleRate']
                 self.n_samples = self.LFPs[ntet][ntchan].size
