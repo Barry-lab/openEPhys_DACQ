@@ -18,10 +18,10 @@ RPiPassword = 'raspberry'
 connection = ssh(RPiIPs[n_rpi], RPiUsername, RPiPassword)
 connection.sendCommand('pkill python') # Ensure any past processes have closed
 
+connection.sendCommand('nohup python openPinchValve.py ' + str(duration) + ' &')
+
 pygame.mixer.init()
 pygame.mixer.music.load('audiocheck.net_sin_2800Hz_-3dBFS_2s.wav')
 pygame.mixer.music.play()
 while pygame.mixer.music.get_busy() == True:
     continue
-
-connection.sendCommand('nohup python openPinchValve.py ' + str(duration) + ' &')
