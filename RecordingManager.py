@@ -101,7 +101,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_load_last.clicked.connect(lambda:self.load_last_settings())
         self.pb_load.clicked.connect(lambda:self.load_settings())
         self.pb_root_folder.clicked.connect(lambda:self.root_folder_browse())
-        self.pb_badChan.clicked.connect(lambda:self.load_last_badChan())
         self.pb_make_date_folder.clicked.connect(lambda:self.make_date_folder())
         self.pb_auto_rec_folder.clicked.connect(lambda:self.auto_rec_folder())
         self.pb_manual_rec_folder.clicked.connect(lambda:self.manual_rec_folder())
@@ -118,9 +117,9 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             shutil.rmtree(self.TEMPfolder)
         os.mkdir(self.TEMPfolder)
 
-    def openFolderDialog(self):
+    def openFolderDialog(self, caption='Select folder'):
         # Pops up a GUI to select a folder
-        dialog = QtGui.QFileDialog(self, caption='Select folder', directory=str(self.pt_root_folder.toPlainText()))
+        dialog = QtGui.QFileDialog(self, caption=caption, directory=str(self.pt_root_folder.toPlainText()))
         dialog.setFileMode(QtGui.QFileDialog.Directory)
         dialog.setOption(QtGui.QFileDialog.ShowDirsOnly, True)
         if dialog.exec_():
@@ -131,31 +130,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             selected_folder = 'No folder selected'
 
         return selected_folder
-
-    def openSingleFileDialog(self, caption='Select a RecGUI_Settings.p file', directory=None):
-        # Pops up a GUI to select a single file. All others with same prefix will be loaded
-        dialog = QtGui.QFileDialog(self, caption, directory)
-        dialog.setFileMode(QtGui.QFileDialog.ExistingFile)
-        dialog.setViewMode(QtGui.QFileDialog.List) # or Detail
-        if dialog.exec_():
-            # Get path and file name of selection
-            tmp = dialog.selectedFiles()
-            selected_file = str(tmp[0])
-
-        return selected_file
-
-    def load_last_badChan(self):
-        # Find the latest recording data in this animals path and load badChan into current GUI
-        dir_animal = str(self.pt_root_folder.toPlainText()) + '/' + str(self.pt_animal.toPlainText())
-        if len(str(self.pt_animal.toPlainText())) > 0 and os.path.isdir(dir_animal):
-            latest_date_folder = findLatestDateFolder(dir_animal)
-            latest_folder = findLatestTimeFolder(dir_animal + '/' + latest_date_folder)
-            full_path = dir_animal + '/' + latest_date_folder + '/' + latest_folder
-            with open(full_path + '/RecGUI_Settings.p','rb') as file:
-                RecGUI_Settings = pickle.load(file)
-            self.pt_badChan.setPlainText(RecGUI_Settings['badChan'])
-        else:
-            self.pt_badChan.setPlainText('Could not find Animal Data!')
 
     def make_date_folder(self):
         dir_animal = str(self.pt_root_folder.toPlainText()) + '/' + str(self.pt_animal.toPlainText())
@@ -168,12 +142,12 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         else:
             show_message('ERROR! Animal folder not found.')
 
-    def load_settings(self, selected_file=None):
-        if not selected_file: # Get user to select settings to load if not given
-            selected_file = openSingleFileDialog(caption='Select a RecGUI_Settings.p file', \
-                                                 directory=self.RecGUI_dataFolder)
+    def load_settings(self, recording_folder=None):
+        if not recording_folder: # Get user to select settings to load if not given
+            recording_folder_full_path = self.openFolderDialog(caption='Select Recording Folder')
+            recording_folder = os.path.basename(recording_folder_full_path)
         # Copy over settings to TEMP folder
-        callstr = 'rsync -avzh ' + os.path.dirname(selected_file) + '/ ' + self.TEMPfolder + '/'
+        callstr = 'rsync -avzh ' + self.RecGUI_dataFolder + '/' + recording_folder + '/ ' + self.TEMPfolder + '/'
         os.system(callstr)
         # Load RecGUI_Settings and update settings in GUI
         with open(self.TEMPfolder + '/RecGUI_Settings.p','rb') as file:
@@ -185,6 +159,20 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pt_badChan.setPlainText(RecGUI_Settings['badChan'])
         self.pt_rec_folder.setPlainText(RecGUI_Settings['rec_folder'])
         self.rb_posPlot_yes.setChecked(RecGUI_Settings['PosPlot'])
+        if len(RecGUI_Settings['channel_map']) > 0:
+            self.pt_chan_map_1.setPlainText(RecGUI_Settings['channel_map'][0][0])
+            self.pt_chan_map_1_chans.setPlainText(RecGUI_Settings['channel_map'][0][1])
+            if len(RecGUI_Settings['channel_map']) > 1:
+                self.pt_chan_map_2.setPlainText(RecGUI_Settings['channel_map'][1][0])
+                self.pt_chan_map_2_chans.setPlainText(RecGUI_Settings['channel_map'][1][1])
+            else:
+                self.pt_chan_map_2.setPlainText('')
+                self.pt_chan_map_2_chans.setPlainText('')
+        else:
+            self.pt_chan_map_1.setPlainText('')
+            self.pt_chan_map_1_chans.setPlainText('')
+            self.pt_chan_map_2.setPlainText('')
+            self.pt_chan_map_2_chans.setPlainText('')
         # Update RPi Camera Settings
         with open(self.TEMPfolder + '/RPiSettings.p','rb') as file:
             RPiSettings = pickle.load(file)
@@ -192,11 +180,18 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         Camera_Files_Update_Function(SettingsFolder=self.TEMPfolder, RPiSettings=RPiSettings, useCalibration=True)
 
     def load_last_settings(self):
-        # Find the latest saved Recording Manager Settings
-        latest_folder = findLatestTimeFolder(self.RecGUI_dataFolder)
-        # Compile full path to the RecGUI_Settings.p file in this folder and load the settings
-        latest_RecGUISettings_FullPath = self.RecGUI_dataFolder + '/' + latest_folder + '/RecGUI_Settings.p'
-        self.load_settings(selected_file=latest_RecGUISettings_FullPath)
+        # Check if specific Animal ID has been entered
+        animal_id = str(self.pt_animal.toPlainText())
+        if len(animal_id) > 0:
+            # Find the latest saved Recording Manager Settings
+            dir_animal = str(self.pt_root_folder.toPlainText()) + '/' + animal_id
+            latest_date_folder = findLatestDateFolder(dir_animal)
+            latest_folder = findLatestTimeFolder(dir_animal + '/' + latest_date_folder)
+        else:
+            # Find the latest saved Recording Manager Settings
+            latest_folder = findLatestTimeFolder(self.RecGUI_dataFolder)
+        # Load the settings in the latest_folder
+        self.load_settings(latest_folder=latest_folder)
 
     def root_folder_browse(self):
         # Pops up a new window to select a folder and then inserts the path to the text box
@@ -250,6 +245,25 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             self.CamSet.load(loadFile=self.TEMPfolder + '/RPiSettings.p')
 
     def get_RecordingGUI_settings(self):
+        # Get channel mapping info
+        channel_map = []
+        if len(str(self.pt_chan_map_1.toPlainText())) > 0:
+            channel_map_1 = [str(self.pt_chan_map_1.toPlainText())]
+            chanString = str(self.pt_chan_map_1_chans.toPlainText())
+            channel_map_1.append(chanString)
+            chan_from = int(chanString[:chanString.find('-')])
+            chan_to = int(chanString[chanString.find('-') + 1:])
+            channel_map_1.append(range(chan_from - 1, chan_to))
+            channel_map.append(channel_map_1)
+            if len(str(self.pt_chan_map_2.toPlainText())) > 0:
+                channel_map_2 = [str(self.pt_chan_map_2.toPlainText())]
+                chanString = str(self.pt_chan_map_2_chans.toPlainText())
+                channel_map_2.append(chanString)
+                chan_from = int(chanString[:chanString.find('-')])
+                chan_to = int(chanString[chanString.find('-') + 1:])
+                channel_map_2.append(range(chan_from - 1, chan_to))
+                channel_map.append(channel_map_2)
+
         # Grabs all options in the Recording Manager and puts them into a dictionary
         RecGUI_Settings = {'root_folder': str(self.pt_root_folder.toPlainText()), 
                            'animal': str(self.pt_animal.toPlainText()), 
@@ -257,7 +271,8 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
                            'experimenter': str(self.pt_experimenter.toPlainText()), 
                            'badChan': str(self.pt_badChan.toPlainText()), 
                            'rec_folder': str(self.pt_rec_folder.toPlainText()), 
-                           'PosPlot': self.rb_posPlot_yes.isChecked()}
+                           'PosPlot': self.rb_posPlot_yes.isChecked(), 
+                           'channel_map': channel_map}
 
         return RecGUI_Settings
 

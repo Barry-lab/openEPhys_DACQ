@@ -355,6 +355,110 @@
                </widget>
               </item>
               <item>
+               <widget class="QFrame" name="f_badChan_2">
+                <property name="maximumSize">
+                 <size>
+                  <width>16777215</width>
+                  <height>49</height>
+                 </size>
+                </property>
+                <property name="frameShape">
+                 <enum>QFrame::StyledPanel</enum>
+                </property>
+                <property name="frameShadow">
+                 <enum>QFrame::Raised</enum>
+                </property>
+                <layout class="QHBoxLayout" name="horizontalLayout_23" stretch="2,3">
+                 <item>
+                  <widget class="QPlainTextEdit" name="plainTextEdit_32">
+                   <property name="maximumSize">
+                    <size>
+                     <width>16777215</width>
+                     <height>29</height>
+                    </size>
+                   </property>
+                   <property name="readOnly">
+                    <bool>true</bool>
+                   </property>
+                   <property name="plainText">
+                    <string>Channel mapping</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QFrame" name="frame_4">
+                   <property name="frameShape">
+                    <enum>QFrame::StyledPanel</enum>
+                   </property>
+                   <property name="frameShadow">
+                    <enum>QFrame::Raised</enum>
+                   </property>
+                   <layout class="QHBoxLayout" name="horizontalLayout_5">
+                    <property name="spacing">
+                     <number>0</number>
+                    </property>
+                    <property name="margin">
+                     <number>0</number>
+                    </property>
+                    <item>
+                     <widget class="QPlainTextEdit" name="pt_chan_map_1">
+                      <property name="minimumSize">
+                       <size>
+                        <width>50</width>
+                        <height>29</height>
+                       </size>
+                      </property>
+                      <property name="plainText">
+                       <string>MEC</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPlainTextEdit" name="pt_chan_map_1_chans">
+                      <property name="minimumSize">
+                       <size>
+                        <width>70</width>
+                        <height>29</height>
+                       </size>
+                      </property>
+                      <property name="plainText">
+                       <string>1-64</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPlainTextEdit" name="pt_chan_map_2">
+                      <property name="minimumSize">
+                       <size>
+                        <width>50</width>
+                        <height>29</height>
+                       </size>
+                      </property>
+                      <property name="plainText">
+                       <string>CA1</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPlainTextEdit" name="pt_chan_map_2_chans">
+                      <property name="minimumSize">
+                       <size>
+                        <width>70</width>
+                        <height>29</height>
+                       </size>
+                      </property>
+                      <property name="plainText">
+                       <string>65-128</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </widget>
+                 </item>
+                </layout>
+               </widget>
+              </item>
+              <item>
                <widget class="QFrame" name="f_badChan">
                 <property name="maximumSize">
                  <size>
@@ -368,7 +472,7 @@
                 <property name="frameShadow">
                  <enum>QFrame::Raised</enum>
                 </property>
-                <layout class="QHBoxLayout" name="horizontalLayout_22">
+                <layout class="QHBoxLayout" name="horizontalLayout_22" stretch="1,1">
                  <item>
                   <widget class="QPlainTextEdit" name="plainTextEdit_31">
                    <property name="maximumSize">
@@ -382,25 +486,6 @@
                    </property>
                    <property name="plainText">
                     <string>Bad Channels</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QPushButton" name="pb_badChan">
-                   <property name="minimumSize">
-                    <size>
-                     <width>85</width>
-                     <height>29</height>
-                    </size>
-                   </property>
-                   <property name="maximumSize">
-                    <size>
-                     <width>85</width>
-                     <height>29</height>
-                    </size>
-                   </property>
-                   <property name="text">
-                    <string>Load Last</string>
                    </property>
                   </widget>
                  </item>
