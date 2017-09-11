@@ -13,6 +13,7 @@ import os
 import cPickle as pickle
 import ApplyKlustakwikScripts as AKS
 import createWaveformGUIdata
+import threading
 
 
 class ApplyKlustakwikGUI(QtGui.QMainWindow, ApplyKlustakwikGUIDesign.Ui_MainWindow):
@@ -113,7 +114,7 @@ class ApplyKlustakwikGUI(QtGui.QMainWindow, ApplyKlustakwikGUIDesign.Ui_MainWind
         for wavedat in self.waveform_data:
             # Get channel numbers into string form
             tetrode_channels_str = map(str, list(np.array(wavedat['tetrode_channels']) + 1))
-            tetrode_number_str = str(wavedat['nr_tetrode'])
+            tetrode_number_str = str(wavedat['nr_tetrode'] + 1)
             # Format the item string using tetrode number and channel numbers
             string = 'T' + tetrode_number_str + ' C ' + \
                      ' '.join(tetrode_channels_str)
@@ -141,9 +142,8 @@ class ApplyKlustakwikGUI(QtGui.QMainWindow, ApplyKlustakwikGUIDesign.Ui_MainWind
         
     def cluster_all(self):
         # Calls clustering function for all tetrodes
-        self.cluster(range(len(self.waveform_data)))
-        # Set WaveformGUI button active
-        self.pb_waveformGUI.setEnabled(True)
+        clusteringThread = threading.Thread(target=self.cluster, args=[range(len(self.waveform_data))])
+        clusteringThread.start()
         
         
     def cluster(self, tetrode_rows):
@@ -162,6 +162,8 @@ class ApplyKlustakwikGUI(QtGui.QMainWindow, ApplyKlustakwikGUIDesign.Ui_MainWind
             AKS.klustakwik(waveforms, d, full_filename)
             # Cross out items in the listwidget once they have been clustered
             self.cross_out_lw_tetrode(ntet)
+        # Set WaveformGUI button active
+        self.pb_waveformGUI.setEnabled(True)
             
             
     def cross_out_lw_tetrode(self, ntet):
