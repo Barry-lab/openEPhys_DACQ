@@ -216,7 +216,7 @@ def getExperimentInfo(fpath):
     return experiment_info
 
 
-def apply_speedcut(waveform_datas, speedcut, posfile):
+def get_speed_data(posfile):
     pos_csv = np.genfromtxt(posfile, delimiter=',')
     pos_timestamps = np.array(pos_csv[:,0], dtype=np.float32)
     xy_pos = pos_csv[:,1:3]
@@ -240,11 +240,12 @@ def apply_speedcut(waveform_datas, speedcut, posfile):
     # Convert distance covered to speed cm/s
     speed = distance_sum / winsize
 
-    # import matplotlib
-    # matplotlib.use('Agg')
-    # import matplotlib.pyplot as plt
-    # plt.plot(pos_timestamps, speed)
-    # plt.savefig('tmpfig')
+    return pos_timestamps, speed
+
+
+def apply_speedcut(waveform_datas, speedcut, posfile):
+
+    pos_timestamps, speed = get_speed_data(posfile)
 
     # Create a list to complement waveform_datas that indictes which waveforms to cut
     idx_speedcut = []
@@ -400,7 +401,7 @@ def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'
     subprocess.Popen(['xdg-open', fpath + '/' + subfolder])
         
         
-class FilePicker(QtGui.QWidget):
+class MainWindow(QtGui.QWidget):
 
     def __init__(self):
         # create GUI
@@ -416,21 +417,35 @@ class FilePicker(QtGui.QWidget):
                                 'All necessary files for Waveform GUI will be \n' + \
                                 'created and put into subdirectory WaveformGUI.')
         self.vbox.addWidget(self.lbl)
+        # Create text box to display selected path
+        self.pt_fpath = QtGui.QPlainTextEdit()
+        self.pt_fpath.readOnly = True
+        self.vbox.addWidget(self.pt_fpath)
         # Create a push button labelled 'choose' and add it to our layout
-        self.btn = QtGui.QPushButton('Choose file', self)
-        self.vbox.addWidget(self.btn)
+        self.pb_choose_file = QtGui.QPushButton('Choose file on path', self)
+        self.vbox.addWidget(self.pb_choose_file)
         # Connect the clicked signal to the get_fname handler
-        self.connect(self.btn, QtCore.SIGNAL('clicked()'), self.get_fname)
+        self.connect(self.pb_choose_file, QtCore.SIGNAL('clicked()'), self.get_fname)
         # Add spin box for showing speed limit
         self.spinbox = QtGui.QSpinBox()
         self.spinbox.setPrefix('Speed cut: ')
         self.spinbox.setSuffix(' cm/s')
         self.vbox.addWidget(self.spinbox)
+        # Add button to display speed data
+        self.pb_display_speed = QtGui.QPushButton('Display speed data', self)
+        self.vbox.addWidget(self.pb_display_speed)
+        # Connect the clicked signal to the display speed plot function
+        self.connect(self.pb_display_speed, QtCore.SIGNAL('clicked()'), self.plot_speed)
+        # Create a push button labelled 'Create Data' and add it to our layout
+        self.pb_create_data = QtGui.QPushButton('Create Waveform GUI data', self)
+        self.vbox.addWidget(self.pb_create_data)
+        # Connect the clicked signal to the get_fname handler
+        self.connect(self.pb_create_data, QtCore.SIGNAL('clicked()'), self.create_data)
 
 
     def get_fname(self):
         # Pops up a GUI to select a single file. All others with same prefix will be loaded
-        dialog = QtGui.QFileDialog(self, caption='Select one from the set of waveform files')
+        dialog = QtGui.QFileDialog(self, caption='Select one from the set of waveform files in the recording folder')
         dialog.setFileMode(QtGui.QFileDialog.ExistingFile)
         dialog.setNameFilters(['(*.waveforms)'])
         dialog.setViewMode(QtGui.QFileDialog.List) # or Detail
@@ -439,6 +454,7 @@ class FilePicker(QtGui.QWidget):
             tmp = dialog.selectedFiles()
             selected_file = str(tmp[0])
             self.fpath = ntpath.dirname(selected_file)
+            self.pt_fpath.setPlainText(self.fpath)
             f_s_name = str(ntpath.basename(selected_file))
             # Check if file name is correct format
             numstart = f_s_name.find('_CH') + 3
@@ -453,15 +469,28 @@ class FilePicker(QtGui.QWidget):
                 for fname in os.listdir(self.fpath):
                     if fname.startswith(fprefix) and fname.endswith('.waveforms'):
                         self.fileNames.append(fname)
-            fileNames = getAllFiles(self.fpath, self.fileNames)
-            speedcut = self.spinbox.value()
-            createWaveformData(fpath=self.fpath, fileNames=fileNames, speedcut=speedcut)
-            app.instance().quit()
+            self.fileNames = getAllFiles(self.fpath, self.fileNames)
 
+
+    def create_data(self):
+        speedcut = self.spinbox.value()
+        createWaveformData(fpath=self.fpath, fileNames=self.fileNames, speedcut=speedcut)
+        app.instance().quit()
+
+
+    def plot_speed(self):
+        import pyqtgraph as pg
+        tracesPlot = pg.plot()
+        pos_timestamps, speed = get_speed_data(self.fpath + '/' + self.fileNames['posfile'])
+        tracesPlot.plot(pos_timestamps, speed)
+        speedcut = self.spinbox.value()
+        pen = pg.mkPen('y', width=3, style=QtCore.Qt.DashLine)
+        tracesPlot.addLine(y=speedcut, pen=pen)
+        
 
 # The following is the default ending for a QtGui application script
 if __name__ == "__main__":
     app = QtGui.QApplication(sys.argv)
-    gui = FilePicker()
+    gui = MainWindow()
     gui.show()
     app.exec_()

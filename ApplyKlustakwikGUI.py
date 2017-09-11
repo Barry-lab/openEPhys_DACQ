@@ -12,7 +12,7 @@ import numpy as np
 import os
 import cPickle as pickle
 import ApplyKlustakwikScripts as AKS
-import createWaveformGUIdata as waveGUI
+import createWaveformGUIdata
 
 
 class ApplyKlustakwikGUI(QtGui.QMainWindow, ApplyKlustakwikGUIDesign.Ui_MainWindow):
@@ -175,9 +175,11 @@ class ApplyKlustakwikGUI(QtGui.QMainWindow, ApplyKlustakwikGUIDesign.Ui_MainWind
 
     def waveformGUIdata(self):
         # Convert freshly created files to waveformGUIdata
-        tmpFileNames = waveGUI.getAllFiles(self.fpath, self.fileNames)
-        speedcut = self.sb_speed_cut.value()
-        waveGUI.createWaveformData(self.fpath, tmpFileNames, speedcut=speedcut)
+        self.waveGUI = createWaveformGUIdata.MainWindow()
+        self.waveGUI.show()
+        self.waveGUI.fpath = self.fpath
+        self.waveGUI.fileNames = createWaveformGUIdata.getAllFiles(self.fpath, self.fileNames)
+        self.waveGUI.pt_fpath.setPlainText(self.fpath)
 
 
 # The following is the default ending for a QtGui application script
