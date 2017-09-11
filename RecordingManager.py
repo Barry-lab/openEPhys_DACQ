@@ -142,12 +142,12 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         else:
             show_message('ERROR! Animal folder not found.')
 
-    def load_settings(self, recording_folder=None):
-        if not recording_folder: # Get user to select settings to load if not given
+    def load_settings(self, folder_name=None):
+        if not folder_name: # Get user to select settings to load if not given
             recording_folder_full_path = self.openFolderDialog(caption='Select Recording Folder')
-            recording_folder = os.path.basename(recording_folder_full_path)
+            folder_name = os.path.basename(recording_folder_full_path)
         # Copy over settings to TEMP folder
-        callstr = 'rsync -avzh ' + self.RecGUI_dataFolder + '/' + recording_folder + '/ ' + self.TEMPfolder + '/'
+        callstr = 'rsync -avzh ' + self.RecGUI_dataFolder + '/' + folder_name + '/ ' + self.TEMPfolder + '/'
         os.system(callstr)
         # Load RecGUI_Settings and update settings in GUI
         with open(self.TEMPfolder + '/RecGUI_Settings.p','rb') as file:
@@ -191,7 +191,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             # Find the latest saved Recording Manager Settings
             latest_folder = findLatestTimeFolder(self.RecGUI_dataFolder)
         # Load the settings in the latest_folder
-        self.load_settings(latest_folder=latest_folder)
+        self.load_settings(folder_name=latest_folder)
 
     def root_folder_browse(self):
         # Pops up a new window to select a folder and then inserts the path to the text box
