@@ -105,12 +105,12 @@ def computeAbsolutePosition(linedatas, RPiSettings):
     positions_2 = np.zeros((len(linedatas), 2), dtype=np.float32)
     for nRPi in range(len(linedatas)):
         if linedatas[nRPi]:
-            positions[nRPi, 0] = linedatas[nRPi][3] + RPiSettings['corner_offset'][0]
-            positions[nRPi, 1] = linedatas[nRPi][4] + RPiSettings['corner_offset'][1]
+            positions[nRPi, 0] = linedatas[nRPi][3]
+            positions[nRPi, 1] = linedatas[nRPi][4]
             if linedatas[nRPi][5]:
                 # Compute position of second LED
-                positions_2[nRPi, 0] = linedatas[nRPi][5] + RPiSettings['corner_offset'][0]
-                positions_2[nRPi, 1] = linedatas[nRPi][6] + RPiSettings['corner_offset'][1]
+                positions_2[nRPi, 0] = linedatas[nRPi][5]
+                positions_2[nRPi, 1] = linedatas[nRPi][6]
             else:
                 positions_2[nRPi, 0] = None
                 positions_2[nRPi, 1] = None

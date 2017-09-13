@@ -106,26 +106,30 @@ class Tracking(picamera.array.PiRGBAnalysis):
         (minVal, maxVal_1, minLoc, maxLoc_1) = cv2.minMaxLoc(gray) # Find coordinates of pixel with highest value
         maxLoc_1 = np.reshape(np.array([[maxLoc_1[0], maxLoc_1[1]]],dtype=np.float32),(1,1,2))
         XYcoord_1 = cv2.perspectiveTransform(maxLoc_1, calibrationTmatrix) # Use transformation matrix to map pixel values to position in real world
+        XYcoord_1 = XYcoord_1.astype('float') # Convert to float as it is used in further processing
+        # Correct XY coordinates with the corner offset
+        XYcoord_1[0,0,0] = XYcoord_1[0,0,0] + RPiSettings['corner_offset'][0]
+        XYcoord_1[0,0,1] = XYcoord_1[0,0,1] + RPiSettings['corner_offset'][1]
         if doubleLED:
             # Find the location of second brightest point
             gray = cv2.circle(gray, (maxLoc_1[0,0,0], maxLoc_1[0,0,1]), LED_radius_pix, 0, -1) # Make are at bright LED dark
             (minVal, maxVal_2, minLoc, maxLoc_2) = cv2.minMaxLoc(gray) # Find coordinates of pixel with highest value
             maxLoc_2 = np.reshape(np.array([[maxLoc_2[0], maxLoc_2[1]]],dtype=np.float32),(1,1,2))
             XYcoord_2 = cv2.perspectiveTransform(maxLoc_2, calibrationTmatrix) # Use transformation matrix to map pixel values to position in real world
-            distance = euclidean(np.array(XYcoord_1[0,0,0].astype('float'), XYcoord_1[0,0,1].astype('float')), \
-                                 np.array(XYcoord_2[0,0,0].astype('float'), XYcoord_2[0,0,1].astype('float')))
+            XYcoord_2 = XYcoord_2.astype('float') # Convert to float as it is used in further processing
+            # Correct XY coordinates with the corner offset
+            XYcoord_2[0,0,0] = XYcoord_2[0,0,0] + RPiSettings['corner_offset'][0]
+            XYcoord_2[0,0,1] = XYcoord_2[0,0,1] + RPiSettings['corner_offset'][1]
+            distance = euclidean(np.array(XYcoord_1[0,0,0], XYcoord_1[0,0,1]), \
+                                 np.array(XYcoord_2[0,0,0], XYcoord_2[0,0,1]))
             if distance < LED_max_distance: # If 2nd LED is detected close enough
                 # Set data into compact format
-                linedata = [RPi_number, currenttime, frametime, XYcoord_1[0,0,0].astype('float'), \
-                            XYcoord_1[0,0,1].astype('float'), XYcoord_2[0,0,0].astype('float'), \
-                            XYcoord_2[0,0,1].astype('float'), maxVal_1, maxVal_2]
+                linedata = [RPi_number, currenttime, frametime, XYcoord_1[0,0,0], XYcoord_1[0,0,1], XYcoord_2[0,0,0], XYcoord_2[0,0,1], maxVal_1, maxVal_2]
             else: # If second LED is too far away to be real, move bright LED to primary position
-                linedata = [RPi_number, currenttime, frametime, XYcoord_1[0,0,0].astype('float'), \
-                            XYcoord_1[0,0,1].astype('float'), None, None, maxVal_1, None]
+                linedata = [RPi_number, currenttime, frametime, XYcoord_1[0,0,0], XYcoord_1[0,0,1], None, None, maxVal_1, None]
         else:
             # Set data into compact format
-            linedata = [RPi_number, currenttime, frametime, XYcoord_1[0,0,0].astype('float'), \
-                        XYcoord_1[0,0,1].astype('float'), None, None, maxVal_1, None]
+            linedata = [RPi_number, currenttime, frametime, XYcoord_1[0,0,0], XYcoord_1[0,0,1], None, None, maxVal_1, None]
         # Send data over ethernet with ZeroMQ
         message = json.dumps(linedata) # Convert data to string format
         sockpub.send(message) # Send the message using ZeroMQ
