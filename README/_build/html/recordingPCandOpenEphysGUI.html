@@ -349,9 +349,8 @@ sudo service udev restart
 cd ~/
 </pre></div>
 </div>
-<p>Install ZeroMQ dependencies with terminal commands:</p>
+<p>Install More dependencies with terminal commands:</p>
 <div class="highlight-none"><div class="highlight"><pre>sudo apt-get install libtool pkg-config build-essential autoconf automake
-sudo apt-get install libzmq-dev
 </pre></div>
 </div>
 <p>Install libsodium with terminal commands:</p>
@@ -364,36 +363,12 @@ sudo ldconfig
 cd ~/
 </pre></div>
 </div>
-<p>Install ZeroMQ latest version by downloading the latest Tarball for linux from <a class="reference external" href="http://zeromq.org/intro:get-the-software">ZeroMQ website</a>. Go to location where you downloaded the Tarball and use the following terminal commands with the downloaded file name:</p>
-<div class="highlight-none"><div class="highlight"><pre>tar -xvf downloaded_file_name
-cd zeromq-4.1.2
-./autogen.sh
-./configure &amp;&amp; make check
-sudo make install
-sudo ldconfig
+<p>Install More dependencies with terminal commands:</p>
+<div class="highlight-none"><div class="highlight"><pre>sudo apt-get install libxrandr-dev # To fix a compilation error in JUCE library
+sudo apt-get install libzmq3-dev # ZeroMQ version 3 is required
+sudo apt-get install libhdf5-serial-dev # HDF version 1.8.12, or higher, is required
 </pre></div>
 </div>
-<p>Install HDF5 package.</p>
-<p>Download the latest build (Unix OS gzip version) from their website: <a class="reference external" href="https://support.hdfgroup.org/HDF5/release/obtainsrc.html">https://support.hdfgroup.org/HDF5/release/obtainsrc.html</a></p>
-<p>For quick installation following steps can be used to configure, build, test, and install the HDF5 Library, header files, and support programs. For example, to install HDF5 at location /usr/local/hdf5, use the following steps when in the directory of the downloaded file (by substituting the HDF5DFILE with the file name root of your downloaded file, e.g. hdf5-1.10.0-patch1):</p>
-<div class="highlight-none"><div class="highlight"><pre>gunzip &lt; HDF5DFILE.tar.gz | tar xf -
-cd HDF5DFILE
-./configure --prefix=/usr/local/hdf5 --enable-cxx
-make
-make check                # run test suite.
-sudo make install
-sudo make check-install        # verify installation.
-cd ~/
-</pre></div>
-</div>
-<p>Specify the location of HDF5 libraries in <code class="docutils literal"><span class="pre">.bashrc</span></code>. With terminal command <code class="docutils literal"><span class="pre">gedit</span> <span class="pre">~/.bashrc</span></code> add the following lines to the end of the file</p>
-<div class="highlight-none"><div class="highlight"><pre># HDF5 library paths for Open Ephys GUI
-export CPLUS_INCLUDE_PATH=/usr/local/hdf5/include
-export LIBRARY_PATH=/usr/local/hdf5/lib
-export LD_LIBRARY_PATH=/usr/local/hdf5/lib
-</pre></div>
-</div>
-<p>Restart the PC to update the environmental variables</p>
 </div>
 <div class="section" id="install-open-ephys">
 <h3>Install Open Ephys<a class="headerlink" href="#install-open-ephys" title="Permalink to this headline">¶</a></h3>
@@ -412,7 +387,6 @@ make
 make -f Makefile.plugins
 </pre></div>
 </div>
-<p>If you get an error during the compilation of plug-ins (the above command) regarding KWIK Format, then you can remove KWIK format from the plug-in directory with this terminal command <code class="docutils literal"><span class="pre">rm</span> <span class="pre">-rf</span> <span class="pre">~/Programs/OpenEphysGUI/plugin-GUI/Source/Plugins/KWIKFormat</span></code> and run the above commands again to compile without the KWIKFormat plug-in.</p>
 <p>Create a shortcut for OpenEphys application in the home folder. Use terminal command <code class="docutils literal"><span class="pre">gedit</span> <span class="pre">~/OpenEphysGUI</span></code> to create the file and add these lines to the file to link it to the compiled application:</p>
 <div class="highlight-none"><div class="highlight"><pre>#!/bin/bash
 cd ~/Programs/OpenEphysGUI/plugin-GUI/Builds/Linux/build
