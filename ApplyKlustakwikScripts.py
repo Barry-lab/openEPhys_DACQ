@@ -129,7 +129,7 @@ class Kluster():
             the spike data
         '''
         # specify path to KlustaKwik exe
-        kk_path = r'/home/room418/Programs/klustakwik/KlustaKwik'
+        kk_path = os.path.expanduser('~') + '/Programs/klustakwik/KlustaKwik'
         if not os.path.exists(kk_path):
             print kk_path
             raise IOError()

@@ -45,7 +45,7 @@ You have likely already downloaded the scripts for processing Open Ephys recordi
 
 You will need to download *scikit-learn* package for python to use these scripts. To do so, use the following terminal command ``pip install -U scikit-learn``.
 
-You will should not need to do this step if you installed Klustakwik to the location ``~/Programs/klustakwik/`` as you would have if you followed the commands above to the letter. Edit file ``ApplyKlustakwikScripts.py`` to specify to location of the *Klustakwik* install. Open the file with text editor, e.g. with terminal command ``gedit ~/openEPhys_DACQ/ApplyKlustakwikScripts.py`` and find the line where ``kk_path`` is specified (probably line 132). It should say something like ``kk_path = r'/home/room418/Programs/klustakwik/KlustaKwik'``. Edit the path to where you installed Klustakwik.
+You will should not need to do this step if you installed Klustakwik to the location ``~/Programs/klustakwik/`` as you would have if you followed the commands above to the letter. Edit file ``ApplyKlustakwikScripts.py`` to specify to location of the *Klustakwik* install. Open the file with text editor, e.g. with terminal command ``gedit ~/openEPhys_DACQ/ApplyKlustakwikScripts.py`` and find the line where ``kk_path`` is specified (probably line 132). It should say something like ``kk_path = os.path.expanduser('~') + '/Programs/klustakwik/KlustaKwik'``. Edit the path to where you installed Klustakwik.
 
 Install Google Chrome to use Waveform GUI
 -----------------------------------------
