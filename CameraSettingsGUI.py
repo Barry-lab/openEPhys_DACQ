@@ -375,8 +375,8 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
             positions = np.zeros((len(linedatas), 2), dtype=np.float32)
             for nRPi in range(len(linedatas)):
                 if linedatas[nRPi]:
-                    positions[nRPi, 0] = linedatas[nRPi][3] + RPiSettings['corner_offset'][0]
-                    positions[nRPi, 1] = linedatas[nRPi][4] + RPiSettings['corner_offset'][1]
+                    positions[nRPi, 0] = linedatas[nRPi][3]
+                    positions[nRPi, 1] = linedatas[nRPi][4]
                     # Update the text boxes for this RPi
                     self.pt_RPinr[nRPi].setText('%d' % linedatas[nRPi][0])
                     self.pt_posX[nRPi].setText('%.1f' % positions[nRPi, 0])
