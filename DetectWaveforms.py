@@ -458,6 +458,9 @@ class DetectWaveforms(QtGui.QMainWindow, DetectWaveformsDesign.Ui_MainWindow):
                 waveforms = np.float32(self.LFPs[ntet][nsubchan][self.waveform_windows[ntet][ntchan]]) * self.bitVolts
                 minvals[nsubchan] = np.amin(waveforms)
                 maxvals[nsubchan] = np.amax(waveforms)
+                # Limit number of waveforms to be plotted to 1000
+                if waveforms.shape[0] > 1000:
+                    waveforms = waveforms[np.random.permutation(waveforms.shape[0])[:1000],:]
                 # Describe waveforms in form of connected points (Allows for faster plotting)
                 lines = waveforms.shape[0]
                 pointsPerLine = waveforms.shape[1]
