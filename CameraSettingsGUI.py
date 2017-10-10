@@ -142,9 +142,9 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         RPiSettings = {'LEDmode': LEDmode, 
                        'save_frames': save_frames, 
                        'arena_size': [float(str(self.pt_arena_size_x.toPlainText())), float(str(self.pt_arena_size_y.toPlainText()))], 
-                       'calibration_n_squares': [int(str(self.pt_nsquares_x.toPlainText())), int(str(self.pt_nsquares_y.toPlainText()))], 
+                       'calibration_n_dots': [int(str(self.pt_ndots_x.toPlainText())), int(str(self.pt_ndots_y.toPlainText()))], 
                        'corner_offset': [float(str(self.pt_offset_x.toPlainText())), float(str(self.pt_offset_y.toPlainText()))], 
-                       'calibration_square': float(str(self.pt_calibration_square.toPlainText())), 
+                       'calibration_spacing': float(str(self.pt_calibration_spacing.toPlainText())), 
                        'camera_iso': int(str(self.pt_camera_iso.toPlainText())), 
                        'LED_separation': float(str(self.pt_LED_separation.toPlainText())), 
                        'LED_angle': float(str(self.pt_LED_angle.toPlainText())), 
@@ -198,33 +198,27 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
     def calibrate(self):
         self.update_camera_files(useCalibration = False)
         RPiSettings = self.get_camera_settings_dict()
-        x_y_nsqure_diff = RPiSettings['calibration_n_squares'][0] - RPiSettings['calibration_n_squares'][1]
-        if x_y_nsqure_diff == 0:
-            # Calibration requires uneven number of squares in the two axes
-            message = 'Error: Calibration requires uneven number of squares in the two axes.'
-            show_message(message, message_more=None)
-        else: # Otherwise, proceed
-            for n_rpi in RPiSettings['use_RPi_nrs']:
-                print('Calibrating camera ' + str(n_rpi) + ' of ' + str(RPiSettings['use_RPi_nrs']))
-                # Use SSH connection to send commands
-                connection = ssh(RPiSettings['RPiIP'][n_rpi], RPiSettings['username'], RPiSettings['password'])
-                # connection.sendCommand('cd ' + self.trackingFolder + ' && nohup python calibrate.py >/dev/null 2>&1 &')
-                # Run calibrate.py on RPi
-                com_str = 'cd ' + self.trackingFolder + ' && python calibrate.py'
-                connection.sendCommand(com_str)
-                # Copy over output files to local TEMP folder
-                callstr = 'scp ' + RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + self.trackingFolder + '/calibrationData.p ' + \
-                     str(self.TEMPfolder) + '/calibrationData' + str(n_rpi) + '.p'
-                os.system(callstr)
-                callstr = 'scp ' + RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + self.trackingFolder + '/calibrationTmatrix.p ' + \
-                     self.TEMPfolder + '/calibrationTmatrix' + str(n_rpi) + '.p'
-                os.system(callstr)
-            # Save current RPiSettings also to TEMP folder with the calibration data
-            RPiSettingsFile = self.TEMPfolder + '/RPiSettings.p'
-            with open(RPiSettingsFile, 'wb') as file:
-                pickle.dump(RPiSettings, file)
-            # Show calibration data
-            self.show_calibration()
+        for n_rpi in RPiSettings['use_RPi_nrs']:
+            print('Calibrating camera ' + str(n_rpi) + ' of ' + str(RPiSettings['use_RPi_nrs']))
+            # Use SSH connection to send commands
+            connection = ssh(RPiSettings['RPiIP'][n_rpi], RPiSettings['username'], RPiSettings['password'])
+            # connection.sendCommand('cd ' + self.trackingFolder + ' && nohup python calibrate.py >/dev/null 2>&1 &')
+            # Run calibrate.py on RPi
+            com_str = 'cd ' + self.trackingFolder + ' && python calibrate.py'
+            connection.sendCommand(com_str)
+            # Copy over output files to local TEMP folder
+            callstr = 'scp ' + RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + self.trackingFolder + '/calibrationData.p ' + \
+                 str(self.TEMPfolder) + '/calibrationData' + str(n_rpi) + '.p'
+            os.system(callstr)
+            callstr = 'scp ' + RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + self.trackingFolder + '/calibrationTmatrix.p ' + \
+                 self.TEMPfolder + '/calibrationTmatrix' + str(n_rpi) + '.p'
+            os.system(callstr)
+        # Save current RPiSettings also to TEMP folder with the calibration data
+        RPiSettingsFile = self.TEMPfolder + '/RPiSettings.p'
+        with open(RPiSettingsFile, 'wb') as file:
+            pickle.dump(RPiSettings, file)
+        # Show calibration data
+        self.show_calibration()
 
     def save(self):
         self.load(loadFile=self.TEMPfolder + '/RPiSettings.p')
@@ -264,11 +258,11 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
             self.rb_save_im_no.setChecked(True)
         self.pt_arena_size_x.setPlainText(str(RPiSettings['arena_size'][0]))
         self.pt_arena_size_y.setPlainText(str(RPiSettings['arena_size'][1]))
-        self.pt_nsquares_x.setPlainText(str(RPiSettings['calibration_n_squares'][0]))
-        self.pt_nsquares_y.setPlainText(str(RPiSettings['calibration_n_squares'][1]))
+        self.pt_ndots_x.setPlainText(str(RPiSettings['calibration_n_dots'][0]))
+        self.pt_ndots_y.setPlainText(str(RPiSettings['calibration_n_dots'][1]))
         self.pt_offset_x.setPlainText(str(RPiSettings['corner_offset'][0]))
         self.pt_offset_y.setPlainText(str(RPiSettings['corner_offset'][1]))
-        self.pt_calibration_square.setPlainText(str(RPiSettings['calibration_square']))
+        self.pt_calibration_spacing.setPlainText(str(RPiSettings['calibration_spacing']))
         self.pt_smooth_r.setPlainText(str(RPiSettings['smoothing_radius']))
         self.pt_LED_separation.setPlainText(str(RPiSettings['LED_separation']))
         self.pt_LED_angle.setPlainText(str(RPiSettings['LED_angle']))

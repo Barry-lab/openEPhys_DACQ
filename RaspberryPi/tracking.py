@@ -107,9 +107,6 @@ class Tracking(picamera.array.PiRGBAnalysis):
         maxLoc_1 = np.reshape(np.array([[maxLoc_1[0], maxLoc_1[1]]],dtype=np.float32),(1,1,2))
         XYcoord_1 = cv2.perspectiveTransform(maxLoc_1, calibrationTmatrix) # Use transformation matrix to map pixel values to position in real world
         XYcoord_1 = XYcoord_1.astype('float') # Convert to float as it is used in further processing
-        # Correct XY coordinates with the corner offset
-        XYcoord_1[0,0,0] = XYcoord_1[0,0,0] + RPiSettings['corner_offset'][0]
-        XYcoord_1[0,0,1] = XYcoord_1[0,0,1] + RPiSettings['corner_offset'][1]
         if doubleLED:
             # Find the location of second brightest point
             gray = cv2.circle(gray, (maxLoc_1[0,0,0], maxLoc_1[0,0,1]), LED_radius_pix, 0, -1) # Make are at bright LED dark
@@ -117,9 +114,6 @@ class Tracking(picamera.array.PiRGBAnalysis):
             maxLoc_2 = np.reshape(np.array([[maxLoc_2[0], maxLoc_2[1]]],dtype=np.float32),(1,1,2))
             XYcoord_2 = cv2.perspectiveTransform(maxLoc_2, calibrationTmatrix) # Use transformation matrix to map pixel values to position in real world
             XYcoord_2 = XYcoord_2.astype('float') # Convert to float as it is used in further processing
-            # Correct XY coordinates with the corner offset
-            XYcoord_2[0,0,0] = XYcoord_2[0,0,0] + RPiSettings['corner_offset'][0]
-            XYcoord_2[0,0,1] = XYcoord_2[0,0,1] + RPiSettings['corner_offset'][1]
             distance = euclidean(np.array(XYcoord_1[0,0,0], XYcoord_1[0,0,1]), \
                                  np.array(XYcoord_2[0,0,0], XYcoord_2[0,0,1]))
             if distance < LED_max_distance: # If 2nd LED is detected close enough

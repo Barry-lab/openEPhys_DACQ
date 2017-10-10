@@ -504,7 +504,7 @@
                     <bool>true</bool>
                    </property>
                    <property name="plainText">
-                    <string>Calibration squares (n):</string>
+                    <string>Calibration Dots (n):</string>
                    </property>
                   </widget>
                  </item>
@@ -543,7 +543,7 @@
                      </widget>
                     </item>
                     <item>
-                     <widget class="QPlainTextEdit" name="pt_nsquares_x">
+                     <widget class="QPlainTextEdit" name="pt_ndots_x">
                       <property name="minimumSize">
                        <size>
                         <width>0</width>
@@ -557,7 +557,7 @@
                        </size>
                       </property>
                       <property name="plainText">
-                       <string>12</string>
+                       <string>4</string>
                       </property>
                      </widget>
                     </item>
@@ -581,7 +581,7 @@
                      </widget>
                     </item>
                     <item>
-                     <widget class="QPlainTextEdit" name="pt_nsquares_y">
+                     <widget class="QPlainTextEdit" name="pt_ndots_y">
                       <property name="minimumSize">
                        <size>
                         <width>0</width>
@@ -595,7 +595,7 @@
                        </size>
                       </property>
                       <property name="plainText">
-                       <string>8</string>
+                       <string>11</string>
                       </property>
                      </widget>
                     </item>
@@ -691,7 +691,7 @@
                        </size>
                       </property>
                       <property name="plainText">
-                       <string>5</string>
+                       <string>20</string>
                       </property>
                      </widget>
                     </item>
@@ -729,7 +729,7 @@
                        </size>
                       </property>
                       <property name="plainText">
-                       <string>5</string>
+                       <string>20</string>
                       </property>
                      </widget>
                     </item>
@@ -772,12 +772,12 @@
                     <bool>true</bool>
                    </property>
                    <property name="plainText">
-                    <string>Calibration Square Side (cm):</string>
+                    <string>Calibration Spacing (cm):</string>
                    </property>
                   </widget>
                  </item>
                  <item>
-                  <widget class="QPlainTextEdit" name="pt_calibration_square">
+                  <widget class="QPlainTextEdit" name="pt_calibration_spacing">
                    <property name="minimumSize">
                     <size>
                      <width>180</width>

@@ -29,9 +29,13 @@ RPi_number = int(open('RPiNumber','r').read().splitlines()[0]) # The number to i
 # Get OpenEphys configuration details for this RPi
 with open('RPiSettings.p','rb') as file:
     RPiSettings = pickle.load(file)
-nsquares_x = RPiSettings['calibration_n_squares'][0]
-nsquares_y = RPiSettings['calibration_n_squares'][1]
-squaresize = RPiSettings['calibration_square']
+# ndots_x = RPiSettings['calibration_n_squares'][0]
+# ndots_y = RPiSettings['calibration_n_squares'][1]
+# spacing = RPiSettings['calibration_square']
+ndots_x = 4
+ndots_y = 11
+spacing = 10
+corner_offset = [RPiSettings['corner_offset'][0], RPiSettings['corner_offset'][1]]
 camera_iso = RPiSettings['camera_iso']
 shutter_speed = RPiSettings['shutter_speed']
 exposure_setting = RPiSettings['exposure_setting']
@@ -49,45 +53,26 @@ class Tracking(picamera.array.PiRGBAnalysis):
     def output(self):
         return self.frames
 
-def processFrames(frames, nsquares_y, nsquares_x, squaresize, overlay=False):
+def processFrames(frames, ndots_x, ndots_y, spacing, overlay=False):
     if not overlay: # Do this unless only overlay was requested
-        # Set criteria for cv2.cornerSubPix accuracy improvement
-        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-        # Find corners in each image
-        corners = []
+        # Find pattern in each image
+        patterns = []
         for nframe in range(len(frames)):
             img = np.uint8(copy.copy(frames[nframe]))
-            # print('processing frame nr ' + str(nframe + 1) + ' of ' + str(len(frames)))
             gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-            ret, crns = cv2.findChessboardCorners(gray, (nsquares_x - 1, nsquares_y - 1), None)
-            print(ret)
+            flags = cv2.CALIB_CB_ASYMMETRIC_GRID + cv2.CALIB_CB_CLUSTERING
+            ret, crns = cv2.findCirclesGrid(gray,(ndots_x, ndots_y),flags=flags)
             if ret == True:
-                # Compute search radius for when using cv2.cornerSubPix
-                pixeldistance = euclidean(np.squeeze(crns[0,:,:]),np.squeeze(crns[-1,:,:]))
-                objectdistance = euclidean(np.float32([0,0]),np.float32([nsquares_x - 1, nsquares_y - 1]))
-                sradius = int(np.round(pixeldistance / objectdistance / 2))
-                # Increase corner pixel accuracy
-                crns = cv2.cornerSubPix(gray,crns,(sradius,sradius),(-1,-1),criteria)
-                # Correct image flip such that 0,0 would be closest to the brightest spot
-                gray = cv2.GaussianBlur(gray, (smoothradius, smoothradius), 0) # Smooth the image
-                (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(gray) # Find coordinates of pixel with highest value
-                crnsFirstDist = euclidean(np.squeeze(crns[0,:,:]),np.array(maxLoc))
-                crnsLastDist = euclidean(np.squeeze(crns[-1,:,:]),np.array(maxLoc))
-                print(crnsFirstDist)
-                print(crnsLastDist)
-                if crnsLastDist < crnsFirstDist:
-                    print('Flipped')
-                    crns = np.flipud(crns)
-                # Append to corners list
-                corners.append(crns)
+                # Append to pattern list
+                patterns.append(crns)
             else:
-                corners.append([])
-        # Find average corners
-        tmpcorners = [x for x in corners if x != []]
-        print(str(len(tmpcorners)) + ' of ' + str(len(frames)) + ' images used.')
-        tmp = np.concatenate(tmpcorners, axis=1)
-        corners_mean = np.mean(tmp, axis=1)
-        corners_mean = corners_mean.reshape((corners_mean.shape[0],1,2), order='C')
+                patterns.append([])
+        # Find average pattern
+        tmp_patterns = [x for x in patterns if x != []]
+        print(str(len(tmp_patterns)) + ' of ' + str(len(frames)) + ' images used.')
+        tmp = np.concatenate(tmp_patterns, axis=1)
+        pattern_mean = np.mean(tmp, axis=1)
+        pattern_mean = pattern_mean.reshape((pattern_mean.shape[0],1,2), order='C')
     # Find average image
     image = np.concatenate(frames, axis=2)
     image = image.reshape((frames[0].shape[0],frames[0].shape[1],frames[0].shape[2],len(frames)), order='F')
@@ -96,19 +81,31 @@ def processFrames(frames, nsquares_y, nsquares_x, squaresize, overlay=False):
     if overlay: # Use pre-existing corners, if overlay requested
         with open('calibrationData.p', 'rb') as file:
             calibrationData = pickle.load(file)
-        corners_mean = calibrationData['corners']
-    image = cv2.drawChessboardCorners(image, (nsquares_x - 1,nsquares_y - 1), corners_mean, True)
+        pattern_mean = calibrationData['pattern']
+    image = cv2.drawChessboardCorners(image, (ndots_y, ndots_x), pattern_mean, True)
 
-    return image, corners_mean
+    return image, pattern_mean
 
-def getTransformMatrix(corners_mean, nsquares_y, nsquares_x, squaresize):
-    # Generate object point values corresponding to corners
-    objp = np.zeros(((nsquares_x - 1) * (nsquares_y - 1),3), dtype=np.float32)
-    objp[:,:2] = np.mgrid[0:(nsquares_x - 1),0:(nsquares_y - 1)].T.reshape(-1,2)
-    objp = objp * squaresize
+def getTransformMatrix(pattern, ndots_x, ndots_y, spacing):
+    # Generate object point values corresponding to the pattern
+    objp = np.mgrid[0:ndots_x,0:ndots_y].T.reshape(-1,2).astype(np.float32)
+    objp[:,1] = objp[:,1] / 2
+    shiftrows = np.arange(1,ndots_y,2)
+    for row in shiftrows:
+        tmpidx = np.arange(row * ndots_x, (row + 1) * ndots_x)
+        objp[tmpidx,0] = objp[tmpidx,0] + 0.5
+    # now left col is Y(4) and right col is X(11)
+    # Below the example with offsets works
+    # Stretch the object point values to scale with the real pattern
+    objp = objp * spacing
+    # Add offset from arena corner to get circle locations in the arena
+    objp[:,0] = objp[:,0] + corner_offset[0]
+    objp[:,1] = objp[:,1] + corner_offset[1]
+    # Add the zeros to force pattern onto the plane in 3D world
+    objp = np.concatenate((objp, np.zeros((objp.shape[0],1))), 1)
     # Compute transformation matrix
-    transformMatrix, mask = cv2.findHomography(corners_mean, objp, cv2.RANSAC,5.0)
-
+    transformMatrix, mask = cv2.findHomography(pattern, objp, cv2.RANSAC,5.0)
+    
     return transformMatrix
 
 # Here is the actual core of the script
@@ -131,16 +128,16 @@ overlay = False
 if len(sys.argv) > 1:
     if sys.argv[1] == 'overlay':
         overlay = 'True'
-# Use images to find corners of the chessboard image
-# or if requested, overlay previous corners on current image
-image, corners_mean = processFrames(frames, nsquares_y, nsquares_x, squaresize, overlay)
+# Use images to find pattern of the chessboard image
+# or if requested, overlay previous pattern on current image
+image, pattern = processFrames(frames, ndots_x, ndots_y, spacing, overlay)
 if not overlay:
     # Compute transformation matrix and save it as well as calibration data
-    transformMatrix = getTransformMatrix(corners_mean, nsquares_y, nsquares_x, squaresize)
+    transformMatrix = getTransformMatrix(pattern, ndots_x, ndots_y, spacing)
     with open('calibrationTmatrix.p', 'wb') as file:
         pickle.dump(transformMatrix, file)
-    calibrationData = {'image': image, 'corners': corners_mean, 'nsquares_y': nsquares_y, 'nsquares_x': nsquares_x, 'squaresize': squaresize}
+    calibrationData = {'image': image, 'pattern': pattern, 'ndots_x': ndots_x, 'ndots_y': ndots_y, 'spacing': spacing}
     with open('calibrationData.p', 'wb') as file:
         pickle.dump(calibrationData, file)
-else: # If requested, simply save the current image with overlay of previous corners
+else: # If requested, simply save the current image with overlay of previous pattern
     cv2.imwrite('overlay.jpg', image)
