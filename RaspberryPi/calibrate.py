@@ -29,12 +29,9 @@ RPi_number = int(open('RPiNumber','r').read().splitlines()[0]) # The number to i
 # Get OpenEphys configuration details for this RPi
 with open('RPiSettings.p','rb') as file:
     RPiSettings = pickle.load(file)
-# ndots_x = RPiSettings['calibration_n_squares'][0]
-# ndots_y = RPiSettings['calibration_n_squares'][1]
-# spacing = RPiSettings['calibration_square']
-ndots_x = 4
-ndots_y = 11
-spacing = 10
+ndots_x = RPiSettings['calibration_n_dots'][0]
+ndots_y = RPiSettings['calibration_n_dots'][1]
+spacing = RPiSettings['calibration_spacing']
 corner_offset = [RPiSettings['corner_offset'][0], RPiSettings['corner_offset'][1]]
 camera_iso = RPiSettings['camera_iso']
 shutter_speed = RPiSettings['shutter_speed']
