@@ -22,6 +22,11 @@ def angle_clockwise(p1, p2):
     angle = np.degrees(np.arctan2(p0[0], p0[1]))
     if angle < 0:
         angle = 360 + angle
+    angle = 360 - angle
+    angle = angle - 180
+    if angle < 0:
+        angle = 360 + angle
+
     return angle
 
 class PosPlot(object):
@@ -38,7 +43,7 @@ class PosPlot(object):
         self.plotWidget.setXRange(-margin_x, self.RPiSettings['arena_size'][0] + margin_x)
         self.plotWidget.setYRange(-margin_y, self.RPiSettings['arena_size'][1] + margin_y)
         # Invert Y-axis #### This messes up the arrow direction
-        # self.plotWidget.invertY(True)
+        self.plotWidget.invertY(True)
         # Put plot into plot window
         self.window.setCentralWidget(self.plotWidget)
         # Draw arena boundaries
