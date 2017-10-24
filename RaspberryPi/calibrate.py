@@ -91,8 +91,6 @@ def getTransformMatrix(pattern, ndots_x, ndots_y, spacing):
     for row in shiftrows:
         tmpidx = np.arange(row * ndots_x, (row + 1) * ndots_x)
         objp[tmpidx,0] = objp[tmpidx,0] + 0.5
-    # now left col is Y(4) and right col is X(11)
-    # Below the example with offsets works
     # Stretch the object point values to scale with the real pattern
     objp = objp * spacing
     # Add offset from arena corner to get circle locations in the arena
