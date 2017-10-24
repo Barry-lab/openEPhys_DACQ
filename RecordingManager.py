@@ -362,7 +362,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Find first RAW data file (100_CH start). It is required as input by DetectWaveformsGUI.
         dirfiles = os.listdir(str(self.pt_rec_folder.toPlainText()))
         listpos = 0
-        while not dirfiles[listpos].startswith('100_CH') or not dirfiles[listpos].endswith('.continuous'):
+        while not dirfiles[listpos].startswith('108_CH') or not dirfiles[listpos].endswith('.continuous'):
             listpos += 1
         selected_file = str(self.pt_rec_folder.toPlainText()) + '/' + dirfiles[listpos]
         # Start DetectWaveforms GUI and load the just recorded RAW data
