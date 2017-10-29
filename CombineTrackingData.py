@@ -62,21 +62,6 @@ def getPosData(RPi_nr, filename, OEdict, RPiSettings):
     # Use pos_frametimes and pos_TTLtimes differences to correct OEtimes
     RPiClockOffset = np.mean(pos_TTLtimes - pos_frametimes)
     times = OEtimes - (pos_TTLtimes - pos_frametimes - RPiClockOffset)
-    # # Find bad pos data lines
-    # idxBad = np.zeros(times.size, dtype=bool)
-    # primary_lum = pos_csv[:,7] # Lines with severly reduced luminance on primary LED
-    # idxBad = np.logical_or(idxBad, primary_lum < np.median(primary_lum) * 0.75)
-    # arena_size = RPiSettings['arena_size'] # Points beyond arena size
-    # x_too_big = np.logical_or(pos_csv[:,3] > arena_size[0] + 20, pos_csv[:,5] > arena_size[0] + 20)
-    # y_too_big = np.logical_or(pos_csv[:,4] > arena_size[1] + 20, pos_csv[:,6] > arena_size[1] + 20)
-    # idxBad = np.logical_or(idxBad, np.logical_or(x_too_big, y_too_big))
-    # x_too_small = np.logical_or(pos_csv[:,3] < -20, pos_csv[:,5] < -20)
-    # y_too_small = np.logical_or(pos_csv[:,4] < -20, pos_csv[:,6] < -20)
-    # idxBad = np.logical_or(idxBad, np.logical_or(x_too_small, y_too_small))
-    # # Combine good position data lines
-    # times = times[np.logical_not(idxBad)]
-    # pos_csv = pos_csv[np.logical_not(idxBad),:]
-
     # Combine corrected timestamps with position data
     posdata = np.concatenate((np.expand_dims(times, axis=1), pos_csv[:,3:7]), axis=1).astype(np.float32)
 

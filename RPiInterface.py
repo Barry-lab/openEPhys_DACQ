@@ -97,36 +97,6 @@ def StopRPi(RPiSettings):
     sockSUB.close()
     sockPUB.close()
 
-# def computeAbsolutePosition(linedatas, RPiSettings):
-#     ########## Note! this function should be changed to utilize CombineTrackingData.py method
-#     ########## Note! This function is also used by CumulativePosPlot.
-#     # This function return the absolute position, 
-#     # by combining information from multiple cameras
-#     # Get Position values of all RPis and populate update text boxes
-#     positions = np.zeros((len(linedatas), 2), dtype=np.float32)
-#     positions_2 = np.zeros((len(linedatas), 2), dtype=np.float32)
-#     for nRPi in range(len(linedatas)):
-#         if linedatas[nRPi]:
-#             positions[nRPi, 0] = linedatas[nRPi][3]
-#             positions[nRPi, 1] = linedatas[nRPi][4]
-#             if linedatas[nRPi][5]:
-#                 # Compute position of second LED
-#                 positions_2[nRPi, 0] = linedatas[nRPi][5]
-#                 positions_2[nRPi, 1] = linedatas[nRPi][6]
-#             else:
-#                 positions_2[nRPi, 0] = None
-#                 positions_2[nRPi, 1] = None
-#         else:
-#             positions[nRPi, 0] = None
-#             positions[nRPi, 1] = None
-#             positions_2[nRPi, 0] = None
-#             positions_2[nRPi, 1] = None
-
-#     position = np.mean(positions, axis=0)
-#     positions_2 = np.mean(positions_2, axis=0)
-
-#     return position, positions_2
-
 def combineCamerasData(cameraPos, lastCombPos=None, RPiSettings=None):
     # This outputs position data based on which camera is closest to tracking target.
 
