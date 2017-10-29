@@ -12,6 +12,7 @@ import numpy as np
 import OpenEphys
 import pickle
 import os
+import RPiInterface as rpiI
 
 
 def findPosLogs(rootfolder):
@@ -61,21 +62,23 @@ def getPosData(RPi_nr, filename, OEdict, RPiSettings):
     # Use pos_frametimes and pos_TTLtimes differences to correct OEtimes
     RPiClockOffset = np.mean(pos_TTLtimes - pos_frametimes)
     times = OEtimes - (pos_TTLtimes - pos_frametimes - RPiClockOffset)
-    # Find bad pos data lines
-    idxBad = np.zeros(times.size, dtype=bool)
-    primary_lum = pos_csv[:,7] # Lines with severly reduced luminance on primary LED
-    idxBad = np.logical_or(idxBad, primary_lum < np.median(primary_lum) * 0.75)
-    arena_size = RPiSettings['arena_size'] # Points beyond arena size
-    x_too_big = np.logical_or(pos_csv[:,3] > arena_size[0] + 10, pos_csv[:,5] > arena_size[0] + 10)
-    y_too_big = np.logical_or(pos_csv[:,4] > arena_size[1] + 10, pos_csv[:,6] > arena_size[1] + 10)
-    idxBad = np.logical_or(idxBad, np.logical_or(x_too_big, y_too_big))
-    x_too_small = np.logical_or(pos_csv[:,3] < -10, pos_csv[:,5] < -10)
-    y_too_small = np.logical_or(pos_csv[:,4] < -10, pos_csv[:,6] < -10)
-    idxBad = np.logical_or(idxBad, np.logical_or(x_too_small, y_too_small))
-    # Combine good position data lines
-    times = times[np.logical_not(idxBad)]
-    pos_csv = pos_csv[np.logical_not(idxBad),:]
-    posdata = np.concatenate((np.expand_dims(times, axis=1), pos_csv[:,3:7]), axis=1)
+    # # Find bad pos data lines
+    # idxBad = np.zeros(times.size, dtype=bool)
+    # primary_lum = pos_csv[:,7] # Lines with severly reduced luminance on primary LED
+    # idxBad = np.logical_or(idxBad, primary_lum < np.median(primary_lum) * 0.75)
+    # arena_size = RPiSettings['arena_size'] # Points beyond arena size
+    # x_too_big = np.logical_or(pos_csv[:,3] > arena_size[0] + 20, pos_csv[:,5] > arena_size[0] + 20)
+    # y_too_big = np.logical_or(pos_csv[:,4] > arena_size[1] + 20, pos_csv[:,6] > arena_size[1] + 20)
+    # idxBad = np.logical_or(idxBad, np.logical_or(x_too_big, y_too_big))
+    # x_too_small = np.logical_or(pos_csv[:,3] < -20, pos_csv[:,5] < -20)
+    # y_too_small = np.logical_or(pos_csv[:,4] < -20, pos_csv[:,6] < -20)
+    # idxBad = np.logical_or(idxBad, np.logical_or(x_too_small, y_too_small))
+    # # Combine good position data lines
+    # times = times[np.logical_not(idxBad)]
+    # pos_csv = pos_csv[np.logical_not(idxBad),:]
+
+    # Combine corrected timestamps with position data
+    posdata = np.concatenate((np.expand_dims(times, axis=1), pos_csv[:,3:7]), axis=1).astype(np.float32)
 
     return posdata
 
@@ -103,5 +106,61 @@ def combdata(rootfolder):
     for n_rpi in range(len(RPi_nrs)):
         posdata = getPosData(RPi_nrs[n_rpi], filenames[n_rpi], OEdict, RPiSettings)
         posdatas.append(posdata)
-    ######## Figure out how to combine information from multiple RPis
-    savedata(posdatas[0], rootfolder)
+    if len(posdatas) > 1:
+        PosDataFramesPerSecond = 20.0
+        # Find first and last timepoint for position data
+        first_timepoints = []
+        last_timepoints = []
+        for posdata in posdatas:
+            first_timepoints.append(posdata[0,0])
+            last_timepoints.append(posdata[-1,0])
+        # Combine position data step-wise from first to last timepoint at PosDataFramesPerSecond
+        # At each timepoint the closest matchin datapoints will be taken from different cameras
+        timepoints = np.arange(np.array(first_timepoints).min(), np.array(last_timepoints).max(), 1.0 / PosDataFramesPerSecond)
+        combPosData = [None]
+        listNaNs = []
+        for npoint in range(len(timepoints)):
+            # Find closest matchin timepoint from all RPis
+            idx_tp = np.zeros(4, dtype=np.int32)
+            for n_rpi in range(len(posdatas)):
+                idx_tp[n_rpi] = np.argmin(np.abs(timepoints[npoint] - posdatas[n_rpi][:,0]))
+            # Convert posdatas for use in combineCamerasData function
+            cameraPos = []
+            for n_rpi in range(len(posdatas)):
+                cameraPos.append(posdatas[n_rpi][idx_tp[n_rpi], 1:5])
+            tmp_comb_data = rpiI.combineCamerasData(cameraPos, combPosData[-1], RPiSettings)
+            combPosData.append(tmp_comb_data)
+            if tmp_comb_data is None:
+                listNaNs.append(npoint)
+        # Remove the extra element from combPosData
+        del combPosData[0]
+        # Remove all None elements
+        for nanElement in listNaNs[::-1]:
+            del combPosData[nanElement]
+        timepoints = np.delete(timepoints, listNaNs)
+        # Save timepoints and combined position data
+        posdata = np.concatenate((np.expand_dims(np.array(timepoints), axis=1), np.array(combPosData)), axis=1)
+        savedata(posdata, rootfolder)
+        # Print info about None elements
+        if len(listNaNs) > 0:
+            print('Total of ' + str(len(listNaNs) * (1.0 / PosDataFramesPerSecond)) + ' seconds of position data was lost')
+            if listNaNs[0] == 0:
+                print('This was in the beginning and ' + str(np.sum(np.diff(np.array(listNaNs)) > 1)) + ' other epochs.')
+            else:
+                print('This was not in the beginning, but in ' + str(np.sum(np.diff(np.array(listNaNs)) > 1) + 1) + ' other epochs.')
+    else:
+        # In case of single camera being used, simply delete data outside enivornmental boundaries
+        posdata = posdatas[0]
+        # Find bad pos data lines
+        idxBad = np.zeros(posdata.shape[0], dtype=bool)
+        arena_size = RPiSettings['arena_size'] # Points beyond arena size
+        x_too_big = np.logical_or(posdata[:,1] > arena_size[0] + 20, posdata[:,3] > arena_size[0] + 20)
+        y_too_big = np.logical_or(posdata[:,2] > arena_size[1] + 20, posdata[:,4] > arena_size[1] + 20)
+        idxBad = np.logical_or(idxBad, np.logical_or(x_too_big, y_too_big))
+        x_too_small = np.logical_or(posdata[:,1] < -20, posdata[:,3] < -20)
+        y_too_small = np.logical_or(posdata[:,2] < -20, posdata[:,4] < -20)
+        idxBad = np.logical_or(idxBad, np.logical_or(x_too_small, y_too_small))
+        # Combine good position data lines
+        posdata = posdata[np.logical_not(idxBad),:]
+        # Save corrected data
+        savedata(posdata[:,:5], rootfolder)

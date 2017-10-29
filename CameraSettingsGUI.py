@@ -73,6 +73,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         self.trackingFolder = '/home/pi/Tracking'
         self.pt_rpi_ips = [self.pt_rpi_ip_1, self.pt_rpi_ip_2, self.pt_rpi_ip_3, self.pt_rpi_ip_4]
         self.cb_rpis = [self.cb_rpi_1, self.cb_rpi_2, self.cb_rpi_3, self.cb_rpi_4]
+        self.pt_rpi_loc = [self.pt_rpi_loc_1, self.pt_rpi_loc_2, self.pt_rpi_loc_3, self.pt_rpi_loc_4]
         self.im_views = [self.im_view_1, self.im_view_2, self.im_view_3, self.im_view_4]
         # Set GUI interaction connections
         self.pb_show_image.clicked.connect(lambda:self.show_image())
@@ -134,10 +135,12 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         use_RPi_Bool = np.array([0] * len(self.cb_rpis), dtype=bool)
         RPiIP = []
         RPi_Usage = []
+        RPi_location = []
         for n_rpi in range(len(self.cb_rpis)):
             RPiIP.append(str(self.pt_rpi_ips[n_rpi].toPlainText()))
             RPi_Usage.append(self.cb_rpis[n_rpi].isChecked())
             use_RPi_Bool[n_rpi] = self.cb_rpis[n_rpi].isChecked()
+            RPi_location.append(str(self.pt_rpi_loc[n_rpi].toPlainText()))
         use_RPi_nrs = list(np.arange(len(self.cb_rpis))[use_RPi_Bool])
         RPiSettings = {'LEDmode': LEDmode, 
                        'save_frames': save_frames, 
@@ -148,6 +151,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
                        'camera_iso': int(str(self.pt_camera_iso.toPlainText())), 
                        'LED_separation': float(str(self.pt_LED_separation.toPlainText())), 
                        'LED_angle': float(str(self.pt_LED_angle.toPlainText())), 
+                       'camera_transfer_radius': float(str(self.pt_camera_transfer_radius.toPlainText())), 
                        'shutter_speed': int(str(self.pt_shutter_speed.toPlainText())), 
                        'exposure_setting': str(self.lw_exposure_settings.currentItem().text()), 
                        'exposure_settings_selection': self.lw_exposure_settings.currentRow(), 
@@ -161,6 +165,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
                        'RPiIP': RPiIP, 
                        'RPi_Usage': RPi_Usage, 
                        'use_RPi_nrs': use_RPi_nrs, 
+                       'RPi_location': RPi_location, 
                        'tracking_folder': self.trackingFolder}
 
         return RPiSettings
@@ -266,6 +271,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         self.pt_smooth_r.setPlainText(str(RPiSettings['smoothing_radius']))
         self.pt_LED_separation.setPlainText(str(RPiSettings['LED_separation']))
         self.pt_LED_angle.setPlainText(str(RPiSettings['LED_angle']))
+        self.pt_camera_transfer_radius.setPlainText(str(RPiSettings['camera_transfer_radius']))
         self.pt_camera_iso.setPlainText(str(RPiSettings['camera_iso']))
         self.pt_shutter_speed.setPlainText(str(RPiSettings['shutter_speed']))
         self.lw_exposure_settings.setCurrentRow(RPiSettings['exposure_settings_selection'])
@@ -280,6 +286,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         for n_rpi in range(len(RPiSettings['RPiIP'])):
             self.pt_rpi_ips[n_rpi].setPlainText(RPiSettings['RPiIP'][n_rpi])
             self.cb_rpis[n_rpi].setChecked(RPiSettings['RPi_Usage'][n_rpi])
+            self.pt_rpi_loc[n_rpi].setPlainText(RPiSettings['RPi_location'][n_rpi])
         self.trackingFolder = RPiSettings['tracking_folder']
         # Copy calibration data to local TEMP folder for use in GUI
         loadFolder = loadFile[:loadFile.rfind('/')]

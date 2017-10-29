@@ -328,7 +328,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Change button color back to default
         self.pb_stop_rec.setStyleSheet(self.original_stylesheets['pb_stop_rec'])
         # Stop cumulative plot
-        if self.rb_posPlot_yes.isChecked():
+        if self.rb_posPlot_yes.isChecked() and hasattr(self, 'PosPlot'):
             self.PosPlot.close()
         # Wait until OpenEphysGUI Recording has been stopped by checking if file size is still growing
         # Find any .continuous file in the recording folder
