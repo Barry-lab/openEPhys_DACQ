@@ -59,7 +59,7 @@ class PosPlot(object):
             time.sleep(0.1)
             self.lastCombPos = self.RPIpos.lastCombPos # Retrieve latest position data
         # Start constant update of the plot
-        plotUpdateInterval = 100 # This sets the plot update interval in milliseconds
+        plotUpdateInterval = 500 # This sets the plot update interval in milliseconds
         self.cumulativePlot_timer = QTimer()
         self.cumulativePlot_timer.timeout.connect(lambda:self.updatePlot())
         self.cumulativePlot_timer.start(plotUpdateInterval)
