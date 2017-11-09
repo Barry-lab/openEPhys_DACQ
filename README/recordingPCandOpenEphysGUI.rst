@@ -359,6 +359,7 @@ Install the necessary packages with the following terminal commands:
 
 	sudo apt-get install python-qt4 python-dev python-pip python-paramiko python-scipy python-pygame
 	sudo pip install pyzmq # This assumes you have already installed ZMQ for OpenEphys GUI
+	pip install h5py # This assumes you have already installed libhdf5-serial-dev for OpenEphys GUI
 
 Additionally install ``pyqtgraph`` latest version from their website (Here 0.10.0-1 was used). Go to their `website <www.pyqtgraph.org>`_ and download the latest version of Debian/Ubuntu package. Install it by right click on the downloaded *.deb* file -> Open With -> GDebi Package Installer. Click on Install button.
 

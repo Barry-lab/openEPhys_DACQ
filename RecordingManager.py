@@ -107,6 +107,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_cam_set.clicked.connect(lambda:self.camera_settings())
         self.pb_start_rec.clicked.connect(lambda:self.start_rec())
         self.pb_stop_rec.clicked.connect(lambda:self.stop_rec())
+        self.pb_cluster.clicked.connect(lambda:self.cluster_data())
         self.pb_process_data.clicked.connect(lambda:self.process_data())
         self.pb_sync_server.clicked.connect(lambda:self.sync_server())
         self.pb_open_rec_folder.clicked.connect(lambda:self.open_rec_folder())
@@ -290,6 +291,10 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Disable and Enable Start and Stop buttons, respectively
         self.pb_start_rec.setEnabled(False)
         self.pb_stop_rec.setEnabled(True)
+        self.pb_cluster.setEnabled(False)
+        self.pb_process_data.setEnabled(False)
+        self.pb_sync_server.setEnabled(False)
+        self.pb_open_rec_folder.setEnabled(False)
         # Start cumulative plot
         if self.rb_posPlot_yes.isChecked():
             self.cumulativePlot()
@@ -331,38 +336,56 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         if self.rb_posPlot_yes.isChecked() and hasattr(self, 'PosPlot'):
             self.PosPlot.close()
         # Wait until OpenEphysGUI Recording has been stopped by checking if file size is still growing
-        # Find any .continuous file in the recording folder
+        # Find any recording file in the recording folder
         dirfiles = os.listdir(str(self.pt_rec_folder.toPlainText()))
         listpos = 0
-        while not dirfiles[listpos].endswith('.continuous'):
+        while not dirfiles[listpos].endswith('.kwd'):
             listpos += 1
-        continuousFileName = str(self.pt_rec_folder.toPlainText()) + '/' + dirfiles[listpos]
+        dataFileName = str(self.pt_rec_folder.toPlainText()) + '/' + dirfiles[listpos]
+        self.lastDataFileName = dataFileName
         # Save badChan list from text box to a file in the recording folder
         if len(str(self.pt_badChan.toPlainText())) > 0:
             save_badChan_to_file(str(self.pt_badChan.toPlainText()), str(self.pt_rec_folder.toPlainText()))
         # Check for file size at intervals to see if it is changing in size. Stop checking if constant.
-        lastsize = os.stat(continuousFileName).st_size
+        lastsize = os.stat(dataFileName).st_size
         time.sleep(0.5)
-        currsize = os.stat(continuousFileName).st_size
+        currsize = os.stat(dataFileName).st_size
         while lastsize != currsize:
             print('Waiting for OpenEphysGUI Recording to stop...')
             lastsize = currsize
             time.sleep(1)
-            currsize = os.stat(continuousFileName).st_size
+            currsize = os.stat(dataFileName).st_size
         print('OpenEphysGUI Recording stopped.')
         # Combine Position Data from RPis
-        combPos.combdata(str(self.pt_rec_folder.toPlainText()))
+        combPos.combdata(dataFileName)
         # Disable Stop button and Enable other buttons
         self.pb_stop_rec.setEnabled(False)
+        self.pb_cluster.setEnabled(True)
+        self.pb_process_data.setEnabled(True)
+        self.pb_sync_server.setEnabled(True)
+        self.pb_open_rec_folder.setEnabled(True)
+
+    def cluster_data(self):
+        # Applies KlustaKwik tetrode-wise to recorded data
+        self.pb_start_rec.setEnabled(False)
+        self.pb_cluster.setEnabled(False)
+        self.pb_process_data.setEnabled(False)
+        self.pb_sync_server.setEnabled(False)
+        self.pb_open_rec_folder.setEnabled(False)
+        time.sleep(0.1)
+        import ApplyKlustakwikScripts as AKS
+        AKS.cluster_all_spikes_Kwik(self.lastDataFileName)
+        self.pb_start_rec.setEnabled(True)
+        self.pb_cluster.setEnabled(True)
         self.pb_process_data.setEnabled(True)
         self.pb_sync_server.setEnabled(True)
         self.pb_open_rec_folder.setEnabled(True)
 
     def process_data(self):
-        # Find first RAW data file (100_CH start). It is required as input by DetectWaveformsGUI.
+        # Find RAW data file. It is required as input by DetectWaveformsGUI.
         dirfiles = os.listdir(str(self.pt_rec_folder.toPlainText()))
         listpos = 0
-        while not dirfiles[listpos].startswith('108_CH') or not dirfiles[listpos].endswith('.continuous'):
+        while not dirfiles[listpos].endswith('.kwd'):
             listpos += 1
         selected_file = str(self.pt_rec_folder.toPlainText()) + '/' + dirfiles[listpos]
         # Start DetectWaveforms GUI and load the just recorded RAW data

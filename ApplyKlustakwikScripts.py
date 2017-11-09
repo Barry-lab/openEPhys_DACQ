@@ -318,3 +318,95 @@ def klustakwik(waveforms, d, filename_root):
         mask = c.get_mask()
         c.make_fmask(mask)
         c.kluster()
+
+# Below stuff is written by Sander, UCL, 31/10/2017
+import Kwik
+import pickle
+import createWaveformGUIdata
+
+def get_position_data_edges(filename):
+    fpath = filename[:filename.rfind('/')]
+    # Get position data file
+    posLog_fileName = 'PosLogComb.csv'
+    # Get raw data file
+    raw_data = Kwik.load(filename)
+    # Get data from CSV file
+    pos_csv = np.genfromtxt(fpath + '/' + posLog_fileName, delimiter=',')
+    pos_timestamps = np.array(pos_csv[:,0], dtype=np.float64)
+    lfp_timestamps = np.arange(raw_data['data'].shape[0], dtype=np.float64) / raw_data['info']['sample_rate']
+    idx_first = np.abs(lfp_timestamps - pos_timestamps[0]).argmin()
+    idx_last = np.abs(lfp_timestamps - pos_timestamps[-1]).argmin()
+    pos_edges = [idx_first, idx_last]
+
+    return pos_edges
+
+def listBadChannels(fpath):
+    # Find file BadChan in the directory and extract numbers from each row
+    badChanFile = fpath + '/BadChan'
+    if os.path.exists(badChanFile):
+        with open(badChanFile) as file:
+            content = file.readlines()
+        content = [x.strip() for x in content]
+        badChan = list(np.array(map(int, content)) - 1)
+    else:
+        badChan = []
+
+    return badChan
+
+def cluster_all_spikes_Kwik(filename):
+    # Loads whole Kwik spike file, cuts off spikes outside position data, clusters all tetrodes
+    # filename - the full path to the raw data file
+    fpath = filename[:filename.rfind('/')]
+
+    data = Kwik.load_spikes(filename)# Get raw data file
+    raw_data = Kwik.load(filename)
+    sampling_rate = raw_data['info']['sample_rate']
+
+    pos_edges = get_position_data_edges(filename)
+
+    badChan = listBadChannels(fpath)
+
+    files_created = []
+    for ntet in range(len(data)):
+        waveforms = -np.array(data[ntet]['waveforms'])
+        timestamps = np.array(data[ntet]['timestamps'])
+        # Set bad channel waveforms to 0
+        channels = np.arange(4) + 4 * ntet
+        if len(badChan) > 0:
+            for bc in badChan:
+                badChanOnTetrode = channels == bc
+                if np.any(badChanOnTetrode):
+                    waveforms[:,:,badChanOnTetrode] = 0
+        # Remove spikes outside position data range
+        idx_delete = np.logical_or(timestamps < pos_edges[0], timestamps > pos_edges[1])
+        timestamps = timestamps[np.logical_not(idx_delete)]
+        waveforms = waveforms[np.logical_not(idx_delete),:,:]
+        # Remove spikes where maximum amplitude exceedes limit
+        noise_cut_off = 500
+        noise_cut_off = np.int16(np.round(noise_cut_off / 0.195))
+        idx_delete = np.any(np.any(np.abs(waveforms) > noise_cut_off, axis=2), axis=1)
+        timestamps = timestamps[np.logical_not(idx_delete)]
+        waveforms = waveforms[np.logical_not(idx_delete),:,:]
+        # Set up dictionary to be saved for this tetrode
+        waveform_data = {'waveforms': waveforms[:,:31,:], 
+                         'spiketimes': timestamps, 
+                         'nr_tetrode': ntet, 
+                         'tetrode_channels': channels, 
+                         'badChan': badChan, 
+                         'sampling_rate': float(sampling_rate), 
+                         'bitVolts': float(0.195)}
+        # Save as a pickle file
+        wave_filename = 'Tet_' + str(ntet + 1) + '_CH' + '_'.join(map(str, list(channels + 1))) + '.waveforms'
+        with open(fpath + '/' + wave_filename,'wb') as file:
+            print('Saving waveforms for tetrode ' + str(ntet + 1))
+            pickle.dump(waveform_data, file)
+        files_created.append(wave_filename)
+        # Applying Klustkwik on tetrode
+        print('Applying KlustaKwik on tetrode ' + str(ntet + 1))
+        waveforms = np.swapaxes(waveforms,1,2)
+        features2use = ['PC1', 'PC2', 'PC3', 'Amp', 'Vt']
+        d = {0: features2use}
+        klustakwik(waveforms, d, fpath + '/' + wave_filename)
+    # Load up createWaveformGUIdata
+    fileNames = createWaveformGUIdata.getAllFiles(fpath, files_created)
+    createWaveformGUIdata.createWaveformData(fpath, fileNames)

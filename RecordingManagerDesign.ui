@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>835</width>
-    <height>597</height>
+    <height>601</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -50,7 +50,7 @@
                <x>0</x>
                <y>0</y>
                <width>492</width>
-               <height>474</height>
+               <height>478</height>
               </rect>
              </property>
              <layout class="QVBoxLayout" name="verticalLayout">
@@ -529,7 +529,7 @@
          <property name="frameShadow">
           <enum>QFrame::Raised</enum>
          </property>
-         <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,0,0,0,0,0,0,0,0,0">
+         <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,0,0,0,0,0,0,0,0,0,0">
           <item>
            <widget class="QPushButton" name="pb_load_last">
             <property name="text">
@@ -765,6 +765,16 @@
             </property>
             <property name="text">
              <string>Stop Recording</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="pb_cluster">
+            <property name="enabled">
+             <bool>false</bool>
+            </property>
+            <property name="text">
+             <string>Cluster all spikes</string>
             </property>
            </widget>
           </item>
