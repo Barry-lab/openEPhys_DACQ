@@ -67,7 +67,7 @@ def create_DACQ_waveform_data(waveform_data, idx_speedcut=None):
         nspikes = waves.shape[0]
         # Set waveforms values on this tetrode to range -127 to 127
         waves = waves.astype(np.float32) * tet_waveform_data['bitVolts']
-        waves = waves / 250 # This sets int8 range to 0.2 mV
+        waves = waves / 250 # This sets int8 range to 0.25 mV
         waves = waves * 127
         waves[waves > 127] = 127
         waves[waves < -127] = -127
