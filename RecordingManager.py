@@ -93,7 +93,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Set GUI environment
         self.scripts_root = os.path.expanduser('~') + '/openEPhys_DACQ'
         self.pt_root_folder.setPlainText(os.path.expanduser('~') + '/RecordingData')
-        self.file_server_path = '/media/QNAP/room418'
+        self.file_server_path = '/media/QNAP/SanderT/room418'
         self.RecGUI_dataFolder = str(self.pt_root_folder.toPlainText()) + '/RecordingManagerData'
         # Prepare GUI variables
         self.original_stylesheets = {}
@@ -406,6 +406,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Create target folder tree on server
         os.system('mkdir -p ' + server_folder)
         # Copy files over to server
+        print('Copying files to server ...')
         callstr = 'rsync -avzh ' + rec_folder + '/ ' + server_folder + '/'
         os.system(callstr)
         # Change button color back to default
