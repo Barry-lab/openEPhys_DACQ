@@ -18,13 +18,16 @@ from scipy.spatial.distance import euclidean
 import subprocess
 
 
-def getAllFiles(fpath, fileNames):
+def getAllFiles(fpath, file_basenames):
     # Find .clu and position files and incorporate into dictionary of fileNames
-    fileNames = {'waveforms': fileNames, 'clufiles': [None] * len(fileNames), 
+    fileNames = {'waveforms': [None] * len(file_basenames), 'clufiles': [None] * len(file_basenames), 
                  'posfile': [None]}
+    for nfile in range(len(file_basenames)):
+        waveforms_string = file_basenames[nfile] + '.spikes.p'
+        fileNames['waveforms'][nfile] = waveforms_string
     # Get all available clu file names
-    for nfile in range(len(fileNames['waveforms'])):
-        clu_string = fileNames['waveforms'][nfile] + '.clu.0'
+    for nfile in range(len(file_basenames)):
+        clu_string = file_basenames[nfile] + '.clu.0'
         if os.path.exists(fpath + '/' + clu_string):
             fileNames['clufiles'][nfile] = clu_string
     # Get position data file

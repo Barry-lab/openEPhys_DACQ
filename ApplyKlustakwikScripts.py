@@ -387,6 +387,11 @@ def cluster_all_spikes_Kwik(filename):
         idx_delete = np.any(np.any(np.abs(waveforms) > noise_cut_off, axis=2), axis=1)
         timestamps = timestamps[np.logical_not(idx_delete)]
         waveforms = waveforms[np.logical_not(idx_delete),:,:]
+        # Create filename base for tetrode
+        tet_file_basename = 'Tet_' + str(ntet + 1) + '_CH' + '_'.join(map(str, list(channels + 1)))
+        # Save logical array of spikes used
+        idx_keep = np.logical_not(idx_delete)
+        np.savetxt(os.path.join(fpath,tet_file_basename + '.SpikesUsed'),idx_keep,fmt='%i')
         # Set up dictionary to be saved for this tetrode
         waveform_data = {'waveforms': waveforms[:,:31,:], 
                          'spiketimes': timestamps, 
@@ -396,17 +401,21 @@ def cluster_all_spikes_Kwik(filename):
                          'sampling_rate': float(sampling_rate), 
                          'bitVolts': float(0.195)}
         # Save as a pickle file
-        wave_filename = 'Tet_' + str(ntet + 1) + '_CH' + '_'.join(map(str, list(channels + 1))) + '.waveforms'
-        with open(fpath + '/' + wave_filename,'wb') as file:
+        wave_filename = tet_file_basename + '.spikes.p'
+        with open(os.path.join(fpath,wave_filename),'wb') as file:
             print('Saving waveforms for tetrode ' + str(ntet + 1))
             pickle.dump(waveform_data, file)
-        files_created.append(wave_filename)
+        files_created.append(tet_file_basename)
         # Applying Klustkwik on tetrode
         print('Applying KlustaKwik on tetrode ' + str(ntet + 1))
         waveforms = np.swapaxes(waveforms,1,2)
         features2use = ['PC1', 'PC2', 'PC3', 'Amp', 'Vt']
         d = {0: features2use}
-        klustakwik(waveforms, d, fpath + '/' + wave_filename)
+        klustakwik(waveforms, d, os.path.join(fpath,tet_file_basename))
+        # Delete all files aside from .clu.0 and .SpikesUsed
+        extensions = ['.fet.0','.fmask.0','.initialclusters.2.clu.0','.temp.clu.0','_0.cut']
+        for extension in extensions:
+            os.remove(os.path.join(fpath,tet_file_basename + extension))
     # Load up createWaveformGUIdata
     fileNames = createWaveformGUIdata.getAllFiles(fpath, files_created)
     createWaveformGUIdata.createWaveformData(fpath, fileNames)

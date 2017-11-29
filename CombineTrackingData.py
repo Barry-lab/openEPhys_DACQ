@@ -9,7 +9,6 @@
 ### By Sander Tanni, May 2017, UCL
 
 import numpy as np
-import OpenEphys
 import pickle
 import os
 import RPiInterface as rpiI
