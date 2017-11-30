@@ -16,6 +16,7 @@ import shutil
 from scipy import interpolate
 from scipy.spatial.distance import euclidean
 import subprocess
+import Kwik
 
 
 def getAllFiles(fpath, file_basenames):
@@ -140,6 +141,25 @@ def create_DACQ_pos_data(posfile, duration):
     
     return pos_data_dacq
 
+def create_DACQ_eeg_data(fpath,OpenEphys_SamplingRate,dacq_eeg_samplingRate):
+    # Load EEG data of second channel
+    data = Kwik.load(os.path.join(fpath,'experiment1_101.raw.kwd'))['data'][:,1]
+    data = data.astype(np.float32)
+    data = data - np.mean(data)
+    data = data / 1000 # Set data range to between 1000 microvolts
+    data = data * 127
+    data[data > 127] = 127
+    data[data < -127] = -127
+    # Create DACQ data eeg format
+    data = data[::int(np.round(OpenEphys_SamplingRate/dacq_eeg_samplingRate))]
+    dacq_eeg_dtype = [('eeg', '=b')]
+    dacq_eeg_data_dtype = '>i1'
+    dacq_eeg = data.astype(dtype=dacq_eeg_dtype)
+    eeg_data_dacq = np.zeros(dacq_eeg.size, dtype=dacq_eeg_dtype)
+    eeg_data_dacq['eeg'] = dacq_eeg
+
+    return eeg_data_dacq
+
 
 def header_templates(htype):
     # This function returns the default header necessary for the waveform and pos files
@@ -201,6 +221,22 @@ def header_templates(htype):
                   'bytes_per_coord': '2', 
                   'pixels_per_metre': '600', 
                   'num_pos_samples': '1'}
+    elif htype == 'eeg':
+        keyorder = ['trial_date', 'trial_time', 'experimenter', 'comments', \
+              'duration', 'sw_version', 'num_chans', 'sample_rate', 'EEG_samples_per_position', \
+              'bytes_per_sample', 'num_EEG_samples']
+
+        header = {'trial_date': 'Tuesday, 14 Dec 2010', 
+                  'trial_time': '10:44:07', 
+                  'experimenter': 'cb', 
+                  'comments': '1838', 
+                  'duration': '1201', 
+                  'sw_version': '1.0.2', 
+                  'num_chans': '1', 
+                  'sample_rate': '250.0 hz', 
+                  'EEG_samples_per_position': '5', 
+                  'bytes_per_sample': '1', 
+                  'num_EEG_samples': '300250'}
                   
     return header, keyorder
     
@@ -296,9 +332,13 @@ def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'
     # Convert data to DACQ format
     waveform_data_dacq = create_DACQ_waveform_data(waveform_data, idx_speedcut)
     pos_data_dacq = create_DACQ_pos_data(fpath + '/' + fileNames['posfile'], duration)
+    OpenEphys_SamplingRate = 30000
+    dacq_eeg_samplingRate = 250 # Sampling rate in Hz
+    eeg_data_dacq = create_DACQ_eeg_data(fpath,OpenEphys_SamplingRate,dacq_eeg_samplingRate)
     # Get headers for both datatypes
     header_wave, keyorder_wave = header_templates('waveforms')
     header_pos, keyorder_pos = header_templates('pos')
+    header_eeg, keyorder_eeg = header_templates('eeg')
     # Update headers
     experiment_info = getExperimentInfo(fpath)
     header_wave['trial_date'] = experiment_info['trial_date']
@@ -317,6 +357,11 @@ def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'
     header_pos['comments'] = experiment_info['animal']
     header_pos['duration'] = str(int(float(pos_data_dacq['ts'][-1]) / 50))
     header_pos['num_pos_samples'] = str(len(pos_data_dacq))
+    header_eeg['trial_date'] = experiment_info['trial_date']
+    header_eeg['trial_time'] = experiment_info['trial_time']
+    header_eeg['comments'] = experiment_info['animal']
+    header_eeg['duration'] = str(int(float(len(eeg_data_dacq['eeg'])) / dacq_eeg_samplingRate))
+    header_eeg['num_pos_samples'] = str(len(eeg_data_dacq))
     # Generate base name for files
     fname_prefix = fileNames['waveforms'][0][:fileNames['waveforms'][0].find('_CH')]
     file_basename = fname_prefix + '_' + \
@@ -378,6 +423,25 @@ def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'
         f.write(DATA_START_TOKEN)
         # Write the data into the file in binary format
         pos_data_dacq.tofile(f)
+        # Write the end token string
+        f.write(DATA_END_TOKEN)
+    # Write EEG data into DACQ format
+    fname = fpath + '/' + subfolder + '/' + file_basename + '.eeg'
+    with open(fname, 'wb') as f:
+        # Write header in the correct order
+        for key in keyorder_eeg:
+            if 'duration' in key:
+                # Replicate spaces following duration in original dacq files
+                stringval = header_eeg[key]
+                while len(stringval) < 10:
+                    stringval += ' '
+                f.write(key + ' ' + stringval + '\r\n')
+            else:
+                f.write(key + ' ' + header_eeg[key] + '\r\n')
+        # Write the start token string
+        f.write(DATA_START_TOKEN)
+        # Write the data into the file in binary format
+        eeg_data_dacq.tofile(f)
         # Write the end token string
         f.write(DATA_END_TOKEN)
     # Copy over and rename CLU files for each tetrode
@@ -450,7 +514,7 @@ class MainWindow(QtGui.QWidget):
         # Pops up a GUI to select a single file. All others with same prefix will be loaded
         dialog = QtGui.QFileDialog(self, caption='Select one from the set of waveform files in the recording folder')
         dialog.setFileMode(QtGui.QFileDialog.ExistingFile)
-        dialog.setNameFilters(['(*.waveforms)'])
+        dialog.setNameFilters(['(*.spikes.p)'])
         dialog.setViewMode(QtGui.QFileDialog.List) # or Detail
         if dialog.exec_():
             # Get path and file name of selection
@@ -461,7 +525,7 @@ class MainWindow(QtGui.QWidget):
             f_s_name = str(ntpath.basename(selected_file))
             # Check if file name is correct format
             numstart = f_s_name.find('_CH') + 3
-            numend = f_s_name.find('.waveforms')
+            numend = f_s_name.find('.spikes.p')
             if numstart == -1 or numend == -1:
                 print('Error: Unexpected file name')
             else:
@@ -470,8 +534,8 @@ class MainWindow(QtGui.QWidget):
                 # Get list of all other files and channel numbers from this recording
                 self.fileNames = []
                 for fname in os.listdir(self.fpath):
-                    if fname.startswith(fprefix) and fname.endswith('.waveforms'):
-                        self.fileNames.append(fname)
+                    if fname.startswith(fprefix) and fname.endswith('.spikes.p'):
+                        self.fileNames.append(fname[:-9])
             self.fileNames = getAllFiles(self.fpath, self.fileNames)
 
 
