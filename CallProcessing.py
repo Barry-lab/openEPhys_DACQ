@@ -5,4 +5,4 @@ import sys
 dataFileName = str(sys.argv[1])
 
 combPos.combdata(dataFileName)
-AKS.cluster_all_spikes_Kwik(dataFileName)
+AKS.cluster_all_spikes_NWB(dataFileName)

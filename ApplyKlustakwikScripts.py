@@ -320,23 +320,17 @@ def klustakwik(waveforms, d, filename_root):
         c.kluster()
 
 # Below stuff is written by Sander, UCL, 31/10/2017
-import Kwik
+import NWBio
 import pickle
 import createWaveformGUIdata
 
 def get_position_data_edges(filename):
     fpath = filename[:filename.rfind('/')]
-    # Get position data file
+    # Get position data first and last timestamps
     posLog_fileName = 'PosLogComb.csv'
-    # Get raw data file
-    raw_data = Kwik.load(filename)
-    # Get data from CSV file
     pos_csv = np.genfromtxt(fpath + '/' + posLog_fileName, delimiter=',')
     pos_timestamps = np.array(pos_csv[:,0], dtype=np.float64)
-    lfp_timestamps = np.arange(raw_data['data'].shape[0], dtype=np.float64) / raw_data['info']['sample_rate']
-    idx_first = np.abs(lfp_timestamps - pos_timestamps[0]).argmin()
-    idx_last = np.abs(lfp_timestamps - pos_timestamps[-1]).argmin()
-    pos_edges = [idx_first, idx_last]
+    pos_edges = [pos_timestamps[0], pos_timestamps[-1]]
 
     return pos_edges
 
@@ -353,23 +347,23 @@ def listBadChannels(fpath):
 
     return badChan
 
-def cluster_all_spikes_Kwik(filename):
-    # Loads whole Kwik spike file, cuts off spikes outside position data, clusters all tetrodes
+def cluster_all_spikes_NWB(filename):
+    # Loads whole NWB spike data, cuts off spikes outside position data, clusters all tetrodes
     # filename - the full path to the raw data file
     fpath = filename[:filename.rfind('/')]
 
-    data = Kwik.load_spikes(filename)# Get raw data file
-    raw_data = Kwik.load(filename)
-    sampling_rate = raw_data['info']['sample_rate']
+    spike_data = NWBio.load_spikes(filename)# Get raw data file
+    sampling_rate = 30000
 
     pos_edges = get_position_data_edges(filename)
 
     badChan = listBadChannels(fpath)
 
     files_created = []
-    for ntet in range(len(data)):
-        waveforms = -np.array(data[ntet]['waveforms'])
-        timestamps = np.array(data[ntet]['timestamps'])
+    for ntet in range(len(spike_data)):
+        waveforms = -np.array(spike_data[ntet]['waveforms']) # Waveforms are inverted
+        waveforms = np.swapaxes(waveforms,1,2)
+        timestamps = np.array(spike_data[ntet]['timestamps'])
         # Set bad channel waveforms to 0
         channels = np.arange(4) + 4 * ntet
         if len(badChan) > 0:
@@ -398,7 +392,6 @@ def cluster_all_spikes_Kwik(filename):
                          'nr_tetrode': ntet, 
                          'tetrode_channels': channels, 
                          'badChan': badChan, 
-                         'sampling_rate': float(sampling_rate), 
                          'bitVolts': float(0.195)}
         # Save as a pickle file
         wave_filename = tet_file_basename + '.spikes.p'

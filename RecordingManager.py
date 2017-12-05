@@ -339,7 +339,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Find any recording file in the recording folder
         dirfiles = os.listdir(str(self.pt_rec_folder.toPlainText()))
         listpos = 0
-        while not dirfiles[listpos].endswith('.kwd'):
+        while not dirfiles[listpos].endswith('.nwb'):
             listpos += 1
         dataFileName = str(self.pt_rec_folder.toPlainText()) + '/' + dirfiles[listpos]
         self.lastDataFileName = dataFileName
@@ -374,7 +374,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_open_rec_folder.setEnabled(False)
         time.sleep(0.1)
         import ApplyKlustakwikScripts as AKS
-        AKS.cluster_all_spikes_Kwik(self.lastDataFileName)
+        AKS.cluster_all_spikes_NWB(self.lastDataFileName)
         self.pb_start_rec.setEnabled(True)
         self.pb_cluster.setEnabled(True)
         self.pb_process_data.setEnabled(True)

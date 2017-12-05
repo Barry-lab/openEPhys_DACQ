@@ -16,7 +16,7 @@ import shutil
 from scipy import interpolate
 from scipy.spatial.distance import euclidean
 import subprocess
-import Kwik
+import NWBio
 
 
 def getAllFiles(fpath, file_basenames):
@@ -52,20 +52,26 @@ def interpolate_waveforms(waves, nr_targetbins=50):
     return new_waves
     
     
-def create_DACQ_waveform_data(waveform_data, idx_speedcut=None):
+def create_DACQ_waveform_data(waveform_data, pos_edges, idx_speedcut=None):
     # Create DACQ data tetrode format
     waveform_data_dacq = []
     dacq_waveform_dtype = [('ts', '>i'), ('waveform', '50b')]
     dacq_waveform_timestamps_dtype = '>i4'
     dacq_waveform_waves_dtype = '>i1'
     dacq_sampling_rate = 96000
-    openEphus_sampling_rate = waveform_data[0]['sampling_rate']
     for ntet in range(len(waveform_data)):
         # Remove spikes under speedcut if asked to
         tet_waveform_data = waveform_data[ntet]
         if idx_speedcut:
             tet_waveform_data['waveforms'] = np.delete(tet_waveform_data['waveforms'], idx_speedcut[ntet], 0)
             tet_waveform_data['spiketimes'] = np.delete(tet_waveform_data['spiketimes'], idx_speedcut[ntet], 0)
+        # Remove spikes before or after position data and align times to beginning of position data
+        idx_outside_pos_data = tet_waveform_data['spiketimes'] < pos_edges[0]
+        idx_outside_pos_data = np.logical_or(idx_outside_pos_data, tet_waveform_data['spiketimes'] > pos_edges[1])
+        idx_outside_pos_data = np.where(idx_outside_pos_data[0])
+        tet_waveform_data['waveforms'] = np.delete(tet_waveform_data['waveforms'], idx_outside_pos_data, 0)
+        tet_waveform_data['spiketimes'] = np.delete(tet_waveform_data['spiketimes'], idx_outside_pos_data, 0)
+        tet_waveform_data['spiketimes'] = tet_waveform_data['spiketimes'] - pos_edges[0]
         # Get waveforms
         waves = np.array(tet_waveform_data['waveforms'])
         nspikes = waves.shape[0]
@@ -93,7 +99,7 @@ def create_DACQ_waveform_data(waveform_data, idx_speedcut=None):
         timestamps = np.array(tet_waveform_data['spiketimes'])
         timestamps = np.ravel(np.repeat(np.reshape(timestamps, (len(timestamps), 1)), 4, axis=1),'C')
         # Convert OpenEphys timestamp sampling rate to DACQ sampling rate
-        timestamps = timestamps.astype(dtype=np.float32) * (float(dacq_sampling_rate) / float(openEphus_sampling_rate))
+        timestamps = timestamps * float(dacq_sampling_rate)
         timestamps_dacq = np.round(timestamps).astype(dtype=dacq_waveform_timestamps_dtype)
         # Input timestamp values to the dacq data matrix
         tmp_waveform_data_dacq['ts'] = timestamps_dacq
@@ -102,7 +108,7 @@ def create_DACQ_waveform_data(waveform_data, idx_speedcut=None):
     return waveform_data_dacq
     
     
-def create_DACQ_pos_data(posfile, duration):
+def create_DACQ_pos_data(posfile):
     # Create DACQ data pos format
     dacq_pos_samplingRate = 50 # Sampling rate in Hz
     dacq_pos_dtype = [('ts', '>i'), ('pos', '>8h')]
@@ -112,14 +118,16 @@ def create_DACQ_pos_data(posfile, duration):
     pos_csv = np.genfromtxt(posfile, delimiter=',')
     timestamps = np.array(pos_csv[:,0], dtype=np.float32)
     xy_pos = pos_csv[:,1:5]
-    # Interpolate position data to 50Hz and from 0 timepoint to last spike
-    countstamps = np.arange(np.ceil(duration * dacq_pos_samplingRate))
+    # Realign position data start to 0
+    timestamps = timestamps - timestamps[0]
+    # Interpolate position data to 50Hz
+    countstamps = np.arange(np.floor(timestamps[-1] * dacq_pos_samplingRate))
     dacq_timestamps = countstamps / dacq_pos_samplingRate
     xy_pos_interp = np.zeros((countstamps.size, xy_pos.shape[1]), dtype=np.float32)
     for ncoord in range(xy_pos.shape[1]):
         xy_pos_interp[:,ncoord] = np.interp(dacq_timestamps, timestamps, xy_pos[:,ncoord])
     xy_pos = xy_pos_interp
-    # Set position data to range between 0 and 600 (increases resolution for smaller arenas)
+    # Set position data to range between 0 and 600 (upsamples data for smaller arenas)
     # Also set NaN values to 1023
     xy_pos = xy_pos - np.nanmin(xy_pos)
     xy_pos = xy_pos * (600 / np.nanmax(xy_pos))
@@ -141,9 +149,16 @@ def create_DACQ_pos_data(posfile, duration):
     
     return pos_data_dacq
 
-def create_DACQ_eeg_data(fpath,OpenEphys_SamplingRate,dacq_eeg_samplingRate):
+def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges):
     # Load EEG data of second channel
-    data = Kwik.load(os.path.join(fpath,'experiment1_101.raw.kwd'))['data'][:,1]
+    data = NWBio.load_continuous(os.path.join(fpath,'experiment_1.nwb'))['continuous'][:,1]
+    timestamps = NWBio.load_continuous(os.path.join(fpath,'experiment_1.nwb'))['timestamps']
+    # Crop data outside position data
+    idx_outside_pos_data = timestamps < pos_edges[0]
+    idx_outside_pos_data = np.logical_or(idx_outside_pos_data, timestamps > pos_edges[1])
+    idx_outside_pos_data = np.where(idx_outside_pos_data)[0]
+    data = np.delete(data, idx_outside_pos_data, 0)
+    # Adjust EEG data format and range
     data = data.astype(np.float32)
     data = data - np.mean(data)
     data = data / 1000 # Set data range to between 1000 microvolts
@@ -301,20 +316,25 @@ def apply_speedcut(waveform_datas, speedcut, posfile):
 
     return idx_speedcut
 
+def get_position_data_edges(fpath):
+    # Get position data first and last timestamps
+    posLog_fileName = 'PosLogComb.csv'
+    pos_csv = np.genfromtxt(fpath + '/' + posLog_fileName, delimiter=',')
+    pos_timestamps = np.array(pos_csv[:,0], dtype=np.float64)
+    pos_edges = [pos_timestamps[0], pos_timestamps[-1]]
+
+    return pos_edges
 
 def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'):
     print('Converting data')
     # Loads waveforms from Pickle files selected with the openFileDialog
     waveform_data = []
-    duration = 0
     for filename in fileNames['waveforms']:
         # Load all selected waveform files
         full_filename = fpath + '/' + filename
         with open(full_filename, 'rb') as file:
             tmp = pickle.load(file)
         waveform_data.append(tmp)
-        # Find last spike to determine recording duration
-        duration = np.maximum(duration, tmp['spiketimes'][-1] / float(tmp['sampling_rate']))
     # Extract tetrode numbers and order data by tetrode numbers
     tetrode_numbers_int = []
     for wavedat in waveform_data:
@@ -329,12 +349,14 @@ def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'
         subfolder = subfolder + '_s' + str(speedcut)
     else:
         idx_speedcut = None
+    # Get position data start and end times
+    pos_edges = get_position_data_edges(fpath)
     # Convert data to DACQ format
-    waveform_data_dacq = create_DACQ_waveform_data(waveform_data, idx_speedcut)
-    pos_data_dacq = create_DACQ_pos_data(fpath + '/' + fileNames['posfile'], duration)
+    waveform_data_dacq = create_DACQ_waveform_data(waveform_data, pos_edges, idx_speedcut)
+    pos_data_dacq = create_DACQ_pos_data(fpath + '/' + fileNames['posfile'])
     OpenEphys_SamplingRate = 30000
     dacq_eeg_samplingRate = 250 # Sampling rate in Hz
-    eeg_data_dacq = create_DACQ_eeg_data(fpath,OpenEphys_SamplingRate,dacq_eeg_samplingRate)
+    eeg_data_dacq = create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges)
     # Get headers for both datatypes
     header_wave, keyorder_wave = header_templates('waveforms')
     header_pos, keyorder_pos = header_templates('pos')
@@ -344,7 +366,7 @@ def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'
     header_wave['trial_date'] = experiment_info['trial_date']
     header_wave['trial_time'] = experiment_info['trial_time']
     header_wave['comments'] = experiment_info['animal']
-    header_wave['duration'] = str(int(np.ceil(duration)))
+    header_wave['duration'] = str(int(float(len(eeg_data_dacq['eeg'])) / dacq_eeg_samplingRate))
     nspikes_tet = []
     for waves in waveform_data_dacq:
         nspikes_tet.append(str(int(len(waves) / 4)))
@@ -355,7 +377,7 @@ def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'
     header_pos['trial_date'] = experiment_info['trial_date']
     header_pos['trial_time'] = experiment_info['trial_time']
     header_pos['comments'] = experiment_info['animal']
-    header_pos['duration'] = str(int(float(pos_data_dacq['ts'][-1]) / 50))
+    header_pos['duration'] = str(int(float(len(eeg_data_dacq['eeg'])) / dacq_eeg_samplingRate))
     header_pos['num_pos_samples'] = str(len(pos_data_dacq))
     header_eeg['trial_date'] = experiment_info['trial_date']
     header_eeg['trial_time'] = experiment_info['trial_time']

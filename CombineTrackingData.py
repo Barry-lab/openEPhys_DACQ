@@ -12,7 +12,7 @@ import numpy as np
 import pickle
 import os
 import RPiInterface as rpiI
-import Kwik
+import NWBio
 
 
 def findPosLogs(rootfolder):
@@ -45,8 +45,7 @@ def getPosData(RPi_nr, filename, data_events, RPiSettings):
     pos_csv = np.delete(pos_csv, (0), axis=0) # Cut out the header row
     pos_csv[0,2] = 0 # Set first frametime to 0
     # Read OpenEphys frame times for this camera in seconds
-    timestamps_2_use = np.logical_and(data_events['eventID'] > 0.5, np.int8(data_events['channel']) == RPi_nr)
-    OEtimes = data_events['timestamps'][timestamps_2_use] # Use the timestamps where RPi sent pulse to OE board
+    OEtimes = data_events['timestamps'][np.array(data_events['eventID']) == RPi_nr + 1] # Use the timestamps where RPi sent pulse to OE board
     if OEtimes.size != pos_csv.shape[0]: # If PosLog*.csv has more datapoints than TTL pulses recorded 
         # Realign frame times between OpenEphys and RPi by dropping the extra datapoints in PosLog data
         offset = pos_csv.shape[0] - OEtimes.size
@@ -85,7 +84,7 @@ def combdata(filename):
     with open(RPiSettingsFile, 'rb') as f:
         RPiSettings = pickle.load(f)
     # Get OpenEphysGUI events data (TTL pulse times in reference to electrophysiological signal)
-    data_events = Kwik.load_events(filename) # OE events timestamps are aligned to beginnig of Raw Data file
+    data_events = NWBio.load_events(filename)
     # Process position data from all PosLog*.csv's from all cameras
     posdatas = []
     for n_rpi in range(len(RPi_nrs)):
