@@ -322,7 +322,7 @@ def klustakwik(waveforms, d, filename_root):
 # Below stuff is written by Sander, UCL, 31/10/2017
 import NWBio
 import pickle
-import createWaveformGUIdata
+import createAxonaData
 
 def get_position_data_edges(filename):
     fpath = filename[:filename.rfind('/')]
@@ -353,7 +353,6 @@ def cluster_all_spikes_NWB(filename):
     fpath = filename[:filename.rfind('/')]
 
     spike_data = NWBio.load_spikes(filename)# Get raw data file
-    sampling_rate = 30000
 
     pos_edges = get_position_data_edges(filename)
 
@@ -410,5 +409,5 @@ def cluster_all_spikes_NWB(filename):
         for extension in extensions:
             os.remove(os.path.join(fpath,tet_file_basename + extension))
     # Load up createWaveformGUIdata
-    fileNames = createWaveformGUIdata.getAllFiles(fpath, files_created)
-    createWaveformGUIdata.createWaveformData(fpath, fileNames)
+    fileNames = createAxonaData.getAllFiles(fpath, files_created)
+    createAxonaData.createAxonaData(fpath, fileNames)

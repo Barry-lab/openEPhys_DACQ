@@ -16,7 +16,21 @@ import shutil
 from scipy import interpolate
 from scipy.spatial.distance import euclidean
 import subprocess
+from progress_bar import print_progress
 import NWBio
+from scipy import signal
+
+
+def Filter(signal_in, sampling_rate=30000, highpass_frequency=600, lowpass_frequency=6000, filt_order=2):
+    # Applies a high pass filter on the signal
+    Wn = float(highpass_frequency) / float(sampling_rate)
+    b, a = signal.butter(filt_order, Wn, 'highpass')
+    signal_mid = signal.filtfilt(b, a, signal_in, padlen=0)
+    Wn = float(lowpass_frequency) / float(sampling_rate)
+    b, a = signal.butter(filt_order, Wn, 'lowpass')
+    signal_out = signal.filtfilt(b, a, signal_mid, padlen=0)
+
+    return signal_out
 
 
 def getAllFiles(fpath, file_basenames):
@@ -56,21 +70,19 @@ def create_DACQ_waveform_data(waveform_data, pos_edges, idx_speedcut=None):
     # Create DACQ data tetrode format
     waveform_data_dacq = []
     dacq_waveform_dtype = [('ts', '>i'), ('waveform', '50b')]
-    dacq_waveform_timestamps_dtype = '>i4'
+    # dacq_waveform_timestamps_dtype = '>i4'
     dacq_waveform_waves_dtype = '>i1'
+    dacq_waveform_timestamps_dtype = '>i'
+    # dacq_waveform_waves_dtype = '50b'
     dacq_sampling_rate = 96000
+    print_progress(0, len(waveform_data), prefix = 'Converting Waveforms:', initiation=True)
     for ntet in range(len(waveform_data)):
         # Remove spikes under speedcut if asked to
         tet_waveform_data = waveform_data[ntet]
         if idx_speedcut:
             tet_waveform_data['waveforms'] = np.delete(tet_waveform_data['waveforms'], idx_speedcut[ntet], 0)
             tet_waveform_data['spiketimes'] = np.delete(tet_waveform_data['spiketimes'], idx_speedcut[ntet], 0)
-        # Remove spikes before or after position data and align times to beginning of position data
-        idx_outside_pos_data = tet_waveform_data['spiketimes'] < pos_edges[0]
-        idx_outside_pos_data = np.logical_or(idx_outside_pos_data, tet_waveform_data['spiketimes'] > pos_edges[1])
-        idx_outside_pos_data = np.where(idx_outside_pos_data[0])
-        tet_waveform_data['waveforms'] = np.delete(tet_waveform_data['waveforms'], idx_outside_pos_data, 0)
-        tet_waveform_data['spiketimes'] = np.delete(tet_waveform_data['spiketimes'], idx_outside_pos_data, 0)
+        # Align spiketimes to beginning of position data
         tet_waveform_data['spiketimes'] = tet_waveform_data['spiketimes'] - pos_edges[0]
         # Get waveforms
         waves = np.array(tet_waveform_data['waveforms'])
@@ -93,7 +105,8 @@ def create_DACQ_waveform_data(waveform_data, pos_edges, idx_speedcut=None):
         # Create DACQ datatype structured array
         tmp_waveform_data_dacq = np.zeros(nspikes * 4, dtype=dacq_waveform_dtype)
         # Input waveform values, leaving a trailing end of zeros due to lower sampling rate
-        tmp_waveform_data_dacq['waveform'][:,:waves.shape[1]] = waves.astype(dtype=dacq_waveform_waves_dtype)
+        waves = waves.astype(dtype=dacq_waveform_waves_dtype)
+        tmp_waveform_data_dacq['waveform'][:,:waves.shape[1]] = waves
         # Arrange timestamps into a vector where timestamp for a spike is
         # repeated for each of the 4 channels
         timestamps = np.array(tet_waveform_data['spiketimes'])
@@ -104,6 +117,7 @@ def create_DACQ_waveform_data(waveform_data, pos_edges, idx_speedcut=None):
         # Input timestamp values to the dacq data matrix
         tmp_waveform_data_dacq['ts'] = timestamps_dacq
         waveform_data_dacq.append(tmp_waveform_data_dacq)
+        print_progress(ntet, len(waveform_data), prefix = 'Converting Waveforms:')
         
     return waveform_data_dacq
     
@@ -112,8 +126,10 @@ def create_DACQ_pos_data(posfile):
     # Create DACQ data pos format
     dacq_pos_samplingRate = 50 # Sampling rate in Hz
     dacq_pos_dtype = [('ts', '>i'), ('pos', '>8h')]
-    dacq_pos_timestamp_dtype = '>i4'
+    # dacq_pos_timestamp_dtype = '>i4'
     dacq_pos_xypos_dtype = '>i2'
+    dacq_pos_timestamp_dtype = '>i'
+    # dacq_pos_xypos_dtype = '>8h'
     # Get data from CSV file
     pos_csv = np.genfromtxt(posfile, delimiter=',')
     timestamps = np.array(pos_csv[:,0], dtype=np.float32)
@@ -149,10 +165,10 @@ def create_DACQ_pos_data(posfile):
     
     return pos_data_dacq
 
-def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges):
+def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges, eegChan):
     # Load EEG data of second channel
-    data = NWBio.load_continuous(os.path.join(fpath,'experiment_1.nwb'))['continuous'][:,1]
-    timestamps = NWBio.load_continuous(os.path.join(fpath,'experiment_1.nwb'))['timestamps']
+    data = np.array(NWBio.load_continuous(os.path.join(fpath,'experiment_1.nwb'))['continuous'][:,eegChan])
+    timestamps = np.array(NWBio.load_continuous(os.path.join(fpath,'experiment_1.nwb'))['timestamps'])
     # Crop data outside position data
     idx_outside_pos_data = timestamps < pos_edges[0]
     idx_outside_pos_data = np.logical_or(idx_outside_pos_data, timestamps > pos_edges[1])
@@ -160,16 +176,17 @@ def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, p
     data = np.delete(data, idx_outside_pos_data, 0)
     # Adjust EEG data format and range
     data = data.astype(np.float32)
+    data = Filter(data, sampling_rate=30000, highpass_frequency=1, lowpass_frequency=300)
     data = data - np.mean(data)
-    data = data / 1000 # Set data range to between 1000 microvolts
+    data = data / 2000 # Set data range to between 1000 microvolts
     data = data * 127
     data[data > 127] = 127
     data[data < -127] = -127
     # Create DACQ data eeg format
     data = data[::int(np.round(OpenEphys_SamplingRate/dacq_eeg_samplingRate))]
     dacq_eeg_dtype = [('eeg', '=b')]
-    dacq_eeg_data_dtype = '>i1'
-    dacq_eeg = data.astype(dtype=dacq_eeg_dtype)
+    dacq_eeg_data_dtype = '=b'
+    dacq_eeg = data.astype(dtype=dacq_eeg_data_dtype)
     eeg_data_dacq = np.zeros(dacq_eeg.size, dtype=dacq_eeg_dtype)
     eeg_data_dacq['eeg'] = dacq_eeg
 
@@ -325,24 +342,162 @@ def get_position_data_edges(fpath):
 
     return pos_edges
 
-def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'):
-    print('Converting data')
-    # Loads waveforms from Pickle files selected with the openFileDialog
+def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=False):
+    # This function uses KiloSort output to extract waveforms from NWB file
+    # UseChans = [0,64] will limit finding waveforms to channels 1 to 64
+    # UseChans = [64,128] will limit finding waveforms to channels 65 to 128
+    # Set waveform size in datapoints
+    winsize_before = 10
+    winsize_after = 20
+    wintotal = winsize_before + winsize_after + 1 # This should be 31 for all downstream functions to work
+    # Load data
+    clusters = np.load(os.path.join(KiloSortOutputPath, 'spike_clusters.npy'))[:,0]
+    spiketimes = np.load(os.path.join(KiloSortOutputPath, 'spike_times.npy'))[:,0]
+    data = NWBio.load_continuous(NWBfilePath)
+    timestamps = np.array(data['timestamps'])
+    continuous = -np.transpose(np.array(data['continuous']))
+    if UseChans:
+        continuous = continuous[UseChans[0]:UseChans[1],:]
+    # Remove the mean of the signal from all channels
+    continuous_mean = np.mean(continuous, axis=0, keepdims=True)
+    continuous = continuous - np.repeat(continuous_mean, continuous.shape[0], axis=0)
+    # Filter each channel
+    print_progress(0, continuous.shape[0], prefix = 'Filtering raw data:', initiation=True)
+    for nchan in range(continuous.shape[0]):
+        signal_in = np.float32(continuous[nchan,:])
+        signal_out = Filter(signal_in)
+        continuous[nchan,:] = np.int16(signal_out)
+        print_progress(nchan + 1, continuous.shape[0], prefix = 'Filtering raw data:')
+    n_tetrodes = continuous.shape[0] / 4
+    tetrode_channels = np.reshape(np.arange(n_tetrodes * 4), (n_tetrodes, 4))
+    cluster_nrs = np.unique(clusters)
     waveform_data = []
-    for filename in fileNames['waveforms']:
-        # Load all selected waveform files
-        full_filename = fpath + '/' + filename
-        with open(full_filename, 'rb') as file:
-            tmp = pickle.load(file)
+    for ntet in range(n_tetrodes):
+        tmp = {'waveforms':np.zeros((1,wintotal,4),dtype=np.int16), 
+               'spiketimes':np.array([100],dtype=np.int64), 
+               'clusterIDs':np.array([1],dtype=np.int16)}
         waveform_data.append(tmp)
-    # Extract tetrode numbers and order data by tetrode numbers
-    tetrode_numbers_int = []
-    for wavedat in waveform_data:
-        tetrode_numbers_int.append(wavedat['nr_tetrode'])
-    file_order = np.argsort(np.array(tetrode_numbers_int))
-    fileNames['waveforms'] = [fileNames['waveforms'][x] for x in file_order]
-    waveform_data = [waveform_data[x] for x in file_order]
-    fileNames['clufiles'] = [fileNames['clufiles'][x] for x in file_order]
+    print_progress(0, len(cluster_nrs), prefix = 'Loading waveforms from NWB:', initiation=True)
+    progress_count = 0
+    for nclu in list(cluster_nrs):
+        stimes = spiketimes[clusters == nclu]
+        clu_timestamps = timestamps[stimes]
+        # Create windows for indexing all samples for a waveform
+        stimes = np.int32(np.expand_dims(stimes, 1))
+        windows = np.arange(winsize_before + winsize_after + 1, dtype=np.int32) - winsize_before
+        windows = np.tile(windows, (stimes.size,1))
+        windows = windows + np.tile(stimes, (1,windows.shape[1]))
+        # Skip windows that are too close to edge of signal
+        tooearly = windows < 0
+        toolate = windows > (continuous.shape[1] - 1)
+        idx_delete = np.any(np.logical_or(tooearly, toolate), axis=1)
+        windows = np.delete(windows, np.where(idx_delete)[0], axis=0)
+        clu_timestamps = np.delete(clu_timestamps, np.where(idx_delete)[0], axis=0)
+        # Create indexing for all channels and spikes
+        # windows and windows_channels shape is nchan x windowsize x nspikes
+        windows = np.repeat(windows[:,:,np.newaxis], n_tetrodes * 4, axis=2)
+        windows = np.swapaxes(windows,0,2)
+        windows_channels = np.tile(np.arange(windows.shape[0]), (windows.shape[1],1))
+        windows_channels = np.transpose(windows_channels)
+        windows_channels = np.repeat(windows_channels[:,:,np.newaxis], windows.shape[2], axis=2)
+        # Compute mean spike for all channels
+        tmp_waveforms = continuous[windows_channels,windows]
+        # # Zero all tmp_waveforms
+        # zeroing_array = np.mean(tmp_waveforms,axis=1,keepdims=True)
+        # zeroing_array = np.repeat(zeroing_array, tmp_waveforms.shape[1], axis=1)
+        # tmp_waveforms = tmp_waveforms - zeroing_array
+        mean_waveforms = np.mean(tmp_waveforms, axis=2)
+        # Find channel and tetrode with highest amplitude
+        wave_peaks = np.ptp(mean_waveforms, axis=1)
+        nchan = np.argmax(wave_peaks)
+        ntet = np.where(np.any(tetrode_channels == nchan, axis=1))[0][0]
+        # Extract waveforms of all spikes on all channels of this tetrode
+        usechans = tetrode_channels[ntet,:]
+        waveforms = continuous[windows_channels[usechans,:,:],windows[usechans,:,:]]
+        waveforms = np.swapaxes(waveforms,0,2)
+        # # Zero all waveforms
+        # zeroing_array = np.mean(waveforms,axis=1,keepdims=True)
+        # zeroing_array = np.repeat(zeroing_array, waveforms.shape[1], axis=1)
+        # waveforms = waveforms - zeroing_array
+        # Remove spikes outside position data
+        pos_edges = get_position_data_edges(os.path.dirname(NWBfilePath))
+        idx_outside_pos_data = clu_timestamps < pos_edges[0]
+        idx_outside_pos_data = np.logical_or(idx_outside_pos_data, clu_timestamps > pos_edges[1])
+        idx_outside_pos_data = np.where(idx_outside_pos_data)[0]
+        waveforms = np.delete(waveforms, idx_outside_pos_data, 0)
+        clu_timestamps = np.delete(clu_timestamps, idx_outside_pos_data)
+        # Store data for the corresponding tetrode
+        waveform_data[ntet]['waveforms'] = np.append(waveform_data[ntet]['waveforms'],waveforms,axis=0)
+        waveform_data[ntet]['spiketimes'] = np.append(waveform_data[ntet]['spiketimes'],clu_timestamps)
+        waveform_data[ntet]['clusterIDs'] = np.append(waveform_data[ntet]['clusterIDs'],nclu * np.ones(clu_timestamps.size,dtype=np.int16))
+        progress_count += 1
+        print_progress(progress_count, len(cluster_nrs), prefix = 'Loading waveforms from NWB:')
+    # Correct spike order for each tetrode and remove placeholder if spikes detected
+    for ntet in range(n_tetrodes):
+        if waveform_data[ntet]['spiketimes'].size > 1:
+            waveform_data[ntet]['waveforms'] = waveform_data[ntet]['waveforms'][1:,:,:]
+            waveform_data[ntet]['spiketimes'] = waveform_data[ntet]['spiketimes'][1:]
+            waveform_data[ntet]['clusterIDs'] = waveform_data[ntet]['clusterIDs'][1:]
+            idx = waveform_data[ntet]['spiketimes'].argsort()
+            waveform_data[ntet]['waveforms'] = waveform_data[ntet]['waveforms'][idx,:,:]
+            waveform_data[ntet]['spiketimes'] = waveform_data[ntet]['spiketimes'][idx]
+            waveform_data[ntet]['clusterIDs'] = waveform_data[ntet]['clusterIDs'][idx]
+    # Set cluster values on each tetrode to start from 1
+    for ntet in range(n_tetrodes):
+        if waveform_data[ntet]['spiketimes'].size > 1:
+            originalClus = np.unique(waveform_data[ntet]['clusterIDs'])
+            for nclu in range(originalClus.size):
+                idx = waveform_data[ntet]['clusterIDs'] == originalClus[nclu]
+                waveform_data[ntet]['clusterIDs'][idx] = nclu + 1
+    # Put additional variables into the dictionary for each tetrode
+    for ntet in range(n_tetrodes):
+        waveform_data[ntet]['nr_tetrode'] = ntet
+        waveform_data[ntet]['tetrode_channels'] = tetrode_channels[ntet,:]
+        waveform_data[ntet]['badChan'] = []
+        waveform_data[ntet]['bitVolts'] = float(0.195)
+    # Write clu files for each tetrode
+    cluFiles = []
+    print_progress(0, n_tetrodes, prefix = 'Creating Clu files:', initiation=True)
+    for ntet in range(n_tetrodes):
+        clufileName = NWBfilePath[:-4] + '.clu.' + str(ntet + 1)
+        lines = [str(waveform_data[ntet]['clusterIDs'].size) + '\r\n']
+        for nclu in list(waveform_data[ntet]['clusterIDs']):
+            lines.append(str(nclu) + '\r\n')
+        with open(clufileName, 'wb') as file:
+                file.writelines(lines)
+        cluFiles.append(os.path.basename(clufileName))
+        print_progress(ntet+1, n_tetrodes, prefix = 'Creating Clu files:')
+
+    return waveform_data, cluFiles
+
+def createAxonaData(fpath, fileNames, speedcut=0, subfolder='AxonaData',UseChans=False,eegChan=1):
+    print('Converting data')
+    if type(fileNames) is not str:
+        # Loads waveforms from Pickle files selected with the openFileDialog
+        waveform_data = []
+        for filename in fileNames['waveforms']:
+            # Load all selected waveform files
+            full_filename = fpath + '/' + filename
+            with open(full_filename, 'rb') as file:
+                tmp = pickle.load(file)
+            waveform_data.append(tmp)
+        # Extract tetrode numbers and order data by tetrode numbers
+        tetrode_numbers_int = []
+        for wavedat in waveform_data:
+            tetrode_numbers_int.append(wavedat['nr_tetrode'])
+        file_order = np.argsort(np.array(tetrode_numbers_int))
+        fileNames['waveforms'] = [fileNames['waveforms'][x] for x in file_order]
+        waveform_data = [waveform_data[x] for x in file_order]
+        fileNames['clufiles'] = [fileNames['clufiles'][x] for x in file_order]
+    elif type(fileNames) is str:
+        NWBfileName = 'experiment_1.nwb'
+        NWBfilePath = os.path.join(fpath,NWBfileName)
+        KiloSortOutputPath = fileNames
+        waveform_data, cluFiles = createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=UseChans)
+        fileNames = {}
+        fileNames['posfile'] = 'PosLogComb.csv'
+        fileNames['waveforms'] = [NWBfileName] * len(cluFiles)
+        fileNames['clufiles'] = cluFiles
     # Apply speed cut if requested
     if speedcut > 0:
         idx_speedcut = apply_speedcut(waveform_data, speedcut, fpath + '/' + fileNames['posfile'])
@@ -356,17 +511,18 @@ def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'
     pos_data_dacq = create_DACQ_pos_data(fpath + '/' + fileNames['posfile'])
     OpenEphys_SamplingRate = 30000
     dacq_eeg_samplingRate = 250 # Sampling rate in Hz
-    eeg_data_dacq = create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges)
+    eeg_data_dacq = create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges, eegChan)
     # Get headers for both datatypes
     header_wave, keyorder_wave = header_templates('waveforms')
     header_pos, keyorder_pos = header_templates('pos')
     header_eeg, keyorder_eeg = header_templates('eeg')
     # Update headers
     experiment_info = getExperimentInfo(fpath)
+    trial_duration = str(int(float(len(eeg_data_dacq['eeg'])) / dacq_eeg_samplingRate))
     header_wave['trial_date'] = experiment_info['trial_date']
     header_wave['trial_time'] = experiment_info['trial_time']
     header_wave['comments'] = experiment_info['animal']
-    header_wave['duration'] = str(int(float(len(eeg_data_dacq['eeg'])) / dacq_eeg_samplingRate))
+    header_wave['duration'] = trial_duration
     nspikes_tet = []
     for waves in waveform_data_dacq:
         nspikes_tet.append(str(int(len(waves) / 4)))
@@ -377,13 +533,14 @@ def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'
     header_pos['trial_date'] = experiment_info['trial_date']
     header_pos['trial_time'] = experiment_info['trial_time']
     header_pos['comments'] = experiment_info['animal']
-    header_pos['duration'] = str(int(float(len(eeg_data_dacq['eeg'])) / dacq_eeg_samplingRate))
+    header_pos['duration'] = trial_duration
     header_pos['num_pos_samples'] = str(len(pos_data_dacq))
     header_eeg['trial_date'] = experiment_info['trial_date']
     header_eeg['trial_time'] = experiment_info['trial_time']
     header_eeg['comments'] = experiment_info['animal']
-    header_eeg['duration'] = str(int(float(len(eeg_data_dacq['eeg'])) / dacq_eeg_samplingRate))
-    header_eeg['num_pos_samples'] = str(len(eeg_data_dacq))
+    header_eeg['duration'] = trial_duration
+    header_eeg['EEG_samples_per_position'] = str(int(np.round(len(eeg_data_dacq) / len(pos_data_dacq))))
+    header_eeg['num_EEG_samples'] = str(len(eeg_data_dacq))
     # Generate base name for files
     fname_prefix = fileNames['waveforms'][0][:fileNames['waveforms'][0].find('_CH')]
     file_basename = fname_prefix + '_' + \
@@ -397,6 +554,7 @@ def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'
         shutil.rmtree(fpath + '/' + subfolder)
     os.mkdir(fpath + '/' + subfolder)
     # Write WAVEFORM data for each tetrode into DACQ format
+    print_progress(0, len(waveform_data_dacq), prefix = 'Writing tetrode files:', initiation=True)
     for ntet in range(len(waveform_data_dacq)):
         fname = fpath + '/' + subfolder + '/' + file_basename + '.' + str(waveform_data[ntet]['nr_tetrode'] + 1)
         with open(fname, 'wb') as f:
@@ -422,6 +580,7 @@ def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'
             waveform_data_dacq[ntet].tofile(f)
             # Write the end token string
             f.write(DATA_END_TOKEN)
+        print_progress(ntet + 1, len(waveform_data_dacq), prefix = 'Writing tetrode files:')
     # Write POSITION data into DACQ format
     fname = fpath + '/' + subfolder + '/' + file_basename + '.pos'
     with open(fname, 'wb') as f:
@@ -466,26 +625,37 @@ def createWaveformData(fpath, fileNames, speedcut=0, subfolder='WaveformGUIdata'
         eeg_data_dacq.tofile(f)
         # Write the end token string
         f.write(DATA_END_TOKEN)
-    # Copy over and rename CLU files for each tetrode
+    # Copy over and rename CLU files for each tetrode and correct line endings for TINT
     nremoved = 0
     for ntet in range(len(fileNames['clufiles'])):
-        if not not fileNames['clufiles'][ntet]:
+        if fileNames['clufiles'][ntet]:
             sourcefile = fpath + '/' + fileNames['clufiles'][ntet]
             fname = fpath + '/' + subfolder + '/' + file_basename + '.clu.' + str(waveform_data[ntet]['nr_tetrode'] + 1)
-            shutil.copy2(sourcefile, fname)
-        # Remove lines for spikes that are excluded with speed cut, by rewriting the file
-        if idx_speedcut:
-            with open(fname, 'rb') as file:
-                lines = file.readlines()
-            if len(idx_speedcut[ntet]) > 0:
-                for nspike in idx_speedcut[ntet][::-1]:
-                    del lines[nspike + 1]
-            with open(fname, 'wb') as file:
-                file.writelines(lines)
+            shutil.move(sourcefile, fname)
+        with open(fname, 'rb') as file:
+            lines = file.readlines()
+        if idx_speedcut and len(idx_speedcut[ntet]) > 0:
             nremoved += len(idx_speedcut[ntet])
+            for nspike in idx_speedcut[ntet][::-1]:
+                del lines[nspike + 1]
+        new_lines = []
+        for line in lines:
+            new_lines.append(line.rstrip() + '\r\n')
+        with open(fname, 'wb') as file:
+            file.writelines(new_lines)
     print('Waveform data was generated for ' + str(len(waveform_data_dacq)) + ' tetrodes.')
     if idx_speedcut:
         print('Total of ' + str(nremoved) + ' spikes removed according to speed cut')
+    # Make a copy of a random .set file into the converted data folder
+    sourcefile = 'SetFileBase.set'
+    fname = fpath + '/' + subfolder + '/' + file_basename + '.set'
+    shutil.copy(sourcefile, fname)
+    # Rewrite the .set file to correct the trial duration
+    with open(fname, 'rb') as file:
+        lines = file.readlines()
+    lines[4] = lines[4][:9] + trial_duration + lines[4][9 + len(trial_duration):]
+    with open(fname, 'wb') as file:
+        file.writelines(lines)
     # Opens recording folder with Ubuntu file browser
     subprocess.Popen(['xdg-open', fpath + '/' + subfolder])
         
@@ -563,7 +733,7 @@ class MainWindow(QtGui.QWidget):
 
     def create_data(self):
         speedcut = self.spinbox.value()
-        createWaveformData(fpath=self.fpath, fileNames=self.fileNames, speedcut=speedcut)
+        createAxonaData(fpath=self.fpath, fileNames=self.fileNames, speedcut=speedcut)
         app.instance().quit()
 
 
