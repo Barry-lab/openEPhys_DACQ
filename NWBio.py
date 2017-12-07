@@ -85,5 +85,8 @@ def check_if_binary_pos(filename):
     # Load data file
     f = h5py.File(filename, 'r')
     recordingKey = f['acquisition']['timeseries'].keys()[0]
-    # Load timestamps and position data
-    eventdatas = f['acquisition']['timeseries'][recordingKey]['events'].keys()
+    # Check if 'binary1' is among event keys
+    event_data_keys = f['acquisition']['timeseries'][recordingKey]['events'].keys()
+    binaryPosData = 'binary1' in event_data_keys
+
+    return binaryPosData

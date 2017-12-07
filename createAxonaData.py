@@ -353,6 +353,7 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
     # Load data
     clusters = np.load(os.path.join(KiloSortOutputPath, 'spike_clusters.npy'))[:,0]
     spiketimes = np.load(os.path.join(KiloSortOutputPath, 'spike_times.npy'))[:,0]
+    print('Loading NWB data')
     data = NWBio.load_continuous(NWBfilePath)
     timestamps = np.array(data['timestamps'])
     continuous = -np.transpose(np.array(data['continuous']))
