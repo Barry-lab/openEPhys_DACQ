@@ -2,6 +2,7 @@
 
 import h5py
 import numpy as np
+import os
 
 def load_continuous(filename):
     # Load data file
@@ -54,3 +55,35 @@ def load_events(filename):
     data = {'eventID': eventID, 'timestamps': timestamps}
 
     return data
+
+def load_pos(filename, savecsv=False):
+    # Loads position data from NWB file
+    # Optionally saves data into a csv file.
+
+    # Load data file
+    f = h5py.File(filename, 'r')
+    recordingKey = f['acquisition']['timeseries'].keys()[0]
+    # Load timestamps and position data
+    timestamps = np.array(f['acquisition']['timeseries'][recordingKey]['events']['binary1']['timestamps'])
+    xy = np.array(f['acquisition']['timeseries'][recordingKey]['events']['binary1']['data'][:,:2])
+    data = {'xy': xy, 'timestamps': timestamps}
+
+    if savecsv:
+        posdata = np.append(timestamps[:,None], xy.astype(np.float32), axis=1)
+        nanarray = np.zeros(xy.shape, dtype=np.float32)
+        nanarray[:] = np.nan
+        posdata = np.append(posdata, nanarray, axis=1)
+        rootfolder = os.path.dirname(filename)
+        CombFileName = os.path.join(rootfolder,'PosLogComb.csv')
+        with open(CombFileName, 'wb') as f:
+            np.savetxt(f, posdata, delimiter=',')
+
+    return data
+
+def check_if_binary_pos(filename):
+    # Checks if binary position data exists in NWB file
+    # Load data file
+    f = h5py.File(filename, 'r')
+    recordingKey = f['acquisition']['timeseries'].keys()[0]
+    # Load timestamps and position data
+    eventdatas = f['acquisition']['timeseries'][recordingKey]['events'].keys()
