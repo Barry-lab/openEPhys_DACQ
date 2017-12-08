@@ -336,7 +336,7 @@ def get_position_data_edges(filename):
 
 def listBadChannels(fpath):
     # Find file BadChan in the directory and extract numbers from each row
-    badChanFile = fpath + '/BadChan'
+    badChanFile = os.path.join(fpath,'BadChan')
     if os.path.exists(badChanFile):
         with open(badChanFile) as file:
             content = file.readlines()
