@@ -32,7 +32,9 @@ else:
 if os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'BadChan')):
     badChan = np.array(listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
     if UseChans:
-        badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)] - np.array(UseChans[0], dtype=np.int16)
+        badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
+        badChan = badChan - np.array(UseChans[0], dtype=np.int16)
+        badChan = badChan[badChan < data.shape[1]]
     data[:,badChan] = np.int16(0)
 # Write binary file for KiloSort
 print('Writing NWB into binary')

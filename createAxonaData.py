@@ -364,7 +364,9 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
     if os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'BadChan')):
         badChan = np.array(listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
         if UseChans:
-            badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)] - np.array(UseChans[0], dtype=np.int16)
+            badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
+            badChan = badChan - np.array(UseChans[0], dtype=np.int16)
+            badChan = badChan[badChan < continuous.shape[0]]
         continuous[badChan,:] = np.int16(0)
     # Remove the mean of the signal from all channels
     continuous_mean = np.mean(continuous, axis=0, keepdims=True)
@@ -373,7 +375,9 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
     if os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'BadChan')):
         badChan = np.array(listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
         if UseChans:
-            badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)] - np.array(UseChans[0], dtype=np.int16)
+            badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
+            badChan = badChan - np.array(UseChans[0], dtype=np.int16)
+            badChan = badChan[badChan < continuous.shape[0]]
         continuous[badChan,:] = np.int16(0)
     # Filter each channel
     print_progress(0, continuous.shape[0], prefix = 'Filtering raw data:', initiation=True)
