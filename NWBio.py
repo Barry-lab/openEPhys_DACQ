@@ -90,3 +90,16 @@ def check_if_binary_pos(filename):
     binaryPosData = 'binary1' in event_data_keys
 
     return binaryPosData
+
+def listBadChannels(fpath):
+    # Find file BadChan in the directory and extract numbers from each row
+    badChanFile = os.path.join(fpath,'BadChan')
+    if os.path.exists(badChanFile):
+        with open(badChanFile) as file:
+            content = file.readlines()
+        content = [x.strip() for x in content]
+        badChan = list(np.array(map(int, content)) - 1)
+    else:
+        badChan = []
+
+    return badChan

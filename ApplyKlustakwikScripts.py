@@ -334,18 +334,6 @@ def get_position_data_edges(filename):
 
     return pos_edges
 
-def listBadChannels(fpath):
-    # Find file BadChan in the directory and extract numbers from each row
-    badChanFile = os.path.join(fpath,'BadChan')
-    if os.path.exists(badChanFile):
-        with open(badChanFile) as file:
-            content = file.readlines()
-        content = [x.strip() for x in content]
-        badChan = list(np.array(map(int, content)) - 1)
-    else:
-        badChan = []
-
-    return badChan
 
 def cluster_all_spikes_NWB(filename):
     # Loads whole NWB spike data, cuts off spikes outside position data, clusters all tetrodes
@@ -356,7 +344,7 @@ def cluster_all_spikes_NWB(filename):
 
     pos_edges = get_position_data_edges(filename)
 
-    badChan = listBadChannels(fpath)
+    badChan = NWBio.listBadChannels(fpath)
 
     files_created = []
     for ntet in range(len(spike_data)):

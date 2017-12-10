@@ -19,7 +19,6 @@ import subprocess
 from progress_bar import print_progress
 import NWBio
 from scipy import signal
-from ApplyKlustakwikScripts import listBadChannels
 
 
 def Filter(signal_in, sampling_rate=30000, highpass_frequency=600, lowpass_frequency=6000, filt_order=2):
@@ -362,7 +361,7 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
         continuous = continuous[UseChans[0]:UseChans[1],:]
     # If BadChan file exists, zero values for those channels
     if os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'BadChan')):
-        badChan = np.array(listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
+        badChan = np.array(NWBio.listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
         if UseChans:
             badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
             badChan = badChan - np.array(UseChans[0], dtype=np.int16)
@@ -373,7 +372,7 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
     continuous = continuous - np.repeat(continuous_mean, continuous.shape[0], axis=0)
     # If BadChan file exists, zero values for those channels. Do this again to remove erroneous signal from demeaning.
     if os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'BadChan')):
-        badChan = np.array(listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
+        badChan = np.array(NWBio.listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
         if UseChans:
             badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
             badChan = badChan - np.array(UseChans[0], dtype=np.int16)

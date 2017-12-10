@@ -1,36 +1,54 @@
 import matlab.engine
+# To install matlab engine, go to folder /usr/local/MATLAB/R2017a/extern/engines/python
+# and run terminal command: sudo python setup.py install
 import sys
 import numpy as np
 import os
 import NWBio
 import CombineTrackingData
 import createAxonaData
-from ApplyKlustakwikScripts import listBadChannels
+import argparse
+import tempfile
+import shutil
 
-# To install matlab engine, go to folder /usr/local/MATLAB/R2017a/extern/engines/python
-# and run terminal command: sudo python setup.py install
-
-# Set default location for KiloSortProcessing Folder
-KiloSortProcessingFolder = '/media/DataDrive/sander/Documents/KiloSortProcess/'
-KiloSortBinaryFileName = 'experiment_1.dat'
-
-# Get file path from script call input
-NWBfilePath = str(sys.argv[1])
-# Load file, if promted only specific channels
-print('Loading NWB data')
-if len(sys.argv) > 2:
-    # UseChans = [1,32] will limit finding waveforms to channels 1 to 32
-    # UseChans = [33,64] will limit finding waveforms to channels 33 to 64
-    # UseChans = [1,64] will limit finding waveforms to channels 1 to 64
-    # UseChans = [65,128] will limit finding waveforms to channels 65 to 128
-    UseChans = [int(sys.argv[2]) - 1, int(sys.argv[3])]
-    data = np.array(NWBio.load_continuous(NWBfilePath)['continuous'][:,UseChans[0]:UseChans[1]])
+# Input argument handling and help info
+parser = argparse.ArgumentParser(description='Apply KiloSort and export into Axona format.')
+parser.add_argument('path', type=str,
+                    help='recording data folder')
+parser.add_argument('--chan', type=int, nargs = 2, 
+                    help='list the first and last channel to process (counting starts from 1)')
+parser.add_argument('--keep', action='store_true',
+                    help='store KiloSort output to recording data folder')
+args = parser.parse_args()
+# Assign input arguments to variables
+if args.chan:
+    UseChans = [args.chan[0] - 1, args.chan[1]]
 else:
     UseChans = False
+# Get file path from script call input
+OpenEphysDataPath = args.path
+NWBfilePath = os.path.join(OpenEphysDataPath,'experiment_1.nwb')
+if args.keep:
+    # Set default location for KiloSortProcessing Folder based on specific channels if requested
+    if UseChans:
+        KiloSortProcessingFolder = 'KiloSortProcess_' + str(UseChans[0] + 1) + '-' + str(UseChans[1])
+    else:
+        KiloSortProcessingFolder = 'KiloSortProcess'
+    KiloSortProcessingFolder = os.path.join(OpenEphysDataPath,KiloSortProcessingFolder)
+    os.mkdir(KiloSortProcessingFolder)
+else:
+    KiloSortProcessingFolder = tempfile.mkdtemp('KiloSortProcessing')
+KiloSortBinaryFileName = 'experiment_1.dat'
+
+# Load file, if promted only specific channels
+print('Loading NWB data')
+if UseChans:
+    data = np.array(NWBio.load_continuous(NWBfilePath)['continuous'][:,UseChans[0]:UseChans[1]])
+else:
     data = np.array(NWBio.load_continuous(NWBfilePath)['continuous'])
 # If BadChan file exists, zero values for those channels
 if os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'BadChan')):
-    badChan = np.array(listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
+    badChan = np.array(NWBio.listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
     if UseChans:
         badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
         badChan = badChan - np.array(UseChans[0], dtype=np.int16)
@@ -61,3 +79,5 @@ createAxonaData.createAxonaData(os.path.dirname(NWBfilePath),
                                 KiloSortProcessingFolder, speedcut=0, 
                                 subfolder=subfolder, UseChans=UseChans, 
                                 eegChan=1)
+if not args.keep:
+    shutil.rmtree(KiloSortProcessingFolder)
