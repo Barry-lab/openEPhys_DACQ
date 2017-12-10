@@ -47,8 +47,8 @@ if UseChans:
 else:
     data = np.array(NWBio.load_continuous(NWBfilePath)['continuous'])
 # If BadChan file exists, zero values for those channels
-if os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'BadChan')):
-    badChan = np.array(NWBio.listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
+if os.path.exists(os.path.join(OpenEphysDataPath,'BadChan')):
+    badChan = np.array(NWBio.listBadChannels(OpenEphysDataPath), dtype=np.int16)
     if UseChans:
         badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
         badChan = badChan - np.array(UseChans[0], dtype=np.int16)
@@ -63,9 +63,9 @@ eng.cd('KiloSortScripts')
 eng.master_file(float(data.shape[1]), KiloSortProcessingFolder, KiloSortBinaryFileName, nargout=0)
 
 # Make sure position data is available
-if not os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'PosLogComb.csv')):
+if not os.path.exists(os.path.join(OpenEphysDataPath,'PosLogComb.csv')):
     if NWBio.check_if_binary_pos(NWBfilePath):
-        _ = NWBio.load_pos(NWBfilePath,savecsv=True)
+        _ = NWBio.load_pos(NWBfilePath, savecsv=True, postprocess=True)
     else:
         CombineTrackingData.combdata(NWBfilePath)
 
@@ -75,7 +75,7 @@ if UseChans:
 else:
     subfolder = 'AxonaData'
 # Create Axona data based on KiloSort output
-createAxonaData.createAxonaData(os.path.dirname(NWBfilePath), 
+createAxonaData.createAxonaData(OpenEphysDataPath, 
                                 KiloSortProcessingFolder, speedcut=0, 
                                 subfolder=subfolder, UseChans=UseChans, 
                                 eegChan=1)
