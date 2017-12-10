@@ -85,11 +85,16 @@ def create_DACQ_waveform_data(waveform_data, pos_edges, idx_speedcut=None):
         # Align spiketimes to beginning of position data
         tet_waveform_data['spiketimes'] = tet_waveform_data['spiketimes'] - pos_edges[0]
         # Get waveforms
-        waves = np.array(tet_waveform_data['waveforms'])
+        waves = np.array(tet_waveform_data['waveforms'], dtype=np.float32)
         nspikes = waves.shape[0]
         # Set waveforms values on this tetrode to range -127 to 127
-        waves = waves.astype(np.float32) * tet_waveform_data['bitVolts']
-        waves = waves / 250 # This sets int8 range to 0.25 mV
+        mean_waves = np.mean(waves, axis=0)
+        wave_peak = mean_waves.max()
+        maxchan = np.where(mean_waves == wave_peak)[1][0]
+        maxidx = np.where(mean_waves == wave_peak)[0][0]
+        wave_peak_std = np.std(waves[:,maxidx,maxchan])
+        max_range = wave_peak + 4 * wave_peak_std
+        waves = waves / max_range # This sets int8 range
         waves = waves * 127
         waves[waves > 127] = 127
         waves[waves < -127] = -127
