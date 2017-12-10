@@ -56,7 +56,7 @@ def load_events(filename):
 
     return data
 
-def load_pos(filename, savecsv=False):
+def load_pos(filename, savecsv=False, postprocess=False):
     # Loads position data from NWB file
     # Optionally saves data into a csv file.
 
@@ -67,7 +67,22 @@ def load_pos(filename, savecsv=False):
     timestamps = np.array(f['acquisition']['timeseries'][recordingKey]['events']['binary1']['timestamps'])
     xy = np.array(f['acquisition']['timeseries'][recordingKey]['events']['binary1']['data'][:,:2])
     data = {'xy': xy, 'timestamps': timestamps}
-
+    # Postprocess the data if requested
+    if postprocess:
+        maxjump = 25
+        keepPos = []
+        lastPos = data['xy'][0,:]
+        for npos in range(data['xy'].shape[0]):
+            currpos = data['xy'][npos,:]
+            if np.max(np.abs(lastPos - currpos)) < maxjump:
+                keepPos.append(npos)
+                lastPos = currpos
+        keepPos = np.array(keepPos)
+        print(str(data['xy'].shape[0] - keepPos.size) + ' of ' + 
+              str(data['xy'].shape[0]) + ' removed in postprocessing')
+        data['xy'] = data['xy'][keepPos,:]
+        data['timestamps'] = data['timestamps'][keepPos]
+    # Save the data as csv file in the same folder as NWB file
     if savecsv:
         posdata = np.append(timestamps[:,None], xy.astype(np.float32), axis=1)
         nanarray = np.zeros(xy.shape, dtype=np.float32)
