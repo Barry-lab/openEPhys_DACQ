@@ -18,18 +18,20 @@ from scipy.spatial.distance import euclidean
 import subprocess
 from progress_bar import print_progress
 import NWBio
-from scipy import signal
+from scipy.signal import butter, lfilter
 
 
-def Filter(signal_in, sampling_rate=30000, highpass_frequency=600, lowpass_frequency=6000, filt_order=2):
-    # Applies a high pass filter on the signal
-    Wn = float(highpass_frequency) / float(sampling_rate)
-    b, a = signal.butter(filt_order, Wn, 'highpass')
-    signal_mid = signal.filtfilt(b, a, signal_in, padlen=0)
-    Wn = float(lowpass_frequency) / float(sampling_rate)
-    b, a = signal.butter(filt_order, Wn, 'lowpass')
-    signal_out = signal.filtfilt(b, a, signal_mid, padlen=0)
+def butter_bandpass(lowcut, highcut, fs, order=5):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    return b, a
 
+
+def Filter(signal_in, sampling_rate=30000.0, highpass_frequency=300.0, lowpass_frequency=6000.0, filt_order=4):
+    b, a = butter_bandpass(highpass_frequency, lowpass_frequency, sampling_rate, order=filt_order)
+    signal_out = lfilter(b, a, signal_in)
     return signal_out
 
 
@@ -88,16 +90,17 @@ def create_DACQ_waveform_data(waveform_data, pos_edges, idx_speedcut=None):
         waves = np.array(tet_waveform_data['waveforms'], dtype=np.float32)
         nspikes = waves.shape[0]
         # Set waveforms values on this tetrode to range -127 to 127
-        mean_waves = np.mean(waves, axis=0)
-        wave_peak = mean_waves.max()
-        maxchan = np.where(mean_waves == wave_peak)[1][0]
-        maxidx = np.where(mean_waves == wave_peak)[0][0]
-        wave_peak_std = np.std(waves[:,maxidx,maxchan])
-        max_range = wave_peak + 4 * wave_peak_std
-        waves = waves / max_range # This sets int8 range
-        waves = waves * 127
-        waves[waves > 127] = 127
-        waves[waves < -127] = -127
+        if nspikes > 1:
+            mean_waves = np.mean(waves, axis=0)
+            wave_peak = mean_waves.max()
+            maxchan = np.where(mean_waves == wave_peak)[1][0]
+            maxidx = np.where(mean_waves == wave_peak)[0][0]
+            wave_peak_std = np.std(waves[:,maxidx,maxchan])
+            max_range = wave_peak + 4 * wave_peak_std # This sets int8 range
+            waves = waves / max_range
+            waves = waves * 127
+            waves[waves > 127] = 127
+            waves[waves < -127] = -127
         waves = waves.astype(np.int8)
         # Where channels are missing, add 0 values to waveform values
         if waves.shape[2] < 4:
@@ -364,32 +367,34 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
     continuous = -np.transpose(np.array(data['continuous']))
     if UseChans:
         continuous = continuous[UseChans[0]:UseChans[1],:]
-    # If BadChan file exists, zero values for those channels
+    goodChan = np.arange(continuous.shape[0])
+    # If BadChan file exists, get values and edit goodChans list
     if os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'BadChan')):
         badChan = np.array(NWBio.listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
+        print('Ignoring bad channels: ' + str(list(badChan + 1)))
         if UseChans:
             badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
             badChan = badChan - np.array(UseChans[0], dtype=np.int16)
             badChan = badChan[badChan < continuous.shape[0]]
-        continuous[badChan,:] = np.int16(0)
+            badChan = list(badChan)
+        for nchan in badChan:
+            goodChan = goodChan[goodChan != nchan]
+    else:
+        badChan = []
     # Remove the mean of the signal from all channels
-    continuous_mean = np.mean(continuous, axis=0, keepdims=True)
+    print('Common average referencing all channels')
+    continuous_mean = np.mean(continuous[goodChan,:], axis=0, keepdims=True)
     continuous = continuous - np.repeat(continuous_mean, continuous.shape[0], axis=0)
-    # If BadChan file exists, zero values for those channels. Do this again to remove erroneous signal from demeaning.
-    if os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'BadChan')):
-        badChan = np.array(NWBio.listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
-        if UseChans:
-            badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
-            badChan = badChan - np.array(UseChans[0], dtype=np.int16)
-            badChan = badChan[badChan < continuous.shape[0]]
+    # Set bad channels to 0
+    if badChan:
         continuous[badChan,:] = np.int16(0)
     # Filter each channel
-    print_progress(0, continuous.shape[0], prefix = 'Filtering raw data:', initiation=True)
-    for nchan in range(continuous.shape[0]):
-        signal_in = np.float32(continuous[nchan,:])
+    print_progress(0, goodChan.size, prefix = 'Filtering raw data:', initiation=True)
+    for nchan in range(goodChan.size):
+        signal_in = np.float64(continuous[goodChan[nchan],:])
         signal_out = Filter(signal_in)
-        continuous[nchan,:] = np.int16(signal_out)
-        print_progress(nchan + 1, continuous.shape[0], prefix = 'Filtering raw data:')
+        continuous[goodChan[nchan],:] = np.int16(signal_out)
+        print_progress(nchan + 1, goodChan.size, prefix = 'Filtering raw data:')
     n_tetrodes = continuous.shape[0] / 4
     tetrode_channels = np.reshape(np.arange(n_tetrodes * 4), (n_tetrodes, 4))
     cluster_nrs = np.unique(clusters)
@@ -425,9 +430,6 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
         # Compute mean spike for all channels
         tmp_waveforms = continuous[windows_channels,windows]
         # # Zero all tmp_waveforms
-        # zeroing_array = np.mean(tmp_waveforms,axis=1,keepdims=True)
-        # zeroing_array = np.repeat(zeroing_array, tmp_waveforms.shape[1], axis=1)
-        # tmp_waveforms = tmp_waveforms - zeroing_array
         mean_waveforms = np.mean(tmp_waveforms, axis=2)
         # Find channel and tetrode with highest amplitude
         wave_peaks = np.ptp(mean_waveforms, axis=1)
@@ -437,10 +439,6 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
         usechans = tetrode_channels[ntet,:]
         waveforms = continuous[windows_channels[usechans,:,:],windows[usechans,:,:]]
         waveforms = np.swapaxes(waveforms,0,2)
-        # # Zero all waveforms
-        # zeroing_array = np.mean(waveforms,axis=1,keepdims=True)
-        # zeroing_array = np.repeat(zeroing_array, waveforms.shape[1], axis=1)
-        # waveforms = waveforms - zeroing_array
         # Remove spikes outside position data
         pos_edges = get_position_data_edges(os.path.dirname(NWBfilePath))
         idx_outside_pos_data = clu_timestamps < pos_edges[0]
@@ -475,7 +473,7 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
     for ntet in range(n_tetrodes):
         waveform_data[ntet]['nr_tetrode'] = ntet
         waveform_data[ntet]['tetrode_channels'] = tetrode_channels[ntet,:]
-        waveform_data[ntet]['badChan'] = []
+        waveform_data[ntet]['badChan'] = badChan
         waveform_data[ntet]['bitVolts'] = float(0.195)
     # Write clu files for each tetrode
     cluFiles = []

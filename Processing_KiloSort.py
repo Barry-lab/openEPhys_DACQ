@@ -35,7 +35,8 @@ if args.keep:
     else:
         KiloSortProcessingFolder = 'KiloSortProcess'
     KiloSortProcessingFolder = os.path.join(OpenEphysDataPath,KiloSortProcessingFolder)
-    os.mkdir(KiloSortProcessingFolder)
+    if not os.path.isdir(KiloSortProcessingFolder):
+        os.mkdir(KiloSortProcessingFolder)
 else:
     KiloSortProcessingFolder = tempfile.mkdtemp('KiloSortProcessing')
 KiloSortBinaryFileName = 'experiment_1.dat'
