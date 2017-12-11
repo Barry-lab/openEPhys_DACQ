@@ -10,6 +10,7 @@ import createAxonaData
 import argparse
 import tempfile
 import shutil
+import HelperFunctions as hfunct
 
 # Input argument handling and help info
 parser = argparse.ArgumentParser(description='Apply KiloSort and export into Axona format.')
@@ -23,6 +24,8 @@ args = parser.parse_args()
 # Assign input arguments to variables
 if args.chan:
     UseChans = [args.chan[0] - 1, args.chan[1]]
+    if np.mod(UseChans[1] - UseChans[0], 32) != 0:
+        raise ValueError('Total number of channels must be a multiple of 32')
 else:
     UseChans = False
 # Get file path from script call input
@@ -49,7 +52,7 @@ else:
     data = np.array(NWBio.load_continuous(NWBfilePath)['continuous'])
 # If BadChan file exists, zero values for those channels
 if os.path.exists(os.path.join(OpenEphysDataPath,'BadChan')):
-    badChan = np.array(NWBio.listBadChannels(OpenEphysDataPath), dtype=np.int16)
+    badChan = np.array(hfunct.listBadChannels(OpenEphysDataPath), dtype=np.int16)
     if UseChans:
         badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
         badChan = badChan - np.array(UseChans[0], dtype=np.int16)

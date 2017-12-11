@@ -16,23 +16,8 @@ import shutil
 from scipy import interpolate
 from scipy.spatial.distance import euclidean
 import subprocess
-from progress_bar import print_progress
 import NWBio
-from scipy.signal import butter, lfilter
-
-
-def butter_bandpass(lowcut, highcut, fs, order=5):
-    nyq = 0.5 * fs
-    low = lowcut / nyq
-    high = highcut / nyq
-    b, a = butter(order, [low, high], btype='band')
-    return b, a
-
-
-def Filter(signal_in, sampling_rate=30000.0, highpass_frequency=300.0, lowpass_frequency=6000.0, filt_order=4):
-    b, a = butter_bandpass(highpass_frequency, lowpass_frequency, sampling_rate, order=filt_order)
-    signal_out = lfilter(b, a, signal_in)
-    return signal_out
+import HelperFunctions as hfunct
 
 
 def getAllFiles(fpath, file_basenames):
@@ -77,7 +62,7 @@ def create_DACQ_waveform_data(waveform_data, pos_edges, idx_speedcut=None):
     dacq_waveform_timestamps_dtype = '>i'
     # dacq_waveform_waves_dtype = '50b'
     dacq_sampling_rate = 96000
-    print_progress(0, len(waveform_data), prefix = 'Converting Waveforms:', initiation=True)
+    hfunct.print_progress(0, len(waveform_data), prefix = 'Converting Waveforms:', initiation=True)
     for ntet in range(len(waveform_data)):
         # Remove spikes under speedcut if asked to
         tet_waveform_data = waveform_data[ntet]
@@ -125,7 +110,7 @@ def create_DACQ_waveform_data(waveform_data, pos_edges, idx_speedcut=None):
         # Input timestamp values to the dacq data matrix
         tmp_waveform_data_dacq['ts'] = timestamps_dacq
         waveform_data_dacq.append(tmp_waveform_data_dacq)
-        print_progress(ntet, len(waveform_data), prefix = 'Converting Waveforms:')
+        hfunct.print_progress(ntet, len(waveform_data), prefix = 'Converting Waveforms:')
         
     return waveform_data_dacq
     
@@ -184,7 +169,7 @@ def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, p
     data = np.delete(data, idx_outside_pos_data, 0)
     # Adjust EEG data format and range
     data = data.astype(np.float32)
-    data = Filter(data, sampling_rate=30000, highpass_frequency=1, lowpass_frequency=300)
+    data = hfunct.Filter(data, sampling_rate=30000, highpass_frequency=1, lowpass_frequency=300)
     data = data - np.mean(data)
     data = data / 2000 # Set data range to between 1000 microvolts
     data = data * 127
@@ -370,7 +355,7 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
     goodChan = np.arange(continuous.shape[0])
     # If BadChan file exists, get values and edit goodChans list
     if os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'BadChan')):
-        badChan = np.array(NWBio.listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
+        badChan = np.array(hfunct.listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
         print('Ignoring bad channels: ' + str(list(badChan + 1)))
         if UseChans:
             badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
@@ -389,12 +374,12 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
     if badChan:
         continuous[badChan,:] = np.int16(0)
     # Filter each channel
-    print_progress(0, goodChan.size, prefix = 'Filtering raw data:', initiation=True)
+    hfunct.print_progress(0, goodChan.size, prefix = 'Filtering raw data:', initiation=True)
     for nchan in range(goodChan.size):
         signal_in = np.float64(continuous[goodChan[nchan],:])
-        signal_out = Filter(signal_in)
+        signal_out = hfunct.Filter(signal_in)
         continuous[goodChan[nchan],:] = np.int16(signal_out)
-        print_progress(nchan + 1, goodChan.size, prefix = 'Filtering raw data:')
+        hfunct.print_progress(nchan + 1, goodChan.size, prefix = 'Filtering raw data:')
     n_tetrodes = continuous.shape[0] / 4
     tetrode_channels = np.reshape(np.arange(n_tetrodes * 4), (n_tetrodes, 4))
     cluster_nrs = np.unique(clusters)
@@ -404,7 +389,7 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
                'spiketimes':np.array([100],dtype=np.int64), 
                'clusterIDs':np.array([1],dtype=np.int16)}
         waveform_data.append(tmp)
-    print_progress(0, len(cluster_nrs), prefix = 'Loading waveforms from NWB:', initiation=True)
+    hfunct.print_progress(0, len(cluster_nrs), prefix = 'Loading waveforms from NWB:', initiation=True)
     progress_count = 0
     for nclu in list(cluster_nrs):
         stimes = spiketimes[clusters == nclu]
@@ -451,7 +436,7 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
         waveform_data[ntet]['spiketimes'] = np.append(waveform_data[ntet]['spiketimes'],clu_timestamps)
         waveform_data[ntet]['clusterIDs'] = np.append(waveform_data[ntet]['clusterIDs'],nclu * np.ones(clu_timestamps.size,dtype=np.int16))
         progress_count += 1
-        print_progress(progress_count, len(cluster_nrs), prefix = 'Loading waveforms from NWB:')
+        hfunct.print_progress(progress_count, len(cluster_nrs), prefix = 'Loading waveforms from NWB:')
     # Correct spike order for each tetrode and remove placeholder if spikes detected
     for ntet in range(n_tetrodes):
         if waveform_data[ntet]['spiketimes'].size > 1:
@@ -477,7 +462,7 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
         waveform_data[ntet]['bitVolts'] = float(0.195)
     # Write clu files for each tetrode
     cluFiles = []
-    print_progress(0, n_tetrodes, prefix = 'Creating Clu files:', initiation=True)
+    hfunct.print_progress(0, n_tetrodes, prefix = 'Creating Clu files:', initiation=True)
     for ntet in range(n_tetrodes):
         clufileName = NWBfilePath[:-4] + '.clu.' + str(ntet + 1)
         lines = [str(waveform_data[ntet]['clusterIDs'].size) + '\r\n']
@@ -486,7 +471,7 @@ def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=Fals
         with open(clufileName, 'wb') as file:
                 file.writelines(lines)
         cluFiles.append(os.path.basename(clufileName))
-        print_progress(ntet+1, n_tetrodes, prefix = 'Creating Clu files:')
+        hfunct.print_progress(ntet+1, n_tetrodes, prefix = 'Creating Clu files:')
 
     return waveform_data, cluFiles
 
@@ -574,7 +559,7 @@ def createAxonaData(fpath, fileNames, speedcut=0, subfolder='AxonaData',UseChans
         shutil.rmtree(fpath + '/' + subfolder)
     os.mkdir(fpath + '/' + subfolder)
     # Write WAVEFORM data for each tetrode into DACQ format
-    print_progress(0, len(waveform_data_dacq), prefix = 'Writing tetrode files:', initiation=True)
+    hfunct.print_progress(0, len(waveform_data_dacq), prefix = 'Writing tetrode files:', initiation=True)
     for ntet in range(len(waveform_data_dacq)):
         fname = fpath + '/' + subfolder + '/' + file_basename + '.' + str(waveform_data[ntet]['nr_tetrode'] + 1)
         with open(fname, 'wb') as f:
@@ -600,7 +585,7 @@ def createAxonaData(fpath, fileNames, speedcut=0, subfolder='AxonaData',UseChans
             waveform_data_dacq[ntet].tofile(f)
             # Write the end token string
             f.write(DATA_END_TOKEN)
-        print_progress(ntet + 1, len(waveform_data_dacq), prefix = 'Writing tetrode files:')
+        hfunct.print_progress(ntet + 1, len(waveform_data_dacq), prefix = 'Writing tetrode files:')
     # Write POSITION data into DACQ format
     fname = fpath + '/' + subfolder + '/' + file_basename + '.pos'
     with open(fname, 'wb') as f:

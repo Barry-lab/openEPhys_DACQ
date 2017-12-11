@@ -323,6 +323,7 @@ def klustakwik(waveforms, d, filename_root):
 import NWBio
 import pickle
 import createAxonaData
+import HelperFunctions as hfunct
 
 def get_position_data_edges(filename):
     fpath = filename[:filename.rfind('/')]
@@ -344,7 +345,7 @@ def cluster_all_spikes_NWB(filename):
 
     pos_edges = get_position_data_edges(filename)
 
-    badChan = NWBio.listBadChannels(fpath)
+    badChan = hfunct.listBadChannels(fpath)
 
     files_created = []
     for ntet in range(len(spike_data)):

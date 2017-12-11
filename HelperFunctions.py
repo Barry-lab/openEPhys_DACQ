@@ -1,5 +1,38 @@
 # -*- coding: utf-8 -*-
 import sys
+from scipy.signal import butter, lfilter
+import os
+import numpy as np
+
+
+def butter_bandpass(lowcut, highcut, fs, order=5):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    return b, a
+
+
+def Filter(signal_in, sampling_rate=30000.0, highpass_frequency=300.0, lowpass_frequency=6000.0, filt_order=4):
+    b, a = butter_bandpass(highpass_frequency, lowpass_frequency, sampling_rate, order=filt_order)
+    signal_out = lfilter(b, a, signal_in)
+    return signal_out
+
+
+def listBadChannels(fpath):
+    # Find file BadChan in the directory and extract numbers from each row
+    badChanFile = os.path.join(fpath,'BadChan')
+    if os.path.exists(badChanFile):
+        with open(badChanFile) as file:
+            content = file.readlines()
+        content = [x.strip() for x in content]
+        badChan = list(np.array(map(int, content)) - 1)
+    else:
+        badChan = []
+
+    return badChan
+
+
 # Print iterations progress
 def print_progress(iteration, total, prefix='', suffix='', decimals=1, bar_length=40, initiation=False):
     """
@@ -24,13 +57,10 @@ def print_progress(iteration, total, prefix='', suffix='', decimals=1, bar_lengt
     if iteration == total:
         sys.stdout.write('\n')
     sys.stdout.flush()
-
 # # 
 # # Sample Usage
 # # 
-
 # from time import sleep
-
 # # A List of Items
 # items = list(range(0, 57))
 # l = len(items)
@@ -41,4 +71,3 @@ def print_progress(iteration, total, prefix='', suffix='', decimals=1, bar_lengt
 #     sleep(0.1)
 #     # Update Progress Bar
 #     print_progress(i + 1, l, prefix = 'Progress:', suffix = 'Complete')
-
