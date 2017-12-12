@@ -99,7 +99,6 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[]):
     NWBfilePath = os.path.join(OpenEphysDataPath,'experiment_1.nwb')
     # Get thresholded spike data for each tetrode
     spike_data = NWBio.load_spikes(NWBfilePath)
-    spike_data = []
     if spike_data:
         # Fully load into memory
         for ntet in range(len(spike_data)):
@@ -170,52 +169,54 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[]):
     return waveform_data
 
 
-
-# Input argument handling and help info
-parser = argparse.ArgumentParser(description='Apply KlustaKwik and export into Axona format.')
-parser.add_argument('path', type=str,
-                    help='recording data folder')
-parser.add_argument('--chan', type=int, nargs = 2, 
-                    help='list the first and last channel to process (counting starts from 1)')
-args = parser.parse_args()
-# Form path to recording file
-OpenEphysDataPath = args.path
-NWBfilePath = os.path.join(OpenEphysDataPath,'experiment_1.nwb')
-# Get UseChans input variable
-if args.chan:
-    UseChans = [args.chan[0] - 1, args.chan[1]]
-    if np.mod(UseChans[1] - UseChans[0], 4) != 0:
-        raise ValueError('Channel range must cover full tetrodes')
-else:
-    UseChans = False
-
-# Get bad channels and renumber according to used channels
-badChan = hfunct.listBadChannels(OpenEphysDataPath)
-if badChan:
-    print('Ignoring bad channels: ' + str(list(np.array(badChan) + 1)))
-    badChan = np.array(badChan, dtype=np.int16)
+def main(OpenEphysDataPath, UseChans=False):
+    # Assume NWB file has name experiment_1.nwb
+    NWBfilePath = os.path.join(OpenEphysDataPath,'experiment_1.nwb')
+    # Get bad channels and renumber according to used channels
+    badChan = hfunct.listBadChannels(OpenEphysDataPath)
+    if badChan:
+        print('Ignoring bad channels: ' + str(list(np.array(badChan) + 1)))
+        badChan = np.array(badChan, dtype=np.int16)
+        if UseChans:
+            # Correct bad channel number depending on used channels
+            badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
+            badChan = badChan - np.array(UseChans[0], dtype=np.int16)
+            badChan = badChan[badChan < UseChans[1] - UseChans[0]]
+        badChan = list(badChan)
+    # Make sure position data is available
+    if not os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'PosLogComb.csv')):
+        if NWBio.check_if_binary_pos(NWBfilePath):
+            _ = NWBio.load_pos(NWBfilePath, savecsv=True, postprocess=True)
+        else:
+            CombineTrackingData.combdata(NWBfilePath)
+    # Extract spikes into a dictonary
+    waveform_data = createWaveformDict(OpenEphysDataPath, UseChans=UseChans, badChan=badChan)
+    # Define Axona data subfolder name based on specific channels if requested
     if UseChans:
-        # Correct bad channel number depending on used channels
-        badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
-        badChan = badChan - np.array(UseChans[0], dtype=np.int16)
-        badChan = badChan[badChan < UseChans[1] - UseChans[0]]
-    badChan = list(badChan)
-
-# Make sure position data is available
-if not os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'PosLogComb.csv')):
-    if NWBio.check_if_binary_pos(NWBfilePath):
-        _ = NWBio.load_pos(NWBfilePath, savecsv=True, postprocess=True)
+        subfolder = 'AxonaData_' + str(UseChans[0] + 1) + '-' + str(UseChans[1])
     else:
-        CombineTrackingData.combdata(NWBfilePath)
+        subfolder = 'AxonaData'
+    # Create Axona data
+    createAxonaData.createAxonaData(OpenEphysDataPath, waveform_data, 
+                                    subfolder=subfolder, eegChan=1)
 
-waveform_data = createWaveformDict(OpenEphysDataPath, UseChans=UseChans, badChan=badChan)
 
-
-# Define Axona data subfolder name based on specific channels if requested
-if UseChans:
-    subfolder = 'AxonaData_' + str(UseChans[0] + 1) + '-' + str(UseChans[1])
-else:
-    subfolder = 'AxonaData'
-# Create Axona data
-createAxonaData.createAxonaData(OpenEphysDataPath, waveform_data, 
-                                subfolder=subfolder, eegChan=1)
+if __name__ == '__main__':
+    # Input argument handling and help info
+    parser = argparse.ArgumentParser(description='Apply KlustaKwik and export into Axona format.')
+    parser.add_argument('path', type=str,
+                        help='recording data folder')
+    parser.add_argument('--chan', type=int, nargs = 2, 
+                        help='list the first and last channel to process (counting starts from 1)')
+    args = parser.parse_args()
+    # Form path to recording file
+    OpenEphysDataPath = args.path
+    # Get UseChans input variable
+    if args.chan:
+        UseChans = [args.chan[0] - 1, args.chan[1]]
+        if np.mod(UseChans[1] - UseChans[0], 4) != 0:
+            raise ValueError('Channel range must cover full tetrodes')
+    else:
+        UseChans = False
+    # Run the script
+    main(OpenEphysDataPath, UseChans)

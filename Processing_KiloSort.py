@@ -135,90 +135,90 @@ def createWaveformDict(OpenEphysDataPath,KiloSortOutputPath,UseChans=False,badCh
     return waveform_data
 
 
-# Input argument handling and help info
-parser = argparse.ArgumentParser(description='Apply KiloSort and export into Axona format.')
-parser.add_argument('path', type=str,
-                    help='recording data folder')
-parser.add_argument('--chan', type=int, nargs = 2, 
-                    help='list the first and last channel to process (counting starts from 1)')
-parser.add_argument('--keep', action='store_true',
-                    help='store KiloSort output to recording data folder')
-args = parser.parse_args()
-# Assign input arguments to variables
-if args.chan:
-    UseChans = [args.chan[0] - 1, args.chan[1]]
-    if np.mod(UseChans[1] - UseChans[0], 32) != 0:
-        raise ValueError('Total number of channels must be a multiple of 32')
-else:
-    UseChans = False
-# Get file path from script call input
-OpenEphysDataPath = args.path
-NWBfilePath = os.path.join(OpenEphysDataPath,'experiment_1.nwb')
-if args.keep:
-    # Set default location for KiloSortProcessing Folder based on specific channels if requested
-    if UseChans:
-        KiloSortProcessingFolder = 'KiloSortProcess_' + str(UseChans[0] + 1) + '-' + str(UseChans[1])
+def main(OpenEphysDataPath, UseChans=False, keepKiloSortOutput=False):
+    # Assume NWB file has name experiment_1.nwb
+    NWBfilePath = os.path.join(OpenEphysDataPath,'experiment_1.nwb')
+    if keepKiloSortOutput:
+        # Set default location for KiloSortProcessing Folder based on specific channels if requested
+        if UseChans:
+            KiloSortProcessingFolder = 'KiloSortProcess_' + str(UseChans[0] + 1) + '-' + str(UseChans[1])
+        else:
+            KiloSortProcessingFolder = 'KiloSortProcess'
+        KiloSortProcessingFolder = os.path.join(OpenEphysDataPath,KiloSortProcessingFolder)
+        if not os.path.isdir(KiloSortProcessingFolder):
+            os.mkdir(KiloSortProcessingFolder)
     else:
-        KiloSortProcessingFolder = 'KiloSortProcess'
-    KiloSortProcessingFolder = os.path.join(OpenEphysDataPath,KiloSortProcessingFolder)
-    if not os.path.isdir(KiloSortProcessingFolder):
-        os.mkdir(KiloSortProcessingFolder)
-else:
-    KiloSortProcessingFolder = tempfile.mkdtemp('KiloSortProcessing')
-KiloSortBinaryFileName = 'experiment_1.dat'
-
-# Load file, if promted only specific channel range
-print('Loading NWB data for feeding into KiloSort')
-if UseChans:
-    data = np.array(NWBio.load_continuous(NWBfilePath)['continuous'][:,UseChans[0]:UseChans[1]])
-else:
-    data = np.array(NWBio.load_continuous(NWBfilePath)['continuous'])
-
-# Get bad channels and renumber according to used channels
-badChan = hfunct.listBadChannels(OpenEphysDataPath)
-if badChan:
-    print('Ignoring bad channels: ' + str(list(np.array(badChan) + 1)))
-    badChan = np.array(badChan, dtype=np.int16)
+        KiloSortProcessingFolder = tempfile.mkdtemp('KiloSortProcessing')
+    KiloSortBinaryFileName = 'experiment_1.dat'
+    # Load file, if promted only specific channel range
+    print('Loading NWB data for feeding into KiloSort')
     if UseChans:
-        # Correct bad channel number depending on used channels
-        badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
-        badChan = badChan - np.array(UseChans[0], dtype=np.int16)
-        badChan = badChan[badChan < data.shape[1]]
-    badChan = list(badChan)
-
-# Remove bad channels from data sent to KiloSort
-if badChan:
-    data = np.delete(data, badChan, axis=1)
-# Write binary file for KiloSort
-print('Writing NWB into binary')
-data.tofile(os.path.join(KiloSortProcessingFolder,KiloSortBinaryFileName))
-# Run KiloSort
-eng = matlab.engine.start_matlab()
-eng.cd('KiloSortScripts')
-matlab_badChan = matlab.double(badChan)
-eng.master_file(float(data.shape[1]), matlab_badChan, 
-                KiloSortProcessingFolder, KiloSortBinaryFileName, nargout=0)
-
-# Make sure position data is available
-if not os.path.exists(os.path.join(OpenEphysDataPath,'PosLogComb.csv')):
-    if NWBio.check_if_binary_pos(NWBfilePath):
-        _ = NWBio.load_pos(NWBfilePath, savecsv=True, postprocess=True)
+        data = np.array(NWBio.load_continuous(NWBfilePath)['continuous'][:,UseChans[0]:UseChans[1]])
     else:
-        CombineTrackingData.combdata(NWBfilePath)
+        data = np.array(NWBio.load_continuous(NWBfilePath)['continuous'])
+    # Get bad channels and renumber according to used channels
+    badChan = hfunct.listBadChannels(OpenEphysDataPath)
+    if badChan:
+        print('Ignoring bad channels: ' + str(list(np.array(badChan) + 1)))
+        badChan = np.array(badChan, dtype=np.int16)
+        if UseChans:
+            # Correct bad channel number depending on used channels
+            badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
+            badChan = badChan - np.array(UseChans[0], dtype=np.int16)
+            badChan = badChan[badChan < data.shape[1]]
+        badChan = list(badChan)
+    # Remove bad channels from data sent to KiloSort
+    if badChan:
+        data = np.delete(data, badChan, axis=1)
+    # Write binary file for KiloSort
+    print('Writing NWB into binary')
+    data.tofile(os.path.join(KiloSortProcessingFolder,KiloSortBinaryFileName))
+    # Run KiloSort
+    eng = matlab.engine.start_matlab()
+    eng.cd('KiloSortScripts')
+    matlab_badChan = matlab.double(badChan)
+    eng.master_file(float(data.shape[1]), matlab_badChan, 
+                    KiloSortProcessingFolder, KiloSortBinaryFileName, nargout=0)
+    # Make sure position data is available
+    if not os.path.exists(os.path.join(OpenEphysDataPath,'PosLogComb.csv')):
+        if NWBio.check_if_binary_pos(NWBfilePath):
+            _ = NWBio.load_pos(NWBfilePath, savecsv=True, postprocess=True)
+        else:
+            CombineTrackingData.combdata(NWBfilePath)
+    # Extract waveforms from NWB data based on KiloSort spiketimes and clusters
+    waveform_data = createWaveformDict(OpenEphysDataPath, KiloSortProcessingFolder, 
+                                       UseChans=UseChans, badChan=badChan)
+    # Define Axona data subfolder name based on specific channels if requested
+    if UseChans:
+        subfolder = 'AxonaData_' + str(UseChans[0] + 1) + '-' + str(UseChans[1])
+    else:
+        subfolder = 'AxonaData'
+    # Create Axona data
+    createAxonaData.createAxonaData(OpenEphysDataPath, waveform_data, 
+                                    subfolder=subfolder, eegChan=1)
+    # Delete KiloSort data unless asked to keep it
+    if not keepKiloSortOutput:
+        shutil.rmtree(KiloSortProcessingFolder)
 
-# Extract waveforms from NWB data based on KiloSort spiketimes and clusters
-waveform_data = createWaveformDict(OpenEphysDataPath, KiloSortProcessingFolder, 
-                                   UseChans=UseChans, badChan=badChan)
 
-# Define Axona data subfolder name based on specific channels if requested
-if UseChans:
-    subfolder = 'AxonaData_' + str(UseChans[0] + 1) + '-' + str(UseChans[1])
-else:
-    subfolder = 'AxonaData'
-# Create Axona data
-createAxonaData.createAxonaData(OpenEphysDataPath, waveform_data, 
-                                subfolder=subfolder, eegChan=1)
-
-# Delete KiloSort data unless asked to keep it
-if not args.keep:
-    shutil.rmtree(KiloSortProcessingFolder)
+if __name__ == '__main__':
+    # Input argument handling and help info
+    parser = argparse.ArgumentParser(description='Apply KiloSort and export into Axona format.')
+    parser.add_argument('path', type=str,
+                        help='recording data folder')
+    parser.add_argument('--chan', type=int, nargs = 2, 
+                        help='list the first and last channel to process (counting starts from 1)')
+    parser.add_argument('--keep', action='store_true',
+                        help='store KiloSort output to recording data folder')
+    args = parser.parse_args()
+    # Assign input arguments to variables
+    OpenEphysDataPath = args.path
+    keepKiloSortOutput = args.keep
+    if args.chan:
+        UseChans = [args.chan[0] - 1, args.chan[1]]
+        if np.mod(UseChans[1] - UseChans[0], 32) != 0:
+            raise ValueError('Total number of channels must be a multiple of 32')
+    else:
+        UseChans = False
+    # Launch script
+    main(OpenEphysDataPath, UseChans, keepKiloSortOutput)

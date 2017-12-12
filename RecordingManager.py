@@ -14,7 +14,6 @@ import cPickle as pickle
 import subprocess
 from shutil import copyfile
 import csv
-import CombineTrackingData as combPos
 import time
 
 def show_message(message, message_more=None):
@@ -342,7 +341,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         while not dirfiles[listpos].endswith('.nwb'):
             listpos += 1
         dataFileName = str(self.pt_rec_folder.toPlainText()) + '/' + dirfiles[listpos]
-        self.lastDataFileName = dataFileName
         # Save badChan list from text box to a file in the recording folder
         if len(str(self.pt_badChan.toPlainText())) > 0:
             save_badChan_to_file(str(self.pt_badChan.toPlainText()), str(self.pt_rec_folder.toPlainText()))
@@ -356,8 +354,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             time.sleep(1)
             currsize = os.stat(dataFileName).st_size
         print('OpenEphysGUI Recording stopped.')
-        # Combine Position Data from RPis
-        combPos.combdata(dataFileName)
         # Disable Stop button and Enable other buttons
         self.pb_stop_rec.setEnabled(False)
         self.pb_cluster.setEnabled(True)
@@ -373,8 +369,8 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_sync_server.setEnabled(False)
         self.pb_open_rec_folder.setEnabled(False)
         time.sleep(0.1)
-        import ApplyKlustakwikScripts as AKS
-        AKS.cluster_all_spikes_NWB(self.lastDataFileName)
+        import Processing_KlustaKwik
+        Processing_KlustaKwik.main(str(self.pt_rec_folder.toPlainText()))
         self.pb_start_rec.setEnabled(True)
         self.pb_cluster.setEnabled(True)
         self.pb_process_data.setEnabled(True)
