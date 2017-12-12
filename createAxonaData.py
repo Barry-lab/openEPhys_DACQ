@@ -20,24 +20,24 @@ import NWBio
 import HelperFunctions as hfunct
 
 
-def getAllFiles(fpath, file_basenames):
-    # Find .clu and position files and incorporate into dictionary of fileNames
-    fileNames = {'waveforms': [None] * len(file_basenames), 'clufiles': [None] * len(file_basenames), 
-                 'posfile': [None]}
-    for nfile in range(len(file_basenames)):
-        waveforms_string = file_basenames[nfile] + '.spikes.p'
-        fileNames['waveforms'][nfile] = waveforms_string
-    # Get all available clu file names
-    for nfile in range(len(file_basenames)):
-        clu_string = file_basenames[nfile] + '.clu.0'
-        if os.path.exists(fpath + '/' + clu_string):
-            fileNames['clufiles'][nfile] = clu_string
-    # Get position data file
-    posLog_fileName = 'PosLogComb.csv'
-    if os.path.exists(fpath + '/' + posLog_fileName):
-        fileNames['posfile'] = posLog_fileName
+# def getAllFiles(fpath, file_basenames):
+#     # Find .clu and position files and incorporate into dictionary of fileNames
+#     fileNames = {'waveforms': [None] * len(file_basenames), 'clufiles': [None] * len(file_basenames), 
+#                  'posfile': [None]}
+#     for nfile in range(len(file_basenames)):
+#         waveforms_string = file_basenames[nfile] + '.spikes.p'
+#         fileNames['waveforms'][nfile] = waveforms_string
+#     # Get all available clu file names
+#     for nfile in range(len(file_basenames)):
+#         clu_string = file_basenames[nfile] + '.clu.0'
+#         if os.path.exists(fpath + '/' + clu_string):
+#             fileNames['clufiles'][nfile] = clu_string
+#     # Get position data file
+#     posLog_fileName = 'PosLogComb.csv'
+#     if os.path.exists(fpath + '/' + posLog_fileName):
+#         'PosLogComb.csv' = posLog_fileName
         
-    return fileNames
+#     return fileNames
     
     
 def interpolate_waveforms(waves, nr_targetbins=50):
@@ -53,7 +53,7 @@ def interpolate_waveforms(waves, nr_targetbins=50):
     return new_waves
     
     
-def create_DACQ_waveform_data(waveform_data, pos_edges, idx_speedcut=None):
+def create_DACQ_waveform_data(waveform_data, pos_edges):
     # Create DACQ data tetrode format
     waveform_data_dacq = []
     dacq_waveform_dtype = [('ts', '>i'), ('waveform', '50b')]
@@ -64,11 +64,7 @@ def create_DACQ_waveform_data(waveform_data, pos_edges, idx_speedcut=None):
     dacq_sampling_rate = 96000
     hfunct.print_progress(0, len(waveform_data), prefix = 'Converting Waveforms:', initiation=True)
     for ntet in range(len(waveform_data)):
-        # Remove spikes under speedcut if asked to
         tet_waveform_data = waveform_data[ntet]
-        if idx_speedcut:
-            tet_waveform_data['waveforms'] = np.delete(tet_waveform_data['waveforms'], idx_speedcut[ntet], 0)
-            tet_waveform_data['spiketimes'] = np.delete(tet_waveform_data['spiketimes'], idx_speedcut[ntet], 0)
         # Align spiketimes to beginning of position data
         tet_waveform_data['spiketimes'] = tet_waveform_data['spiketimes'] - pos_edges[0]
         # Get waveforms
@@ -307,222 +303,39 @@ def get_speed_data(posfile):
     return pos_timestamps, speed
 
 
-def apply_speedcut(waveform_datas, speedcut, posfile):
-
-    pos_timestamps, speed = get_speed_data(posfile)
-
-    # Create a list to complement waveform_datas that indictes which waveforms to cut
-    idx_speedcut = []
-    for n_data in range(len(waveform_datas)):
-        # Convert spike times to seconds
-        wave_timestamps = waveform_datas[n_data]['spiketimes'] / waveform_datas[n_data]['sampling_rate']
-        # Get speed for each waveform at closest pos datapoint
-        wave_speeds = np.zeros(wave_timestamps.size)
-        for nwave in range(wave_speeds.size):
-            pos_idx = np.abs(pos_timestamps - wave_timestamps[nwave]).argmin()
-            wave_speeds[nwave] = speed[pos_idx]
-        # Indices for waveforms at slower speeds than speedcut
-        idx_speedcut.append(np.where(wave_speeds < speedcut)[0])
-
-    return idx_speedcut
-
-def get_position_data_edges(fpath):
-    # Get position data first and last timestamps
-    posLog_fileName = 'PosLogComb.csv'
-    pos_csv = np.genfromtxt(fpath + '/' + posLog_fileName, delimiter=',')
-    pos_timestamps = np.array(pos_csv[:,0], dtype=np.float64)
-    pos_edges = [pos_timestamps[0], pos_timestamps[-1]]
-
-    return pos_edges
-
-def createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=False):
-    # This function uses KiloSort output to extract waveforms from NWB file
-    # UseChans = [0,64] will limit finding waveforms to channels 1 to 64
-    # UseChans = [64,128] will limit finding waveforms to channels 65 to 128
-    # Set waveform size in datapoints
-    winsize_before = 10
-    winsize_after = 20
-    wintotal = winsize_before + winsize_after + 1 # This should be 31 for all downstream functions to work
-    # Load data
-    clusters = np.load(os.path.join(KiloSortOutputPath, 'spike_clusters.npy'))[:,0]
-    spiketimes = np.load(os.path.join(KiloSortOutputPath, 'spike_times.npy'))[:,0]
-    print('Loading NWB data')
-    data = NWBio.load_continuous(NWBfilePath)
-    timestamps = np.array(data['timestamps'])
-    continuous = -np.transpose(np.array(data['continuous']))
-    if UseChans:
-        continuous = continuous[UseChans[0]:UseChans[1],:]
-    goodChan = np.arange(continuous.shape[0])
-    # If BadChan file exists, get values and edit goodChans list
-    if os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'BadChan')):
-        badChan = np.array(hfunct.listBadChannels(os.path.dirname(NWBfilePath)), dtype=np.int16)
-        print('Ignoring bad channels: ' + str(list(badChan + 1)))
-        if UseChans:
-            badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
-            badChan = badChan - np.array(UseChans[0], dtype=np.int16)
-            badChan = badChan[badChan < continuous.shape[0]]
-            badChan = list(badChan)
-        for nchan in badChan:
-            goodChan = goodChan[goodChan != nchan]
-    else:
-        badChan = []
-    # Remove the mean of the signal from all channels
-    print('Common average referencing all channels')
-    continuous_mean = np.mean(continuous[goodChan,:], axis=0, keepdims=True)
-    continuous = continuous - np.repeat(continuous_mean, continuous.shape[0], axis=0)
-    # Set bad channels to 0
-    if badChan:
-        continuous[badChan,:] = np.int16(0)
-    # Filter each channel
-    hfunct.print_progress(0, goodChan.size, prefix = 'Filtering raw data:', initiation=True)
-    for nchan in range(goodChan.size):
-        signal_in = np.float64(continuous[goodChan[nchan],:])
-        signal_out = hfunct.Filter(signal_in)
-        continuous[goodChan[nchan],:] = np.int16(signal_out)
-        hfunct.print_progress(nchan + 1, goodChan.size, prefix = 'Filtering raw data:')
-    n_tetrodes = continuous.shape[0] / 4
-    tetrode_channels = np.reshape(np.arange(n_tetrodes * 4), (n_tetrodes, 4))
-    cluster_nrs = np.unique(clusters)
-    waveform_data = []
-    for ntet in range(n_tetrodes):
-        tmp = {'waveforms':np.zeros((1,wintotal,4),dtype=np.int16), 
-               'spiketimes':np.array([100],dtype=np.int64), 
-               'clusterIDs':np.array([1],dtype=np.int16)}
-        waveform_data.append(tmp)
-    hfunct.print_progress(0, len(cluster_nrs), prefix = 'Loading waveforms from NWB:', initiation=True)
-    progress_count = 0
-    for nclu in list(cluster_nrs):
-        stimes = spiketimes[clusters == nclu]
-        clu_timestamps = timestamps[stimes]
-        # Create windows for indexing all samples for a waveform
-        stimes = np.int32(np.expand_dims(stimes, 1))
-        windows = np.arange(winsize_before + winsize_after + 1, dtype=np.int32) - winsize_before
-        windows = np.tile(windows, (stimes.size,1))
-        windows = windows + np.tile(stimes, (1,windows.shape[1]))
-        # Skip windows that are too close to edge of signal
-        tooearly = windows < 0
-        toolate = windows > (continuous.shape[1] - 1)
-        idx_delete = np.any(np.logical_or(tooearly, toolate), axis=1)
-        windows = np.delete(windows, np.where(idx_delete)[0], axis=0)
-        clu_timestamps = np.delete(clu_timestamps, np.where(idx_delete)[0], axis=0)
-        # Create indexing for all channels and spikes
-        # windows and windows_channels shape is nchan x windowsize x nspikes
-        windows = np.repeat(windows[:,:,np.newaxis], n_tetrodes * 4, axis=2)
-        windows = np.swapaxes(windows,0,2)
-        windows_channels = np.tile(np.arange(windows.shape[0]), (windows.shape[1],1))
-        windows_channels = np.transpose(windows_channels)
-        windows_channels = np.repeat(windows_channels[:,:,np.newaxis], windows.shape[2], axis=2)
-        # Compute mean spike for all channels
-        tmp_waveforms = continuous[windows_channels,windows]
-        # # Zero all tmp_waveforms
-        mean_waveforms = np.mean(tmp_waveforms, axis=2)
-        # Find channel and tetrode with highest amplitude
-        wave_peaks = np.ptp(mean_waveforms, axis=1)
-        nchan = np.argmax(wave_peaks)
-        ntet = np.where(np.any(tetrode_channels == nchan, axis=1))[0][0]
-        # Extract waveforms of all spikes on all channels of this tetrode
-        usechans = tetrode_channels[ntet,:]
-        waveforms = continuous[windows_channels[usechans,:,:],windows[usechans,:,:]]
-        waveforms = np.swapaxes(waveforms,0,2)
-        # Remove spikes outside position data
-        pos_edges = get_position_data_edges(os.path.dirname(NWBfilePath))
-        idx_outside_pos_data = clu_timestamps < pos_edges[0]
-        idx_outside_pos_data = np.logical_or(idx_outside_pos_data, clu_timestamps > pos_edges[1])
-        idx_outside_pos_data = np.where(idx_outside_pos_data)[0]
-        waveforms = np.delete(waveforms, idx_outside_pos_data, 0)
-        clu_timestamps = np.delete(clu_timestamps, idx_outside_pos_data)
-        # Store data for the corresponding tetrode
-        waveform_data[ntet]['waveforms'] = np.append(waveform_data[ntet]['waveforms'],waveforms,axis=0)
-        waveform_data[ntet]['spiketimes'] = np.append(waveform_data[ntet]['spiketimes'],clu_timestamps)
-        waveform_data[ntet]['clusterIDs'] = np.append(waveform_data[ntet]['clusterIDs'],nclu * np.ones(clu_timestamps.size,dtype=np.int16))
-        progress_count += 1
-        hfunct.print_progress(progress_count, len(cluster_nrs), prefix = 'Loading waveforms from NWB:')
-    # Correct spike order for each tetrode and remove placeholder if spikes detected
-    for ntet in range(n_tetrodes):
-        if waveform_data[ntet]['spiketimes'].size > 1:
-            waveform_data[ntet]['waveforms'] = waveform_data[ntet]['waveforms'][1:,:,:]
-            waveform_data[ntet]['spiketimes'] = waveform_data[ntet]['spiketimes'][1:]
-            waveform_data[ntet]['clusterIDs'] = waveform_data[ntet]['clusterIDs'][1:]
-            idx = waveform_data[ntet]['spiketimes'].argsort()
-            waveform_data[ntet]['waveforms'] = waveform_data[ntet]['waveforms'][idx,:,:]
-            waveform_data[ntet]['spiketimes'] = waveform_data[ntet]['spiketimes'][idx]
-            waveform_data[ntet]['clusterIDs'] = waveform_data[ntet]['clusterIDs'][idx]
-    # Set cluster values on each tetrode to start from 1
-    for ntet in range(n_tetrodes):
-        if waveform_data[ntet]['spiketimes'].size > 1:
-            originalClus = np.unique(waveform_data[ntet]['clusterIDs'])
-            for nclu in range(originalClus.size):
-                idx = waveform_data[ntet]['clusterIDs'] == originalClus[nclu]
-                waveform_data[ntet]['clusterIDs'][idx] = nclu + 1
-    # Put additional variables into the dictionary for each tetrode
-    for ntet in range(n_tetrodes):
-        waveform_data[ntet]['nr_tetrode'] = ntet
-        waveform_data[ntet]['tetrode_channels'] = tetrode_channels[ntet,:]
-        waveform_data[ntet]['badChan'] = badChan
-        waveform_data[ntet]['bitVolts'] = float(0.195)
-    # Write clu files for each tetrode
-    cluFiles = []
-    hfunct.print_progress(0, n_tetrodes, prefix = 'Creating Clu files:', initiation=True)
-    for ntet in range(n_tetrodes):
-        clufileName = NWBfilePath[:-4] + '.clu.' + str(ntet + 1)
-        lines = [str(waveform_data[ntet]['clusterIDs'].size) + '\r\n']
-        for nclu in list(waveform_data[ntet]['clusterIDs']):
-            lines.append(str(nclu) + '\r\n')
-        with open(clufileName, 'wb') as file:
-                file.writelines(lines)
-        cluFiles.append(os.path.basename(clufileName))
-        hfunct.print_progress(ntet+1, n_tetrodes, prefix = 'Creating Clu files:')
-
-    return waveform_data, cluFiles
-
-def createAxonaData(fpath, fileNames, speedcut=0, subfolder='AxonaData',UseChans=False,eegChan=1):
+def createAxonaData(OpenEphysDataPath, waveform_data, subfolder='AxonaData', eegChan=1):
     print('Converting data')
-    if type(fileNames) is not str:
-        # Loads waveforms from Pickle files selected with the openFileDialog
-        waveform_data = []
-        for filename in fileNames['waveforms']:
-            # Load all selected waveform files
-            full_filename = fpath + '/' + filename
-            with open(full_filename, 'rb') as file:
-                tmp = pickle.load(file)
-            waveform_data.append(tmp)
-        # Extract tetrode numbers and order data by tetrode numbers
-        tetrode_numbers_int = []
-        for wavedat in waveform_data:
-            tetrode_numbers_int.append(wavedat['nr_tetrode'])
-        file_order = np.argsort(np.array(tetrode_numbers_int))
-        fileNames['waveforms'] = [fileNames['waveforms'][x] for x in file_order]
-        waveform_data = [waveform_data[x] for x in file_order]
-        fileNames['clufiles'] = [fileNames['clufiles'][x] for x in file_order]
-    elif type(fileNames) is str:
-        NWBfileName = 'experiment_1.nwb'
-        NWBfilePath = os.path.join(fpath,NWBfileName)
-        KiloSortOutputPath = fileNames
-        waveform_data, cluFiles = createWaveformDict_FromKiloSort(NWBfilePath,KiloSortOutputPath,UseChans=UseChans)
-        fileNames = {}
-        fileNames['posfile'] = 'PosLogComb.csv'
-        fileNames['waveforms'] = [NWBfileName] * len(cluFiles)
-        fileNames['clufiles'] = cluFiles
-    # Apply speed cut if requested
-    if speedcut > 0:
-        idx_speedcut = apply_speedcut(waveform_data, speedcut, fpath + '/' + fileNames['posfile'])
-        subfolder = subfolder + '_s' + str(speedcut)
-    else:
-        idx_speedcut = None
+    # if type(fileNames) is not str:
+    #     # Loads waveforms from Pickle files selected with the openFileDialog
+    #     waveform_data = []
+    #     for filename in fileNames['waveforms']:
+    #         # Load all selected waveform files
+    #         full_filename = fpath + '/' + filename
+    #         with open(full_filename, 'rb') as file:
+    #             tmp = pickle.load(file)
+    #         waveform_data.append(tmp)
+    #     # Extract tetrode numbers and order data by tetrode numbers
+    #     tetrode_numbers_int = []
+    #     for wavedat in waveform_data:
+    #         tetrode_numbers_int.append(wavedat['nr_tetrode'])
+    #     file_order = np.argsort(np.array(tetrode_numbers_int))
+    #     fileNames['waveforms'] = [fileNames['waveforms'][x] for x in file_order]
+    #     waveform_data = [waveform_data[x] for x in file_order]
+    #     fileNames['clufiles'] = [fileNames['clufiles'][x] for x in file_order]
     # Get position data start and end times
-    pos_edges = get_position_data_edges(fpath)
+    pos_edges = hfunct.get_position_data_edges(OpenEphysDataPath)
     # Convert data to DACQ format
-    waveform_data_dacq = create_DACQ_waveform_data(waveform_data, pos_edges, idx_speedcut)
-    pos_data_dacq = create_DACQ_pos_data(fpath + '/' + fileNames['posfile'])
+    waveform_data_dacq = create_DACQ_waveform_data(waveform_data, pos_edges)
+    pos_data_dacq = create_DACQ_pos_data(os.path.join(OpenEphysDataPath,'PosLogComb.csv'))
     OpenEphys_SamplingRate = 30000
     dacq_eeg_samplingRate = 250 # Sampling rate in Hz
-    eeg_data_dacq = create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges, eegChan)
+    eeg_data_dacq = create_DACQ_eeg_data(OpenEphysDataPath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges, eegChan)
     # Get headers for both datatypes
     header_wave, keyorder_wave = header_templates('waveforms')
     header_pos, keyorder_pos = header_templates('pos')
     header_eeg, keyorder_eeg = header_templates('eeg')
     # Update headers
-    experiment_info = getExperimentInfo(fpath)
+    experiment_info = getExperimentInfo(OpenEphysDataPath)
     trial_duration = str(int(float(len(eeg_data_dacq['eeg'])) / dacq_eeg_samplingRate))
     header_wave['trial_date'] = experiment_info['trial_date']
     header_wave['trial_time'] = experiment_info['trial_time']
@@ -547,21 +360,18 @@ def createAxonaData(fpath, fileNames, speedcut=0, subfolder='AxonaData',UseChans
     header_eeg['EEG_samples_per_position'] = str(int(np.round(len(eeg_data_dacq) / len(pos_data_dacq))))
     header_eeg['num_EEG_samples'] = str(len(eeg_data_dacq))
     # Generate base name for files
-    fname_prefix = fileNames['waveforms'][0][:fileNames['waveforms'][0].find('_CH')]
-    file_basename = fname_prefix + '_' + \
-                    re.sub('-', '', experiment_info['trial_date']) + '_' + \
-                    re.sub('-', '', experiment_info['trial_time'])
+    file_basename = 'experiment_1'
     # Set data start and end tokens
     DATA_START_TOKEN = 'data_start'
     DATA_END_TOKEN = '\r\ndata_end\r\n'
     # Create subdirectory or rewrite existing
-    if os.path.exists(fpath + '/' + subfolder):
-        shutil.rmtree(fpath + '/' + subfolder)
-    os.mkdir(fpath + '/' + subfolder)
+    AxonaDataPath = os.path.join(OpenEphysDataPath, subfolder)
+    if not os.path.exists(AxonaDataPath):
+        os.mkdir(AxonaDataPath)
     # Write WAVEFORM data for each tetrode into DACQ format
     hfunct.print_progress(0, len(waveform_data_dacq), prefix = 'Writing tetrode files:', initiation=True)
     for ntet in range(len(waveform_data_dacq)):
-        fname = fpath + '/' + subfolder + '/' + file_basename + '.' + str(waveform_data[ntet]['nr_tetrode'] + 1)
+        fname = os.path.join(AxonaDataPath, file_basename + '.' + str(waveform_data[ntet]['nr_tetrode'] + 1))
         with open(fname, 'wb') as f:
             # Write header in the correct order
             for key in keyorder_wave:
@@ -587,7 +397,7 @@ def createAxonaData(fpath, fileNames, speedcut=0, subfolder='AxonaData',UseChans
             f.write(DATA_END_TOKEN)
         hfunct.print_progress(ntet + 1, len(waveform_data_dacq), prefix = 'Writing tetrode files:')
     # Write POSITION data into DACQ format
-    fname = fpath + '/' + subfolder + '/' + file_basename + '.pos'
+    fname = os.path.join(AxonaDataPath, file_basename + '.pos')
     with open(fname, 'wb') as f:
         # Write header in the correct order
         for key in keyorder_pos:
@@ -612,7 +422,7 @@ def createAxonaData(fpath, fileNames, speedcut=0, subfolder='AxonaData',UseChans
         # Write the end token string
         f.write(DATA_END_TOKEN)
     # Write EEG data into DACQ format
-    fname = fpath + '/' + subfolder + '/' + file_basename + '.eeg'
+    fname = os.path.join(AxonaDataPath, file_basename + '.eeg')
     with open(fname, 'wb') as f:
         # Write header in the correct order
         for key in keyorder_eeg:
@@ -630,30 +440,18 @@ def createAxonaData(fpath, fileNames, speedcut=0, subfolder='AxonaData',UseChans
         eeg_data_dacq.tofile(f)
         # Write the end token string
         f.write(DATA_END_TOKEN)
-    # Copy over and rename CLU files for each tetrode and correct line endings for TINT
-    nremoved = 0
-    for ntet in range(len(fileNames['clufiles'])):
-        if fileNames['clufiles'][ntet]:
-            sourcefile = fpath + '/' + fileNames['clufiles'][ntet]
-            fname = fpath + '/' + subfolder + '/' + file_basename + '.clu.' + str(waveform_data[ntet]['nr_tetrode'] + 1)
-            shutil.move(sourcefile, fname)
-        with open(fname, 'rb') as file:
-            lines = file.readlines()
-        if idx_speedcut and len(idx_speedcut[ntet]) > 0:
-            nremoved += len(idx_speedcut[ntet])
-            for nspike in idx_speedcut[ntet][::-1]:
-                del lines[nspike + 1]
-        new_lines = []
-        for line in lines:
-            new_lines.append(line.rstrip() + '\r\n')
-        with open(fname, 'wb') as file:
-            file.writelines(new_lines)
+    # Write CLU files
+    for ntet in range(len(waveform_data_dacq)):
+        clufileName = os.path.join(AxonaDataPath, file_basename + '.clu.' + str(waveform_data[ntet]['nr_tetrode'] + 1))
+        lines = [str(waveform_data[ntet]['clusterIDs'].size) + '\r\n']
+        for nclu in list(waveform_data[ntet]['clusterIDs']):
+            lines.append(str(nclu) + '\r\n')
+        with open(clufileName, 'wb') as file:
+                file.writelines(lines)
     print('Waveform data was generated for ' + str(len(waveform_data_dacq)) + ' tetrodes.')
-    if idx_speedcut:
-        print('Total of ' + str(nremoved) + ' spikes removed according to speed cut')
     # Make a copy of a random .set file into the converted data folder
     sourcefile = 'SetFileBase.set'
-    fname = fpath + '/' + subfolder + '/' + file_basename + '.set'
+    fname = os.path.join(AxonaDataPath, file_basename + '.set')
     shutil.copy(sourcefile, fname)
     # Rewrite the .set file to correct the trial duration
     with open(fname, 'rb') as file:
@@ -662,7 +460,7 @@ def createAxonaData(fpath, fileNames, speedcut=0, subfolder='AxonaData',UseChans
     with open(fname, 'wb') as file:
         file.writelines(lines)
     # Opens recording folder with Ubuntu file browser
-    subprocess.Popen(['xdg-open', fpath + '/' + subfolder])
+    subprocess.Popen(['xdg-open', AxonaDataPath])
         
         
 class MainWindow(QtGui.QWidget):
@@ -737,19 +535,16 @@ class MainWindow(QtGui.QWidget):
 
 
     def create_data(self):
-        speedcut = self.spinbox.value()
-        createAxonaData(fpath=self.fpath, fileNames=self.fileNames, speedcut=speedcut)
+        createAxonaData(fpath=self.fpath, fileNames=self.fileNames)
         app.instance().quit()
 
 
     def plot_speed(self):
         import pyqtgraph as pg
         tracesPlot = pg.plot()
-        pos_timestamps, speed = get_speed_data(self.fpath + '/' + self.fileNames['posfile'])
+        pos_timestamps, speed = get_speed_data(self.fpath + '/' + 'PosLogComb.csv')
         tracesPlot.plot(pos_timestamps, speed)
-        speedcut = self.spinbox.value()
         pen = pg.mkPen('y', width=3, style=QtCore.Qt.DashLine)
-        tracesPlot.addLine(y=speedcut, pen=pen)
         
 
 # The following is the default ending for a QtGui application script

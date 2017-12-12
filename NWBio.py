@@ -28,16 +28,19 @@ def load_spikes(filename):
     recordingKey = f['acquisition']['timeseries'].keys()[0]
     # Get data file spikes folder keys and sort them into ascending order by tetrode number
     tetrode_nrs = f['acquisition']['timeseries'][recordingKey]['spikes'].keys()
-    tetrode_nrs_int = []
-    for tetrode_nr in tetrode_nrs:
-        tetrode_nrs_int.append(int(tetrode_nr[9:]))
-    keyorder = np.argsort(np.array(tetrode_nrs_int))
-    # Put waveforms and timestamps into a list of dictionaries in correct order
-    data = []
-    for ntet in keyorder:
-        waveforms = f['acquisition']['timeseries'][recordingKey]['spikes'][tetrode_nrs[ntet]]['data']
-        timestamps = f['acquisition']['timeseries'][recordingKey]['spikes'][tetrode_nrs[ntet]]['timestamps']
-        data.append({'waveforms': waveforms, 'timestamps': timestamps})
+    if len(tetrode_nrs) > 0:
+        tetrode_nrs_int = []
+        for tetrode_nr in tetrode_nrs:
+            tetrode_nrs_int.append(int(tetrode_nr[9:]))
+        keyorder = np.argsort(np.array(tetrode_nrs_int))
+        # Put waveforms and timestamps into a list of dictionaries in correct order
+        data = []
+        for ntet in keyorder:
+            waveforms = f['acquisition']['timeseries'][recordingKey]['spikes'][tetrode_nrs[ntet]]['data']
+            timestamps = f['acquisition']['timeseries'][recordingKey]['spikes'][tetrode_nrs[ntet]]['timestamps']
+            data.append({'waveforms': waveforms, 'timestamps': timestamps})
+    else:
+        data = []
 
     return data
 

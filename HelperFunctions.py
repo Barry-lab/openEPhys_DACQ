@@ -71,3 +71,30 @@ def print_progress(iteration, total, prefix='', suffix='', decimals=1, bar_lengt
 #     sleep(0.1)
 #     # Update Progress Bar
 #     print_progress(i + 1, l, prefix = 'Progress:', suffix = 'Complete')
+
+
+def get_position_data_edges(fpath):
+    # Get position data first and last timestamps
+    PosFilePath = os.path.join(fpath,'PosLogComb.csv')
+    pos_csv = np.genfromtxt(PosFilePath, delimiter=',')
+    pos_timestamps = np.array(pos_csv[:,0], dtype=np.float64)
+    pos_edges = [pos_timestamps[0], pos_timestamps[-1]]
+
+    return pos_edges
+
+
+def channels_tetrode(nchan):
+    # Returns the tetrode number this channel is on (all counting starts from 0)
+    nchan = float(nchan + 1)
+    ntet = np.ceil(nchan / 4) - 1
+    ntet = int(ntet)
+
+    return ntet
+
+
+def tetrode_channels(ntet):
+    # Returns the list of channels on this tetrode all counting starts from 0)
+    nchan = ntet * 4
+    nchans = [nchan, nchan + 1, nchan + 2, nchan + 3]
+
+    return nchans
