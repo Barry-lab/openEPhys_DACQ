@@ -39,10 +39,16 @@ with zmq.Context() as context:
                 # Send timestamp to OpenEphysGUI
                 socket.send('Tone: ' + str(n_rpi + 1))
                 dump_response = socket.recv()
-                _ = raw_input()
-                pygame.mixer.music.stop()
-                # Open the valve on the RPi
-                ssh_connection.sendCommand('nohup python openPinchValve.py ' + str(duration) + ' &')
-                # Send timestamp to OpenEphysGUI
-                socket.send('FEEDER: ' + str(n_rpi + 1) + ' duration: ' + str(duration))
-                dump_response = socket.recv()
+                target = str(raw_input())
+                if target != '0':
+                    pygame.mixer.music.stop()
+                    # Open the valve on the RPi
+                    ssh_connection.sendCommand('nohup python openPinchValve.py ' + str(duration) + ' &')
+                    # Send timestamp to OpenEphysGUI
+                    socket.send('FEEDER: ' + str(n_rpi + 1) + ' duration: ' + str(duration))
+                    dump_response = socket.recv()
+                else:
+                    pygame.mixer.music.stop()
+                    # Send timestamp to OpenEphysGUI
+                    socket.send('FEEDER: ' + str(n_rpi + 1) + ' cancelled')
+                    dump_response = socket.recv()

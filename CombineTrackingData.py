@@ -12,6 +12,8 @@ import numpy as np
 import pickle
 import os
 import NWBio
+from itertools import combinations
+from scipy.spatial.distance import euclidean
 
 
 def findPosLogs(rootfolder):
