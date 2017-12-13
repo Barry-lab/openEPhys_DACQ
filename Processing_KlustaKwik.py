@@ -94,12 +94,13 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, badChan=[]):
     return spike_data
 
 
-def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[]):
+def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=False):
     # This function processes NWB data captured spikes with KlustaKwik
     NWBfilePath = os.path.join(OpenEphysDataPath,'experiment_1.nwb')
     # Get thresholded spike data for each tetrode
+    print('Loading spikes')
     spike_data = NWBio.load_spikes(NWBfilePath)
-    if spike_data:
+    if spike_data and not UseRaw:
         # Fully load into memory
         for ntet in range(len(spike_data)):
             spike_data[ntet]['waveforms'] = np.swapaxes(np.array(spike_data[ntet]['waveforms']),1,2)
@@ -112,7 +113,7 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[]):
         for ntet in range(len(spike_data)):
             spike_data[ntet]['waveforms'] = -spike_data[ntet]['waveforms']
     else:
-        print('No spikes recorded. Extracting from raw data.')
+        print('Extracting spikes from raw data.')
         spike_data = extract_spikes_from_raw_data(NWBfilePath, UseChans)
     # Set bad channel waveforms to 0
     if badChan:
@@ -169,7 +170,7 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[]):
     return waveform_data
 
 
-def main(OpenEphysDataPath, UseChans=False):
+def main(OpenEphysDataPath, UseChans=False, UseRaw=False):
     # Assume NWB file has name experiment_1.nwb
     NWBfilePath = os.path.join(OpenEphysDataPath,'experiment_1.nwb')
     # Get bad channels and renumber according to used channels
@@ -185,12 +186,13 @@ def main(OpenEphysDataPath, UseChans=False):
         badChan = list(badChan)
     # Make sure position data is available
     if not os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'PosLogComb.csv')):
+        print('Creating PosLogComb.csv')
         if NWBio.check_if_binary_pos(NWBfilePath):
             _ = NWBio.load_pos(NWBfilePath, savecsv=True, postprocess=True)
         else:
             CombineTrackingData.combdata(NWBfilePath)
     # Extract spikes into a dictonary
-    waveform_data = createWaveformDict(OpenEphysDataPath, UseChans=UseChans, badChan=badChan)
+    waveform_data = createWaveformDict(OpenEphysDataPath, UseChans=UseChans, badChan=badChan, UseRaw=UseRaw)
     # Define Axona data subfolder name based on specific channels if requested
     if UseChans:
         subfolder = 'AxonaData_' + str(UseChans[0] + 1) + '-' + str(UseChans[1])
@@ -208,6 +210,8 @@ if __name__ == '__main__':
                         help='recording data folder')
     parser.add_argument('--chan', type=int, nargs = 2, 
                         help='list the first and last channel to process (counting starts from 1)')
+    parser.add_argument('--useraw', action='store_true',
+                        help='extract spikes from raw continuous data')
     args = parser.parse_args()
     # Form path to recording file
     OpenEphysDataPath = args.path
@@ -219,4 +223,4 @@ if __name__ == '__main__':
     else:
         UseChans = False
     # Run the script
-    main(OpenEphysDataPath, UseChans)
+    main(OpenEphysDataPath, UseChans,args.useraw)

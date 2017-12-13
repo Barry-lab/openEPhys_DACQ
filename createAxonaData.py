@@ -18,27 +18,7 @@ from scipy.spatial.distance import euclidean
 import subprocess
 import NWBio
 import HelperFunctions as hfunct
-
-
-# def getAllFiles(fpath, file_basenames):
-#     # Find .clu and position files and incorporate into dictionary of fileNames
-#     fileNames = {'waveforms': [None] * len(file_basenames), 'clufiles': [None] * len(file_basenames), 
-#                  'posfile': [None]}
-#     for nfile in range(len(file_basenames)):
-#         waveforms_string = file_basenames[nfile] + '.spikes.p'
-#         fileNames['waveforms'][nfile] = waveforms_string
-#     # Get all available clu file names
-#     for nfile in range(len(file_basenames)):
-#         clu_string = file_basenames[nfile] + '.clu.0'
-#         if os.path.exists(fpath + '/' + clu_string):
-#             fileNames['clufiles'][nfile] = clu_string
-#     # Get position data file
-#     posLog_fileName = 'PosLogComb.csv'
-#     if os.path.exists(fpath + '/' + posLog_fileName):
-#         'PosLogComb.csv' = posLog_fileName
-        
-#     return fileNames
-    
+   
     
 def interpolate_waveforms(waves, nr_targetbins=50):
     # Waveforms are interpolated to 50 Hz, assuming the original waveforms were 1000 ms long
@@ -305,23 +285,6 @@ def get_speed_data(posfile):
 
 def createAxonaData(OpenEphysDataPath, waveform_data, subfolder='AxonaData', eegChan=1):
     print('Converting data')
-    # if type(fileNames) is not str:
-    #     # Loads waveforms from Pickle files selected with the openFileDialog
-    #     waveform_data = []
-    #     for filename in fileNames['waveforms']:
-    #         # Load all selected waveform files
-    #         full_filename = fpath + '/' + filename
-    #         with open(full_filename, 'rb') as file:
-    #             tmp = pickle.load(file)
-    #         waveform_data.append(tmp)
-    #     # Extract tetrode numbers and order data by tetrode numbers
-    #     tetrode_numbers_int = []
-    #     for wavedat in waveform_data:
-    #         tetrode_numbers_int.append(wavedat['nr_tetrode'])
-    #     file_order = np.argsort(np.array(tetrode_numbers_int))
-    #     fileNames['waveforms'] = [fileNames['waveforms'][x] for x in file_order]
-    #     waveform_data = [waveform_data[x] for x in file_order]
-    #     fileNames['clufiles'] = [fileNames['clufiles'][x] for x in file_order]
     # Get position data start and end times
     pos_edges = hfunct.get_position_data_edges(OpenEphysDataPath)
     # Convert data to DACQ format
@@ -459,6 +422,10 @@ def createAxonaData(OpenEphysDataPath, waveform_data, subfolder='AxonaData', eeg
     lines[4] = lines[4][:9] + trial_duration + lines[4][9 + len(trial_duration):]
     with open(fname, 'wb') as file:
         file.writelines(lines)
+    # Copy over CombPosLog.csv to AxonaData folder
+    sourcefile = os.path.join(OpenEphysDataPath,'PosLogComb.csv')
+    fname = os.path.join(AxonaDataPath, 'PosLogComb.csv')
+    shutil.copy(sourcefile, fname)
     # Opens recording folder with Ubuntu file browser
     subprocess.Popen(['xdg-open', AxonaDataPath])
         
