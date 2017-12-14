@@ -149,7 +149,7 @@ def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, p
     data = hfunct.butter_lowpass_filter(data, sampling_rate=30000.0, lowpass_frequency=125.0, filt_order=4)
     # Adjust EEG data format and range
     data = data - np.mean(data)
-    data = data / 2000 # Set data range to between 2000 microvolts
+    data = data / 4000 # Set data range to between 2000 microvolts
     data = data * 127
     data[data > 127] = 127
     data[data < -127] = -127
