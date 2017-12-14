@@ -32,7 +32,7 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, badChan=[]):
     hfunct.print_progress(0, goodChan.size, prefix = 'Filtering raw data:', initiation=True)
     for nchan in range(goodChan.size):
         signal_in = np.float64(continuous[goodChan[nchan],:])
-        signal_out = hfunct.Filter(signal_in)
+        signal_out = hfunct.butter_bandpass_filter(signal_in)
         continuous[goodChan[nchan],:] = np.int16(signal_out)
         hfunct.print_progress(nchan + 1, goodChan.size, prefix = 'Filtering raw data:')
     n_tetrodes = continuous.shape[0] / 4

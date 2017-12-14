@@ -16,7 +16,7 @@ def load_continuous(filename):
 
     return data
 
-def load_spikes(filename):
+def load_spikes(filename, tetrode_nrs=None):
     # Outputs a list of dictionaries for each tetrode in correct order where:
     # 'waveforms' is a list of tetrode waveforms in the order of channels
     # Waveforms are passed as HDF5 file objects (handles to memory maps).
@@ -27,18 +27,19 @@ def load_spikes(filename):
     f = h5py.File(filename, 'r')
     recordingKey = f['acquisition']['timeseries'].keys()[0]
     # Get data file spikes folder keys and sort them into ascending order by tetrode number
-    tetrode_nrs = f['acquisition']['timeseries'][recordingKey]['spikes'].keys()
-    if len(tetrode_nrs) > 0:
-        tetrode_nrs_int = []
-        for tetrode_nr in tetrode_nrs:
-            tetrode_nrs_int.append(int(tetrode_nr[9:]))
-        keyorder = np.argsort(np.array(tetrode_nrs_int))
+    tetrode_keys = f['acquisition']['timeseries'][recordingKey]['spikes'].keys()
+    if len(tetrode_keys) > 0:
+        tetrode_keys_int = []
+        for tetrode_key in tetrode_keys:
+            tetrode_keys_int.append(int(tetrode_key[9:]))
+        keyorder = list(np.argsort(np.array(tetrode_keys_int)))
         # Put waveforms and timestamps into a list of dictionaries in correct order
         data = []
         for ntet in keyorder:
-            waveforms = f['acquisition']['timeseries'][recordingKey]['spikes'][tetrode_nrs[ntet]]['data']
-            timestamps = f['acquisition']['timeseries'][recordingKey]['spikes'][tetrode_nrs[ntet]]['timestamps']
-            data.append({'waveforms': waveforms, 'timestamps': timestamps})
+            if not tetrode_nrs or ntet in tetrode_nrs:
+                waveforms = f['acquisition']['timeseries'][recordingKey]['spikes'][tetrode_keys[ntet]]['data']
+                timestamps = f['acquisition']['timeseries'][recordingKey]['spikes'][tetrode_keys[ntet]]['timestamps']
+                data.append({'waveforms': waveforms, 'timestamps': timestamps})
     else:
         data = []
 

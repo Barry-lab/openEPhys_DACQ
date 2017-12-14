@@ -13,8 +13,21 @@ def butter_bandpass(lowcut, highcut, fs, order=5):
     return b, a
 
 
-def Filter(signal_in, sampling_rate=30000.0, highpass_frequency=300.0, lowpass_frequency=6000.0, filt_order=4):
+def butter_bandpass_filter(signal_in, sampling_rate=30000.0, highpass_frequency=300.0, lowpass_frequency=6000.0, filt_order=4):
     b, a = butter_bandpass(highpass_frequency, lowpass_frequency, sampling_rate, order=filt_order)
+    signal_out = lfilter(b, a, signal_in)
+    return signal_out
+
+
+def butter_lowpass(cutoff, fs, order=5):
+    nyq = 0.5 * fs
+    normal_cutoff = cutoff / nyq
+    b, a = butter(order, normal_cutoff, btype='low', analog=False)
+    return b, a
+
+
+def butter_lowpass_filter(signal_in, lowpass_frequency=125.0, sampling_rate=30000.0, filt_order=4):
+    b, a = butter_lowpass(lowpass_frequency, sampling_rate, order=filt_order)
     signal_out = lfilter(b, a, signal_in)
     return signal_out
 

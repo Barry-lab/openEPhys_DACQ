@@ -7,7 +7,7 @@ Created on Mon Jun 18 18:31:31 2012
 import numpy as np
 import os
 import re
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, STDOUT
 
 class Kluster():
     '''
@@ -133,6 +133,8 @@ class Kluster():
         if not os.path.exists(kk_path):
             print kk_path
             raise IOError()
+        # This FNULL stops klustakwik from printing progress reports
+        FNULL = open(os.devnull, 'w')
         kk_proc = Popen(
             kk_path + ' ' +
             self.filename + ' ' +
@@ -153,11 +155,14 @@ class Kluster():
             ' -PenaltyKLogN 0'
             ' -Log 0'
             ' -DistThresh 9.6'
+            ' -Verbose 0'
             ' -UseFeatures ' + ''.join(map(str, self.feature_mask))
-        , shell=True, stdout=PIPE)
+        , shell=True, stdout=FNULL, stderr=STDOUT)
         # Print the output of the KlustaKwik algo
-        for line in kk_proc.stdout:
-            print line.replace('\n', '')
+        kk_proc.communicate()
+        if kk_proc.stderr:
+            for line in kk_proc.stderr:
+                print line.replace('\n', '')
             
         '''
         now read in the .clu.n file that has been created as a result of this

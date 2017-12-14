@@ -134,6 +134,7 @@ def create_DACQ_pos_data(posfile):
     
     return pos_data_dacq
 
+
 def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges, eegChan):
     # Load EEG data of second channel
     data = np.array(NWBio.load_continuous(os.path.join(fpath,'experiment_1.nwb'))['continuous'][:,eegChan])
@@ -143,11 +144,12 @@ def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, p
     idx_outside_pos_data = np.logical_or(idx_outside_pos_data, timestamps > pos_edges[1])
     idx_outside_pos_data = np.where(idx_outside_pos_data)[0]
     data = np.delete(data, idx_outside_pos_data, 0)
+    # Lowpass filter data
+    data = data.astype(np.float64)
+    data = hfunct.butter_lowpass_filter(data, sampling_rate=30000.0, lowpass_frequency=125.0, filt_order=4)
     # Adjust EEG data format and range
-    data = data.astype(np.float32)
-    data = hfunct.Filter(data, sampling_rate=30000, highpass_frequency=1, lowpass_frequency=300)
     data = data - np.mean(data)
-    data = data / 2000 # Set data range to between 1000 microvolts
+    data = data / 2000 # Set data range to between 2000 microvolts
     data = data * 127
     data[data > 127] = 127
     data[data < -127] = -127
