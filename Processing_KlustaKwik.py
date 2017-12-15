@@ -7,7 +7,7 @@ import createAxonaData
 import HelperFunctions as hfunct
 from KlustaKwikWrapper import klustakwik
 
-def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, badChan=[]):
+def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, badChan=[], threshold=50):
     # Load data
     print('Loading NWB data for extracting spikes')
     data = NWBio.load_continuous(NWBfilePath)
@@ -37,14 +37,15 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, badChan=[]):
         hfunct.print_progress(nchan + 1, goodChan.size, prefix = 'Filtering raw data:')
     n_tetrodes = continuous.shape[0] / 4
     # Find threshold crossings on each tetrode
-    threshold_mv = 50 # Threshold in millivolts
+    threshold_int16 = np.int16(np.round(threshold / 0.195))
     spike_data = []
     for ntet in range(n_tetrodes):
         spiketimes = np.array([], dtype=np.int64)
         for nchan in hfunct.tetrode_channels(ntet):
-            tmp = continuous[nchan,:] > np.int16(np.round(threshold_mv / 0.195))
+            tmp = continuous[nchan,:] > threshold_int16
             spiketimes = np.append(spiketimes, np.where(tmp)[0])
-        spiketimes = np.sort(spiketimes)
+        if len(spiketimes) > 0: 
+            spiketimes = np.sort(spiketimes)
         # Remove duplicates based on temporal proximity
         if len(spiketimes) > 0:
             tooclose = np.int64(np.round(30000 * 0.001))
@@ -78,15 +79,15 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, badChan=[]):
             waveforms = continuous[windows_channels,windows]
             waveforms = np.swapaxes(waveforms,0,2)
             # Append data as dictionary to spike_data list
-            spike_data.append({'waveforms': waveforms, 'timestamps': timestamps[spiketimes]})
+            spike_data.append({'waveforms': waveforms, 'timestamps': timestamps[spiketimes.squeeze()]})
         else:
-            spike_data.append({'waveforms': [], 'timestamps': []})
+            spike_data.append({'waveforms': np.zeros((0,31,4), dtype=np.int16), 'timestamps': np.zeros((0), dtype=np.float64)})
 
     return spike_data
 
 
-def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=False, noise_cut_off=500):
-    # This function processes NWB data captured spikes with KlustaKwik
+def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=False, noise_cut_off=500, threshold=50):
+    # This function processes NWB data captured spikes with KlustaKwik and organises data into dictonaries
     NWBfilePath = os.path.join(OpenEphysDataPath,'experiment_1.nwb')
     # Get thresholded spike data for each tetrode
     print('Loading spikes')
@@ -103,9 +104,19 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=Fal
         # Invert waveforms
         for ntet in range(len(spike_data)):
             spike_data[ntet]['waveforms'] = -spike_data[ntet]['waveforms']
+        # Remove spikes below threshold
+        threshold_int16 = np.int16(np.round(threshold / 0.195))
+        for ntet in range(len(spike_data)):
+            idx_keep = np.any(np.any(np.abs(spike_data[ntet]['waveforms']) > threshold_int16, axis=2), axis=1)
+            spike_data[ntet]['timestamps'] = spike_data[ntet]['timestamps'][idx_keep]
+            spike_data[ntet]['waveforms'] = spike_data[ntet]['waveforms'][idx_keep,:,:]
+            if np.sum(idx_keep) < idx_keep.size:
+                percentage_above_threshold = np.sum(idx_keep) / float(idx_keep.size) * 100
+                print('{:.1f}% of spikes on tetrode {} were above threshold'.format(percentage_above_threshold, ntet + 1))
     else:
         print('Extracting spikes from raw data.')
-        spike_data = extract_spikes_from_raw_data(NWBfilePath, UseChans)
+        spike_data = extract_spikes_from_raw_data(NWBfilePath, UseChans, badChan, 
+                                                  threshold)
     # Set bad channel waveforms to 0
     if badChan:
         for nchan in badChan:
@@ -124,11 +135,16 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=Fal
             idx_delete = np.any(np.any(np.abs(spike_data[ntet]['waveforms']) > noise_cut_off, axis=2), axis=1)
             spike_data[ntet]['timestamps'] = spike_data[ntet]['timestamps'][np.logical_not(idx_delete)]
             spike_data[ntet]['waveforms'] = spike_data[ntet]['waveforms'][np.logical_not(idx_delete),:,:]
-            percentage_too_big = np.sum(idx_delete) / float(idx_delete.size) * 100
-            print('{:.1f}% of spikes removed on tetrode {}'.format(percentage_too_big,ntet+1))
+            if np.sum(idx_delete) > 0:
+                percentage_too_big = np.sum(idx_delete) / float(idx_delete.size) * 100
+                print('{:.1f}% of spikes removed on tetrode {}'.format(percentage_too_big,ntet+1))
     # Arrange data into a list of dictionaries
     waveform_data = []
     for ntet in range(len(spike_data)):
+        # If there are no spikes on a tetrode, create one zero spike 1 second after first position sample
+        if len(spike_data[ntet]['timestamps']) == 0:
+            spike_data[ntet]['timestamps'] = np.array([pos_edges[0] + 1], dtype=np.float64)
+            spike_data[ntet]['waveforms'] = np.zeros((1,31,4), dtype=np.int16)
         nchan = hfunct.tetrode_channels(ntet)[0]
         if UseChans:
             nchan = nchan + UseChans[0]
@@ -141,29 +157,35 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=Fal
         waveform_data.append(tmp)
     # Apply Klustakwik on each tetrode
     for ntet in range(len(spike_data)):
-        print('Applying KlustaKwik on tetrode ' + str(ntet + 1) + ' of ' + str(len(spike_data)))
-        waves = np.swapaxes(spike_data[ntet]['waveforms'],1,2)
-        features2use = ['PC1', 'PC2', 'PC3', 'Amp', 'Vt']
-        d = {0: features2use}
-        klustakwik(waves, d, os.path.join(OpenEphysDataPath, 'KlustaKwikTemp'))
-        # Read in cluster IDs
-        cluFileName = os.path.join(OpenEphysDataPath, 'KlustaKwikTemp.clu.0')
-        with open(cluFileName, 'rb') as file:
-            lines = file.readlines()
-        clusterIDs = []
-        for line in lines:
-            clusterIDs.append(int(line.rstrip()))
-        clusterIDs = clusterIDs[1:] # Drop the first value which is number of spikes
-        waveform_data[ntet]['clusterIDs'] = np.array(clusterIDs, dtype=np.int16)
-        # Delete all files aside created by KlustaKwik
-        extensions = ['.fet.0','.fmask.0','.initialclusters.2.clu.0','.temp.clu.0','_0.cut','.clu.0']
-        for extension in extensions:
-            os.remove(os.path.join(OpenEphysDataPath, 'KlustaKwikTemp' + extension))
+        if len(waveform_data[ntet]['spiketimes']) > 1:
+            print('Applying KlustaKwik on tetrode ' + str(ntet + 1) + ' of ' + str(len(waveform_data)))
+            waves = np.swapaxes(waveform_data[ntet]['waveforms'],1,2)
+            features2use = ['PC1', 'PC2', 'PC3', 'Amp', 'Vt']
+            d = {0: features2use}
+            klustakwik(waves, d, os.path.join(OpenEphysDataPath, 'KlustaKwikTemp'))
+            # Read in cluster IDs
+            cluFileName = os.path.join(OpenEphysDataPath, 'KlustaKwikTemp.clu.0')
+            with open(cluFileName, 'rb') as file:
+                lines = file.readlines()
+            clusterIDs = []
+            for line in lines:
+                clusterIDs.append(int(line.rstrip()))
+            clusterIDs = clusterIDs[1:] # Drop the first value which is number of spikes
+            waveform_data[ntet]['clusterIDs'] = np.array(clusterIDs, dtype=np.int16)
+            # Delete all files aside created by KlustaKwik
+            extensions = ['.fet.0','.fmask.0','.initialclusters.2.clu.0','.temp.clu.0','_0.cut','.clu.0']
+            for extension in extensions:
+                tmp_file_path = os.path.join(OpenEphysDataPath, 'KlustaKwikTemp' + extension)
+                if os.path.exists(tmp_file_path):
+                    os.remove(tmp_file_path)
+        else:
+            print('No spikes on tetrode ' + str(ntet + 1))
+            waveform_data[ntet]['clusterIDs'] = np.ones(waveform_data[ntet]['spiketimes'].shape, dtype=np.int16)
 
     return waveform_data
 
 
-def main(OpenEphysDataPath, UseChans=False, UseRaw=False, noise_cut_off=500):
+def main(OpenEphysDataPath, UseChans=False, UseRaw=False, noise_cut_off=500, threshold=50):
     # Assume NWB file has name experiment_1.nwb
     NWBfilePath = os.path.join(OpenEphysDataPath,'experiment_1.nwb')
     # Get bad channels and renumber according to used channels
@@ -186,7 +208,8 @@ def main(OpenEphysDataPath, UseChans=False, UseRaw=False, noise_cut_off=500):
             CombineTrackingData.combdata(NWBfilePath)
     # Extract spikes into a dictonary
     waveform_data = createWaveformDict(OpenEphysDataPath, UseChans=UseChans, 
-                                       badChan=badChan, UseRaw=UseRaw, noise_cut_off=noise_cut_off)
+                                       badChan=badChan, UseRaw=UseRaw, 
+                                       noise_cut_off=noise_cut_off, threshold=threshold)
     # Define Axona data subfolder name based on specific channels if requested
     if UseChans:
         subfolder = 'AxonaData_' + str(UseChans[0] + 1) + '-' + str(UseChans[1])
@@ -206,6 +229,8 @@ if __name__ == '__main__':
                         help='list the first and last channel to process (counting starts from 1)')
     parser.add_argument('--noisecut', type=int, nargs = 1, 
                         help='enter 0 to skip or value in microvolts for noise cutoff (default is 500)')
+    parser.add_argument('--threshold', type=int, nargs = 1, 
+                        help='enter spike threshold in microvolts (default is 50)')
     parser.add_argument('--useraw', action='store_true',
                         help='extract spikes from raw continuous data')
     args = parser.parse_args()
@@ -222,5 +247,9 @@ if __name__ == '__main__':
         noise_cut_off = args.noisecut[0]
     else:
         noise_cut_off = 500
+    if args.threshold:
+        threshold = args.threshold[0]
+    else:
+        threshold = 50
     # Run the script
-    main(OpenEphysDataPath, UseChans, args.useraw, noise_cut_off)
+    main(OpenEphysDataPath, UseChans, args.useraw, noise_cut_off, threshold)
