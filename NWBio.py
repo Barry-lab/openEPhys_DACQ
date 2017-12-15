@@ -40,6 +40,13 @@ def load_spikes(filename, tetrode_nrs=None):
                 waveforms = f['acquisition']['timeseries'][recordingKey]['spikes'][tetrode_keys[ntet]]['data']
                 timestamps = f['acquisition']['timeseries'][recordingKey]['spikes'][tetrode_keys[ntet]]['timestamps']
                 data.append({'waveforms': waveforms, 'timestamps': timestamps})
+        # Check if any tetrodes had spikes. If not, set data to be empty.
+        tetrodes_with_spikes = 0
+        for ntet in range(len(data)):
+            if len(data[ntet]['timestamps']) > 0:
+                tetrodes_with_spikes += 1
+        if tetrodes_with_spikes == 0:
+            data = []
     else:
         data = []
 

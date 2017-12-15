@@ -38,7 +38,6 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, badChan=[]):
     n_tetrodes = continuous.shape[0] / 4
     # Find threshold crossings on each tetrode
     threshold_mv = 50 # Threshold in millivolts
-    noise_threshold_mv = 1000 # in millivolts
     spike_data = []
     for ntet in range(n_tetrodes):
         spiketimes = np.array([], dtype=np.int64)
@@ -78,14 +77,6 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, badChan=[]):
             windows_channels = np.repeat(windows_channels[:,:,np.newaxis], windows.shape[2], axis=2)
             waveforms = continuous[windows_channels,windows]
             waveforms = np.swapaxes(waveforms,0,2)
-            # Remove spikes that have waveforms with ridiculous amplitudes
-            noise_threshold = np.int16(noise_threshold_mv / 0.195)
-            idx_delete = np.any(np.abs(waveforms) > noise_threshold, axis=1)
-            percentage_too_big = np.sum(idx_delete) / float(idx_delete.size) * 100
-            if percentage_too_big > 5:
-                print('Caution! ' + str(percentage_too_big) + ' percent of waveforms in noise level')
-            waveforms = np.delete(waveforms, np.where(idx_delete)[0], axis=0)
-            spiketimes = np.delete(spiketimes, np.where(idx_delete)[0])
             # Append data as dictionary to spike_data list
             spike_data.append({'waveforms': waveforms, 'timestamps': timestamps[spiketimes]})
         else:
@@ -94,21 +85,21 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, badChan=[]):
     return spike_data
 
 
-def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=False):
+def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=False, noise_cut_off=500):
     # This function processes NWB data captured spikes with KlustaKwik
     NWBfilePath = os.path.join(OpenEphysDataPath,'experiment_1.nwb')
     # Get thresholded spike data for each tetrode
     print('Loading spikes')
     spike_data = NWBio.load_spikes(NWBfilePath)
     if spike_data and not UseRaw:
-        # Fully load into memory
-        for ntet in range(len(spike_data)):
-            spike_data[ntet]['waveforms'] = np.swapaxes(np.array(spike_data[ntet]['waveforms']),1,2)
         # Limit analysis to specific tetrodes if channels are specified
         if UseChans:
             firstTet = hfunct.channels_tetrode(UseChans[0])
             lastTet = hfunct.channels_tetrode(UseChans[1] - 1)
             spike_data = spike_data[firstTet:lastTet + 1]
+        # Fully load into memory
+        for ntet in range(len(spike_data)):
+            spike_data[ntet]['waveforms'] = np.swapaxes(np.array(spike_data[ntet]['waveforms']),1,2)
         # Invert waveforms
         for ntet in range(len(spike_data)):
             spike_data[ntet]['waveforms'] = -spike_data[ntet]['waveforms']
@@ -127,12 +118,14 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=Fal
         spike_data[ntet]['timestamps'] = spike_data[ntet]['timestamps'][np.logical_not(idx_delete)]
         spike_data[ntet]['waveforms'] = spike_data[ntet]['waveforms'][np.logical_not(idx_delete),:,:]
     # Remove spikes where maximum amplitude exceedes limit
-    noise_cut_off = 500 # noise cutoff in microvolts
-    noise_cut_off = np.int16(np.round(noise_cut_off / 0.195))
-    for ntet in range(len(spike_data)):
-        idx_delete = np.any(np.any(np.abs(spike_data[ntet]['waveforms']) > noise_cut_off, axis=2), axis=1)
-        spike_data[ntet]['timestamps'] = spike_data[ntet]['timestamps'][np.logical_not(idx_delete)]
-        spike_data[ntet]['waveforms'] = spike_data[ntet]['waveforms'][np.logical_not(idx_delete),:,:]
+    if noise_cut_off and (noise_cut_off != 0):
+        noise_cut_off = np.int16(np.round(noise_cut_off / 0.195))
+        for ntet in range(len(spike_data)):
+            idx_delete = np.any(np.any(np.abs(spike_data[ntet]['waveforms']) > noise_cut_off, axis=2), axis=1)
+            spike_data[ntet]['timestamps'] = spike_data[ntet]['timestamps'][np.logical_not(idx_delete)]
+            spike_data[ntet]['waveforms'] = spike_data[ntet]['waveforms'][np.logical_not(idx_delete),:,:]
+            percentage_too_big = np.sum(idx_delete) / float(idx_delete.size) * 100
+            print('{:.1f}% of spikes removed on tetrode {}'.format(percentage_too_big,ntet+1))
     # Arrange data into a list of dictionaries
     waveform_data = []
     for ntet in range(len(spike_data)):
@@ -170,7 +163,7 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=Fal
     return waveform_data
 
 
-def main(OpenEphysDataPath, UseChans=False, UseRaw=False):
+def main(OpenEphysDataPath, UseChans=False, UseRaw=False, noise_cut_off=500):
     # Assume NWB file has name experiment_1.nwb
     NWBfilePath = os.path.join(OpenEphysDataPath,'experiment_1.nwb')
     # Get bad channels and renumber according to used channels
@@ -192,7 +185,8 @@ def main(OpenEphysDataPath, UseChans=False, UseRaw=False):
         else:
             CombineTrackingData.combdata(NWBfilePath)
     # Extract spikes into a dictonary
-    waveform_data = createWaveformDict(OpenEphysDataPath, UseChans=UseChans, badChan=badChan, UseRaw=UseRaw)
+    waveform_data = createWaveformDict(OpenEphysDataPath, UseChans=UseChans, 
+                                       badChan=badChan, UseRaw=UseRaw, noise_cut_off=noise_cut_off)
     # Define Axona data subfolder name based on specific channels if requested
     if UseChans:
         subfolder = 'AxonaData_' + str(UseChans[0] + 1) + '-' + str(UseChans[1])
@@ -210,6 +204,8 @@ if __name__ == '__main__':
                         help='recording data folder')
     parser.add_argument('--chan', type=int, nargs = 2, 
                         help='list the first and last channel to process (counting starts from 1)')
+    parser.add_argument('--noisecut', type=int, nargs = 1, 
+                        help='enter 0 to skip or value in microvolts for noise cutoff (default is 500)')
     parser.add_argument('--useraw', action='store_true',
                         help='extract spikes from raw continuous data')
     args = parser.parse_args()
@@ -222,5 +218,9 @@ if __name__ == '__main__':
             raise ValueError('Channel range must cover full tetrodes')
     else:
         UseChans = False
+    if args.noisecut:
+        noise_cut_off = args.noisecut[0]
+    else:
+        noise_cut_off = 500
     # Run the script
-    main(OpenEphysDataPath, UseChans,args.useraw)
+    main(OpenEphysDataPath, UseChans, args.useraw, noise_cut_off)
