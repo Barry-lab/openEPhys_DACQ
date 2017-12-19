@@ -6,6 +6,8 @@ import NWBio
 import createAxonaData
 import HelperFunctions as hfunct
 from KlustaKwikWrapper import klustakwik
+import tempfile
+import shutil
 
 def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, badChan=[], threshold=50):
     # Load data
@@ -159,12 +161,15 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=Fal
     for ntet in range(len(spike_data)):
         if len(waveform_data[ntet]['spiketimes']) > 1:
             print('Applying KlustaKwik on tetrode ' + str(ntet + 1) + ' of ' + str(len(waveform_data)))
+            # Create temporary processing folder
+            KlustaKwikProcessingFolder = tempfile.mkdtemp('KlustaKwikProcessing')
+            # Prepare input to KlustaKwik
             waves = np.swapaxes(waveform_data[ntet]['waveforms'],1,2)
             features2use = ['PC1', 'PC2', 'PC3', 'Amp', 'Vt']
             d = {0: features2use}
-            klustakwik(waves, d, os.path.join(OpenEphysDataPath, 'KlustaKwikTemp'))
+            klustakwik(waves, d, os.path.join(KlustaKwikProcessingFolder, 'KlustaKwikTemp'))
             # Read in cluster IDs
-            cluFileName = os.path.join(OpenEphysDataPath, 'KlustaKwikTemp.clu.0')
+            cluFileName = os.path.join(KlustaKwikProcessingFolder, 'KlustaKwikTemp.clu.0')
             with open(cluFileName, 'rb') as file:
                 lines = file.readlines()
             clusterIDs = []
@@ -172,12 +177,8 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=Fal
                 clusterIDs.append(int(line.rstrip()))
             clusterIDs = clusterIDs[1:] # Drop the first value which is number of spikes
             waveform_data[ntet]['clusterIDs'] = np.array(clusterIDs, dtype=np.int16)
-            # Delete all files aside created by KlustaKwik
-            extensions = ['.fet.0','.fmask.0','.initialclusters.2.clu.0','.temp.clu.0','_0.cut','.clu.0']
-            for extension in extensions:
-                tmp_file_path = os.path.join(OpenEphysDataPath, 'KlustaKwikTemp' + extension)
-                if os.path.exists(tmp_file_path):
-                    os.remove(tmp_file_path)
+            # Delete KlustaKwik temporary processing folder
+            shutil.rmtree(KlustaKwikProcessingFolder)
         else:
             print('No spikes on tetrode ' + str(ntet + 1))
             waveform_data[ntet]['clusterIDs'] = np.ones(waveform_data[ntet]['spiketimes'].shape, dtype=np.int16)
