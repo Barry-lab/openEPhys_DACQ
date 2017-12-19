@@ -59,7 +59,7 @@ class PosPlot(object):
             time.sleep(0.1)
             self.lastCombPos = self.RPIpos.lastCombPos # Retrieve latest position data
         # Start constant update of the plot
-        plotUpdateInterval = 500 # This sets the plot update interval in milliseconds
+        plotUpdateInterval = 250 # This sets the plot update interval in milliseconds
         self.cumulativePlot_timer = QTimer()
         self.cumulativePlot_timer.timeout.connect(lambda:self.updatePlot())
         self.cumulativePlot_timer.start(plotUpdateInterval)
@@ -85,20 +85,26 @@ class PosPlot(object):
             item.setData(np.array([self.lastCombPos[:2], newCombPos[:2]]))
             item.setPen(pg.mkPen('w'))
             self.plotWidget.addItem(item)
+            # Draw arrow data for two LEDs available
+            self.plotWidget.removeItem(self.arrow) # Remove previous arrow
+            if self.RPiSettings['LEDmode'] == 'double' and not np.any(np.isnan(newCombPos[2:])):
+                # Compute arrow angle with to align the line connecting the points
+                head_angle = angle_clockwise(newCombPos[:2], newCombPos[2:]) + 90 + self.RPiSettings['LED_angle']
+                # Draw the arro with the head/tip at the location of primary LED
+                self.arrow = pg.ArrowItem(pos=(newCombPos[0], newCombPos[1]), 
+                                          angle=head_angle, headLen=30, tailLen=15, 
+                                          headWidth=30, tailWidth=5, 
+                                          brush=pg.mkBrush('g'), pen=pg.mkPen('c', width=3))
+                self.plotWidget.addItem(self.arrow)
+            else:
+                # If no 2nd LED data, draw arrow based on movement direction
+                head_angle = angle_clockwise(self.lastCombPos[:2], newCombPos[:2]) + 90 + self.RPiSettings['LED_angle']
+                self.arrow = pg.ArrowItem(pos=(newCombPos[0], newCombPos[1]), 
+                                          angle=head_angle, headLen=30, tailLen=15, 
+                                          headWidth=30, tailWidth=5, 
+                                          brush=pg.mkBrush('b'), pen=pg.mkPen('c', width=3))
+                self.plotWidget.addItem(self.arrow)                    
             self.lastCombPos = newCombPos
-            # Draw arrow if data for two LEDs available
-            if self.RPiSettings['LEDmode'] == 'double':
-                self.plotWidget.removeItem(self.arrow) # Remove previous arrow
-                if np.any(np.isnan(newCombPos[2:])):
-                    # If no 2nd LED data, draw arrow to outside of the position -20,-20 outside the arena boundary
-                    self.arrow = pg.ArrowItem(pos=(-10,-10), angle=45, headLen=30, tailLen=15,headWidth=30,tailWidth=5)
-                    self.plotWidget.addItem(self.arrow)
-                else:
-                    # Compute arrow angle with to align the line connecting the points
-                    head_angle = angle_clockwise(newCombPos[:2], newCombPos[2:]) + 90 + self.RPiSettings['LED_angle']
-                    # Draw the arro with the head/tip at the location of primary LED
-                    self.arrow = pg.ArrowItem(pos=(newCombPos[0], newCombPos[1]), angle=head_angle, headLen=30, tailLen=15,headWidth=30,tailWidth=5)
-                    self.plotWidget.addItem(self.arrow)
 
     def close(self):
         # Close the update loop, RPi Position tracking loop and application window
