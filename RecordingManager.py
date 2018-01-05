@@ -418,7 +418,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             RPiSettings = pickle.load(file)
         from CumulativePosPlot import PosPlot
         self.PosPlot = PosPlot(RPiSettings=RPiSettings)
-        self.PosPlot.window.show()
 
 
 # The following is the default ending for a QtGui application script

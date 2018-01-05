@@ -126,20 +126,20 @@ class onlineTrackingData(object):
         if not self.SynthData:
             # Initialize RPi position data listening, unless synthetic data requested
             self.setupSocket() # Set up listening of position data
+            threading.Thread(target=self.updatePosDatas).start()
             # Continue once data is received from each RPi
-            with self.posDatasLock:
-                RPi_data_available = np.zeros(len(self.posDatas), dtype=bool)
+            RPi_data_available = np.zeros(len(self.RPiSettings['use_RPi_nrs']), dtype=bool)
             while not np.all(RPi_data_available):
-                nRPi = self.updateLinedata()
-                if nRPi is not None:
-                    RPi_data_available[nRPi] = True
-            print('All RPi data available, starting updatePosData')
+                for n_rpi in range(len(self.RPiSettings['use_RPi_nrs'])):
+                    if self.posDatas[n_rpi]:
+                        RPi_data_available[n_rpi] = True
+            print('All RPi data available, starting updatePosDatas')
         else:
             # Start generating movement data if synthetic data requested
             threading.Thread(target=self.generatePosData, args=[self.RPiSettings['use_RPi_nrs'][0]]).start()
             time.sleep(0.5)
+            self.setupSocket() # Set up listening of position data
         # Start updating position data and storing it in history
-        threading.Thread(target=self.updatePosData).start()
         threading.Thread(target=self.updateCombPosHistory).start()
 
     def setupSocket(self):
@@ -189,7 +189,7 @@ class onlineTrackingData(object):
                 time_of_last_datapoint = time.time()
             time.sleep(0.005)
 
-    def updatePosData(self):
+    def updatePosDatas(self):
         # Updates self.posDatas when any new position data is received
         # This loop continues until self.KeepGettingData is set False. This is done by self.close function
         while self.KeepGettingData:
@@ -302,7 +302,7 @@ class onlineTrackingData(object):
                 time.sleep(0.005)
 
     def close(self):
-        # Closes the updatePosData thread and ZeroMQ socket for position listening
+        # Closes the updatePosDatas thread and ZeroMQ socket for position listening
         self.KeepGettingData = False
         time.sleep(0.25) # Allow the thread to run one last time before closing the socket to avoid error
         if not self.SynthData:
