@@ -53,8 +53,8 @@ def check_if_running(RPiSettings):
         except:
             message = 'no message'
         if message != 'no message': # If a message was received
-            linedata = json.loads(message) # Convert from string to original format
-            RPi_number = linedata[0] # Identify RPi number that sent this message
+            posData = json.loads(message) # Convert from string to original format
+            RPi_number = posData[0] # Identify RPi number that sent this message
             # Find that RPi number in the list and set it to True, as in sending messages
             RPiIDX = [i for i,x in enumerate(RPiSettings['use_RPi_nrs']) if x == RPi_number]
             ReceivingPos[RPiIDX[0]] = True
@@ -117,30 +117,27 @@ class onlineTrackingData(object):
         self.HistogramParameters = HistogramParameters
         self.KeepGettingData = True # Set True for endless while loop of updating latest data
         self.RPiSettings = RPiSettings
-        self.lineDatas = [None] * len(self.RPiSettings['use_RPi_nrs'])
+        self.posDatas = [None] * len(self.RPiSettings['use_RPi_nrs'])
         self.combPosHistory = []
         # Initialize Locks to avoid errors
-        self.histogramLock = threading.Lock()
-        self.lineDatasLock = threading.Lock()
-        self.lastCombPosLock = threading.Lock()
+        self.posDatasLock = threading.Lock()
         self.combPosHistoryLock = threading.Lock()
+        self.histogramLock = threading.Lock()
         if not self.SynthData:
             # Initialize RPi position data listening, unless synthetic data requested
             self.setupSocket() # Set up listening of position data
             # Continue once data is received from each RPi
-            with self.lineDatasLock:
-                RPi_data_available = np.zeros(len(self.lineDatas), dtype=bool)
+            with self.posDatasLock:
+                RPi_data_available = np.zeros(len(self.posDatas), dtype=bool)
             while not np.all(RPi_data_available):
                 nRPi = self.updateLinedata()
                 if nRPi is not None:
                     RPi_data_available[nRPi] = True
             print('All RPi data available, starting updatePosData')
-            self.combineCurrentLineData()
         else:
             # Start generating movement data if synthetic data requested
             threading.Thread(target=self.generatePosData, args=[self.RPiSettings['use_RPi_nrs'][0]]).start()
             time.sleep(0.5)
-            self.combineCurrentLineData()
         # Start updating position data and storing it in history
         threading.Thread(target=self.updatePosData).start()
         threading.Thread(target=self.updateCombPosHistory).start()
@@ -156,7 +153,7 @@ class onlineTrackingData(object):
             self.sockSUB.connect(tmp)
 
     def generatePosData(self, n_rpi):
-        # Generates continuous position data and updates self.lineDatas for a single RPi
+        # Generates continuous position data and updates self.posDatas for a single RPi
         data_rate = 0.01 # Seconds per datapoint
         nRPi = [i for i,x in enumerate(self.RPiSettings['use_RPi_nrs']) if x == n_rpi][0]
         oldPos = [0.0, 0.0]
@@ -182,70 +179,55 @@ class onlineTrackingData(object):
                     posShift = np.array([np.sin(newDirection) * current_speed, np.cos(newDirection) * current_speed])
                     newPos = np.array(currPos) + posShift
                     if time_since_last_datapoint > 0.05:
-                        with self.lineDatasLock:
-                            self.lineDatas[nRPi] = [n_rpi, None, None, None, None, None, None, None, None]
+                        with self.posDatasLock:
+                            self.posDatas[nRPi] = [n_rpi, None, None, None, None, None, None, None, None]
                         lastDirection = (np.random.random() - 0.5) * 2 * np.pi
                 oldPos = currPos
                 currPos = newPos
-                with self.lineDatasLock:
-                    self.lineDatas[nRPi] = [n_rpi, None, None, newPos[0], newPos[1], None, None, None, None]
+                with self.posDatasLock:
+                    self.posDatas[nRPi] = [n_rpi, None, None, newPos[0], newPos[1], None, None, None, None]
                 time_of_last_datapoint = time.time()
             time.sleep(0.005)
 
-    def updateLinedata(self):
-        if not self.SynthData:
-            # Wait for position data update
-            try:
-                message = self.sockSUB.recv() # Receive message
-            except:
-                message = 'no message'
-            if message != 'no message':
-                linedata = json.loads(message) # Convert from string to original format
-                # Identify the sender of this message as RPi position in list
-                n_rpi = linedata[0]
-                nRPi = [i for i,x in enumerate(self.RPiSettings['use_RPi_nrs']) if x == n_rpi]
-                nRPi = nRPi[0]
-                # Update linedata for the correct position in the list
-                with self.lineDatasLock:
-                    self.lineDatas[nRPi] = linedata
-                dataReceived = True
-            else:
-                dataReceived = False
-                lineDatas = []
-        else:
-            # If synthetic data generated, wait a moment before continuing
-            time.sleep(0.02)
-            dataReceived = True
-
-        return dataReceived
-
-    def combineCurrentLineData(self):
-        with self.lineDatasLock:
-            lineDatas = self.lineDatas
-        # Combine lineDatas from cameras to position data
-        if len(lineDatas) > 1:
-            # Convert lineDatas for use in combineCamerasData function
-            cameraPos = []
-            for linedata in lineDatas:
-                cameraPos.append(np.array(linedata[3:7], dtype=np.float32))
-            # Combine data from cameras
-            with self.lastCombPosLock:
-                previousCombPos = self.lastCombPos
-            lastCombPos = CombineTrackingData.combineCamerasData(cameraPos, previousCombPos, self.RPiSettings)
-        else:
-            # If only a single camera is used, extract position data from linedata into numpy array
-            lastCombPos = np.array(lineDatas[0][3:7], dtype=np.float32)
-        # Update shared variable
-        with self.lastCombPosLock:
-            self.lastCombPos = lastCombPos
-
     def updatePosData(self):
-        # Updates self.lastCombPos when any new position data is received
+        # Updates self.posDatas when any new position data is received
         # This loop continues until self.KeepGettingData is set False. This is done by self.close function
         while self.KeepGettingData:
-            dataReceived = self.updateLinedata() # This waits until new position data is received
-            if dataReceived:
-                threading.Thread(target=self.combineCurrentLineData).start()
+            if not self.SynthData:
+                # Wait for position data update
+                try:
+                    message = self.sockSUB.recv() # Receive message
+                except:
+                    message = 'no message'
+                if message != 'no message':
+                    posData = json.loads(message) # Convert from string to original format
+                    # Identify the sender of this message as RPi position in list
+                    n_rpi = posData[0]
+                    nRPi = [i for i,x in enumerate(self.RPiSettings['use_RPi_nrs']) if x == n_rpi]
+                    nRPi = nRPi[0]
+                    # Update posData for the correct position in the list
+                    with self.posDatasLock:
+                        self.posDatas[nRPi] = posData
+            else:
+                # If synthetic data generated, wait a moment before continuing
+                time.sleep(0.02)
+
+    def combineCurrentLineData(self, previousCombPos):
+        with self.posDatasLock:
+            posDatas = self.posDatas
+        # Combine posDatas from cameras to position data
+        if len(posDatas) > 1:
+            # Convert posDatas for use in combineCamerasData function
+            cameraPos = []
+            for posData in posDatas:
+                cameraPos.append(np.array(posData[3:7], dtype=np.float32))
+            # Combine data from cameras
+            lastCombPos = CombineTrackingData.combineCamerasData(cameraPos, previousCombPos, self.RPiSettings)
+        else:
+            # If only a single camera is used, extract position data from posData into numpy array
+            lastCombPos = np.array(posDatas[0][3:7], dtype=np.float32)
+
+        return lastCombPos
 
     def initializePosHistogram(self, HistogramParameters, update=False):
         # Initialise histogram edgesrameters
@@ -285,18 +267,18 @@ class onlineTrackingData(object):
         # Initialize histogram
         self.initializePosHistogram(self.HistogramParameters)
         # Check data is available before proceeding
-        with self.lastCombPosLock:
-            with self.combPosHistoryLock:
-                self.combPosHistory.append(self.lastCombPos)
+        with self.combPosHistoryLock:
+            lastCombPos = self.combineCurrentLineData(None)
+            self.combPosHistory.append(lastCombPos)
         time_of_last_datapoint = time.time()
         # Update the data at specific interval
         while self.KeepGettingData:
             time_since_last_datapoint = time.time() - time_of_last_datapoint
             if time_since_last_datapoint > self.update_interval:
                 # If enough time has passed since last update, append to combPosHistory list
-                with self.lastCombPosLock:
-                    with self.combPosHistoryLock:
-                        self.combPosHistory.append(self.lastCombPos)
+                with self.combPosHistoryLock:
+                    lastCombPos = self.combineCurrentLineData(self.combPosHistory[-1])
+                    self.combPosHistory.append(lastCombPos)
                 time_of_last_datapoint = time.time()
                 if len(self.combPosHistory) > one_second_steps:
                     # Compute distance from one second in the past if enough data available
@@ -322,6 +304,6 @@ class onlineTrackingData(object):
     def close(self):
         # Closes the updatePosData thread and ZeroMQ socket for position listening
         self.KeepGettingData = False
-        time.sleep(0.5) # Allow the thread to run one last time before closing the socket to avoid error
+        time.sleep(0.25) # Allow the thread to run one last time before closing the socket to avoid error
         if not self.SynthData:
             self.sockSUB.close()

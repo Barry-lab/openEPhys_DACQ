@@ -371,16 +371,16 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
 
         def update_position_text(self):
             # Updates the data in the textboxes
-            with self.RPIpos.lineDatasLock:
-                lineDatas = self.RPIpos.lineDatas # Retrieve latest position data
+            with self.RPIpos.posDatasLock:
+                posDatas = self.RPIpos.posDatas # Retrieve latest position data
             # Get Position values of all RPis and update text boxes
-            positions = np.zeros((len(lineDatas), 2), dtype=np.float32)
-            for nRPi in range(len(lineDatas)):
-                if lineDatas[nRPi]:
-                    positions[nRPi, 0] = lineDatas[nRPi][3]
-                    positions[nRPi, 1] = lineDatas[nRPi][4]
+            positions = np.zeros((len(posDatas), 2), dtype=np.float32)
+            for nRPi in range(len(posDatas)):
+                if posDatas[nRPi]:
+                    positions[nRPi, 0] = posDatas[nRPi][3]
+                    positions[nRPi, 1] = posDatas[nRPi][4]
                     # Update the text boxes for this RPi
-                    self.pt_RPinr[nRPi].setText('%d' % lineDatas[nRPi][0])
+                    self.pt_RPinr[nRPi].setText('%d' % posDatas[nRPi][0])
                     self.pt_posX[nRPi].setText('%.1f' % positions[nRPi, 0])
                     self.pt_posY[nRPi].setText('%.1f' % positions[nRPi, 1])
                 else:
@@ -388,7 +388,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
                     positions[nRPi, 1] = None
             # Compute error from mean of all RPis and insert in text box
             if not np.any(np.isnan(positions)):
-                for nRPi in range(len(lineDatas)):
+                for nRPi in range(len(posDatas)):
                     distance = euclidean(np.mean(positions, axis=0), positions[nRPi, :])
                     self.pt_poserror[nRPi].setText('%.1f' % distance)
 
@@ -453,7 +453,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         # Set up constant update of position fields with QTimer
         self.tracking_timer = QTimer()
         self.tracking_timer.timeout.connect(lambda:update_position_text(self))
-        self.tracking_timer.start(30)
+        self.tracking_timer.start(33)
         # Open up the dialog window
         self.test_tracking_win.exec_()
         # When dialog window closes, stop the RPis
