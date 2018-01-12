@@ -92,7 +92,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Set GUI environment
         self.scripts_root = os.path.expanduser('~') + '/openEPhys_DACQ'
         self.pt_root_folder.setPlainText(os.path.expanduser('~') + '/RecordingData')
-        self.file_server_path = '/media/QNAP/SanderT/room418'
+        self.file_server_path = '/media/QNAP/sanderT/room418'
         self.RecGUI_dataFolder = str(self.pt_root_folder.toPlainText()) + '/RecordingManagerData'
         # Prepare GUI variables
         self.original_stylesheets = {}
