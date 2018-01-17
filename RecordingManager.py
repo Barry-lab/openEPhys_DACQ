@@ -15,6 +15,7 @@ import subprocess
 from shutil import copyfile
 import csv
 import time
+from CumulativePosPlot import PosPlot
 
 def show_message(message, message_more=None):
     # This function is used to display a message in a separate window
@@ -285,6 +286,13 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         rpiI.RPiStarter(self.RPiSettings)
         if not rpiI.check_if_running(self.RPiSettings): # Only continue if receiving position signal
             show_message('ERROR: RPis not sending data to Recording PC!')
+        # Initialize onlineTrackingData class
+        histogramParameters = {'margins': 5, # histogram data margins in centimeters
+                               'binSize': 2, # histogram binSize in centimeters
+                               'speedLimit': 10}# centimeters of distance in last second to be included
+        SynthData = True
+        self.RPIpos = rpiI.onlineTrackingData(self.RPiSettings, HistogramParameters=histogramParameters, SynthData=SynthData)
+        # Change Start button style
         self.original_stylesheets['pb_start_rec'] = self.pb_start_rec.styleSheet()# Keep copy of default button color
         self.pb_start_rec.setStyleSheet('background-color: red') # Change button to red
         # Disable and Enable Start and Stop buttons, respectively
@@ -296,7 +304,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_open_rec_folder.setEnabled(False)
         # Start cumulative plot
         if self.rb_posPlot_yes.isChecked():
-            self.cumulativePlot()
+            self.PosPlot = PosPlot(self.RPiSettings, self.RPIpos, histogramParameters)
 
     def stop_rec(self):
         # Change start button colors

@@ -21,7 +21,7 @@ ssh_connection.sendCommand('pkill python') # Ensure any past processes have clos
 pygame.mixer.init()
 pygame.mixer.music.load('audiocheck.net_sin_2800Hz_-3dBFS_10s.wav')
 # Set up ZMQ to send timestamps to OpenEphysGUI
-ip = '127.0.0.1'
+ip = 'localhost'
 port = 5556
 url = "tcp://%s:%d" % (ip, port)
 with zmq.Context() as context:

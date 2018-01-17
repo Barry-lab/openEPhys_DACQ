@@ -32,16 +32,12 @@ def angle_clockwise(p1, p2, invertedY=True):
     return angle_deg
 
 class PosPlot(object):
-    def __init__(self, RPiSettings):
+    def __init__(self, RPiSettings, RPIPos, HistogramParameters):
         self.RPiSettings = RPiSettings
-        self.histogramParameters = {'margins': 5, # histogram data margins in centimeters
-                                    'binSize': 2, # histogram binSize in centimeters
-                                    'speedLimit': 10}# centimeters of distance in last second to be included
-        SynthData = False
-        # Initialize local position data monitoring
-        self.RPIpos = rpiI.onlineTrackingData(self.RPiSettings, HistogramParameters=self.histogramParameters, SynthData=SynthData)
-        position_data_availability = 0
-        while len(self.RPIpos.combPosHistory) < 1: # Only continue once first position data is obtained
+        self.RPIpos = RPIPos
+        self.histogramParameters = HistogramParameters
+        # Only continue once first position data is obtained
+        while len(self.RPIpos.combPosHistory) < 1:
             time.sleep(0.1)
         # Initialize plot window
         self.PlotGraphicsWidget = pg.GraphicsLayoutWidget()
