@@ -16,6 +16,7 @@ from shutil import copyfile
 import csv
 import time
 from CumulativePosPlot import PosPlot
+from OpenEphysInterface import SendOpenEphysSingleMessage
 
 def show_message(message, message_more=None):
     # This function is used to display a message in a separate window
@@ -85,8 +86,27 @@ def save_badChan_to_file(badChanString, targetFolder):
         for chan_nr_str in badChanStringList:
             file.write(chan_nr_str + os.linesep)
 
+def check_if_nwb_recording(path):
+    # Find NWB file in the path
+    dirfiles = os.listdir(path)
+    dataFilePath = False
+    for fname in dirfiles:
+        if fname.endswith('.nwb'):
+            dataFilePath = os.path.join(path, fname)
+    if dataFilePath:
+        # Check for file size at intervals to see if it is changing in size. Stop checking if constant.
+        lastsize = os.stat(dataFilePath).st_size
+        time.sleep(0.1)
+        currsize = os.stat(dataFilePath).st_size
+        file_recording = lastsize != currsize
+    else:
+        file_recording = False
+
+    return file_recording
+
 
 class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
+
     def __init__(self, parent=None):
         super(RecordingManager, self).__init__(parent=parent)
         self.setupUi(self)
@@ -101,13 +121,9 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_load_last.clicked.connect(lambda:self.load_last_settings())
         self.pb_load.clicked.connect(lambda:self.load_settings())
         self.pb_root_folder.clicked.connect(lambda:self.root_folder_browse())
-        self.pb_make_date_folder.clicked.connect(lambda:self.make_date_folder())
-        self.pb_auto_rec_folder.clicked.connect(lambda:self.auto_rec_folder())
-        self.pb_manual_rec_folder.clicked.connect(lambda:self.manual_rec_folder())
         self.pb_cam_set.clicked.connect(lambda:self.camera_settings())
         self.pb_start_rec.clicked.connect(lambda:self.start_rec())
         self.pb_stop_rec.clicked.connect(lambda:self.stop_rec())
-        self.pb_cluster.clicked.connect(lambda:self.cluster_data())
         self.pb_process_data.clicked.connect(lambda:self.process_data())
         self.pb_sync_server.clicked.connect(lambda:self.sync_server())
         self.pb_open_rec_folder.clicked.connect(lambda:self.open_rec_folder())
@@ -117,6 +133,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         if os.path.isdir(self.TEMPfolder):
             shutil.rmtree(self.TEMPfolder)
         os.mkdir(self.TEMPfolder)
+        self.pb_start_rec.setEnabled(True)
 
     def openFolderDialog(self, caption='Select folder'):
         # Pops up a GUI to select a folder
@@ -131,17 +148,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             selected_folder = 'No folder selected'
 
         return selected_folder
-
-    def make_date_folder(self):
-        dir_animal = str(self.pt_root_folder.toPlainText()) + '/' + str(self.pt_animal.toPlainText())
-        if len(str(self.pt_animal.toPlainText())) > 0 and os.path.isdir(dir_animal):
-            date_dir = dir_animal + '/' + datetime.now().strftime('%d-%m-%y')
-            if not os.path.exists(date_dir):
-                os.makedirs(date_dir)
-            else:
-                show_message('ERROR! Date Folder already exists for ' + str(self.pt_animal.toPlainText()))
-        else:
-            show_message('ERROR! Animal folder not found.')
 
     def load_settings(self, folder_name=None):
         if not folder_name: # Get user to select settings to load if not given
@@ -198,36 +204,28 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Pops up a new window to select a folder and then inserts the path to the text box
         self.pt_root_folder.setPlainText(self.openFolderDialog())
 
-    def rec_time_update(self):
-        # Updates the time shown in the textbox to system local time.
-        # The format of the time string matches that of OpenEphysGUI for recording folder names.
-        self.pt_rec_time.setPlainText(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
-
-    def auto_rec_folder(self):
+    def get_date_folder_path(self):
         # Get directory names
         root_folder = str(self.pt_root_folder.toPlainText())
         animal = str(self.pt_animal.toPlainText())
-        # Check if directory exists for this animal on the current day
-        dir_date = root_folder + '/' + animal + '/' + datetime.now().strftime('%d-%m-%y')
-        if os.path.isdir(dir_date):
+        date_folder_path = os.path.join(root_folder,animal,datetime.now().strftime('%d-%m-%y'))
+
+        return date_folder_path
+
+    def get_recording_folder_path(self, date_folder_path):
+        if os.path.isdir(date_folder_path):
             # Get the name of the folder with latest date time as name
-            latest_folder = findLatestTimeFolder(dir_date)
+            latest_folder = findLatestTimeFolder(date_folder_path)
             foldertime = datetime.strptime(latest_folder, '%Y-%m-%d_%H-%M-%S')
             # If the folder time is less than 60 seconds behind rec_time_dt
-            if (datetime.now() - foldertime).total_seconds() < 60:
-                self.pt_rec_folder.setPlainText(dir_date + '/' + latest_folder)
-                # Enable Start button
-                self.pb_start_rec.setEnabled(True)
+            if (datetime.now() - foldertime).total_seconds() < 5:
+                recording_folder = os.path.join(date_folder_path, latest_folder)
             else: # Display error in text box
-                self.pt_rec_folder.setPlainText('No Rec in last 60s')
+                recording_folder = False
         else: # Display error in text box
-            self.pt_rec_folder.setPlainText('No animal dir for this date')
+            recording_folder = False
 
-    def manual_rec_folder(self):
-        # Pops up a new window for selecting a folder where the recording takes place
-        self.pt_rec_folder.setPlainText(self.openFolderDialog())
-        # Enable Start button
-        self.pb_start_rec.setEnabled(True)
+        return recording_folder
 
     def camera_settings(self):
         # Opens up a new window for Camera Settings
@@ -278,7 +276,18 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         return RecGUI_Settings
 
     def start_rec(self):
-        # Start the recording process
+        # Start Open Ephys GUI recording
+        date_folder_path = self.get_date_folder_path()
+        command = 'StartRecord RecDir=' + date_folder_path
+        SendOpenEphysSingleMessage(command)
+        # Make sure OpenEphys is recording
+        recording_folder = self.get_recording_folder_path(date_folder_path)
+        while not recording_folder:
+            time.sleep(0.1)
+            recording_folder = self.get_recording_folder_path(date_folder_path)
+        self.pt_rec_folder.setPlainText(recording_folder)
+        while not check_if_nwb_recording(recording_folder):
+            time.sleep(0.5)
         # Load RPi Settings
         with open(self.TEMPfolder + '/RPi/RPiSettings.p','rb') as file:
             self.RPiSettings = pickle.load(file)
@@ -290,15 +299,13 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         histogramParameters = {'margins': 5, # histogram data margins in centimeters
                                'binSize': 2, # histogram binSize in centimeters
                                'speedLimit': 10}# centimeters of distance in last second to be included
-        SynthData = True
-        self.RPIpos = rpiI.onlineTrackingData(self.RPiSettings, HistogramParameters=histogramParameters, SynthData=SynthData)
+        self.RPIpos = rpiI.onlineTrackingData(self.RPiSettings, HistogramParameters=histogramParameters, SynthData=False)
         # Change Start button style
         self.original_stylesheets['pb_start_rec'] = self.pb_start_rec.styleSheet()# Keep copy of default button color
         self.pb_start_rec.setStyleSheet('background-color: red') # Change button to red
         # Disable and Enable Start and Stop buttons, respectively
         self.pb_start_rec.setEnabled(False)
         self.pb_stop_rec.setEnabled(True)
-        self.pb_cluster.setEnabled(False)
         self.pb_process_data.setEnabled(False)
         self.pb_sync_server.setEnabled(False)
         self.pb_open_rec_folder.setEnabled(False)
@@ -337,42 +344,28 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             pickle.dump(RecGUI_Settings, file)
         with open(str(self.pt_rec_folder.toPlainText()) + '/RecGUI_Settings.p', 'wb') as file:
             pickle.dump(RecGUI_Settings, file)
+        # Save badChan list from text box to a file in the recording folder
+        if len(str(self.pt_badChan.toPlainText())) > 0:
+            save_badChan_to_file(str(self.pt_badChan.toPlainText()), str(self.pt_rec_folder.toPlainText()))
         # Change button color back to default
         self.pb_stop_rec.setStyleSheet(self.original_stylesheets['pb_stop_rec'])
         # Stop cumulative plot
         if self.rb_posPlot_yes.isChecked() and hasattr(self, 'PosPlot'):
             self.PosPlot.close()
-        # Wait until OpenEphysGUI Recording has been stopped by checking if file size is still growing
-        # Find any recording file in the recording folder
-        dirfiles = os.listdir(str(self.pt_rec_folder.toPlainText()))
-        listpos = 0
-        while not dirfiles[listpos].endswith('.nwb'):
-            listpos += 1
-        dataFileName = str(self.pt_rec_folder.toPlainText()) + '/' + dirfiles[listpos]
-        # Save badChan list from text box to a file in the recording folder
-        if len(str(self.pt_badChan.toPlainText())) > 0:
-            save_badChan_to_file(str(self.pt_badChan.toPlainText()), str(self.pt_rec_folder.toPlainText()))
-        # Check for file size at intervals to see if it is changing in size. Stop checking if constant.
-        lastsize = os.stat(dataFileName).st_size
-        time.sleep(0.5)
-        currsize = os.stat(dataFileName).st_size
-        while lastsize != currsize:
-            print('Waiting for OpenEphysGUI Recording to stop...')
-            lastsize = currsize
-            time.sleep(1)
-            currsize = os.stat(dataFileName).st_size
-        print('OpenEphysGUI Recording stopped.')
+        # Stop Open Ephys Recording
+        while check_if_nwb_recording(str(self.pt_rec_folder.toPlainText())):
+            SendOpenEphysSingleMessage('StopRecord')
+            time.sleep(0.1)
         # Disable Stop button and Enable other buttons
+        self.pb_start_rec.setEnabled(True)
         self.pb_stop_rec.setEnabled(False)
-        self.pb_cluster.setEnabled(True)
         self.pb_process_data.setEnabled(True)
         self.pb_sync_server.setEnabled(True)
         self.pb_open_rec_folder.setEnabled(True)
 
-    def cluster_data(self):
+    def process_data(self):
         # Applies KlustaKwik tetrode-wise to recorded data
         self.pb_start_rec.setEnabled(False)
-        self.pb_cluster.setEnabled(False)
         self.pb_process_data.setEnabled(False)
         self.pb_sync_server.setEnabled(False)
         self.pb_open_rec_folder.setEnabled(False)
@@ -380,23 +373,9 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         import Processing_KlustaKwik
         Processing_KlustaKwik.main(str(self.pt_rec_folder.toPlainText()))
         self.pb_start_rec.setEnabled(True)
-        self.pb_cluster.setEnabled(True)
         self.pb_process_data.setEnabled(True)
         self.pb_sync_server.setEnabled(True)
         self.pb_open_rec_folder.setEnabled(True)
-
-    def process_data(self):
-        # Find RAW data file. It is required as input by DetectWaveformsGUI.
-        dirfiles = os.listdir(str(self.pt_rec_folder.toPlainText()))
-        listpos = 0
-        while not dirfiles[listpos].endswith('.kwd'):
-            listpos += 1
-        selected_file = str(self.pt_rec_folder.toPlainText()) + '/' + dirfiles[listpos]
-        # Start DetectWaveforms GUI and load the just recorded RAW data
-        from DetectWaveforms import DetectWaveforms
-        self.DetectWaveformsGUI = DetectWaveforms(self)
-        self.DetectWaveformsGUI.show()
-        self.DetectWaveformsGUI.findFilesAndCreateStructure(selected_file)
 
     def sync_server(self):
         # Change button colors
@@ -419,13 +398,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
     def open_rec_folder(self):
         # Opens recording folder with Ubuntu file browser
         subprocess.Popen(['xdg-open', str(self.pt_rec_folder.toPlainText())])
-
-    def cumulativePlot(self):
-        # Loads another script that shows the current tracked position and position history
-        with open(self.TEMPfolder + '/RPi/RPiSettings.p','rb') as file:
-            RPiSettings = pickle.load(file)
-        from CumulativePosPlot import PosPlot
-        self.PosPlot = PosPlot(RPiSettings=RPiSettings)
 
 
 # The following is the default ending for a QtGui application script
