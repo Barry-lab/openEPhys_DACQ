@@ -133,7 +133,7 @@ class onlineTrackingData(object):
                 for n_rpi in range(len(self.RPiSettings['use_RPi_nrs'])):
                     if self.posDatas[n_rpi]:
                         RPi_data_available[n_rpi] = True
-            print('All RPi data available, starting updatePosDatas')
+            print('All RPi data available')
         else:
             # Start generating movement data if synthetic data requested
             threading.Thread(target=self.generatePosData, args=[self.RPiSettings['use_RPi_nrs'][0]]).start()
@@ -171,7 +171,7 @@ class onlineTrackingData(object):
                     # Allow circular continuity
                     newDirection = np.arctan2(np.sin(newDirection), np.cos(newDirection))
                     # Compute new position based on speed and angle
-                    current_speed = np.random.normal(loc=50.0, scale=30.0) * time_since_last_datapoint
+                    current_speed = np.random.normal(loc=20.0, scale=20.0) * time_since_last_datapoint
                     if current_speed < 0.1:
                         current_speed = 0.1
                     if time_since_last_datapoint > 0.05:

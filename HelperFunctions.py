@@ -111,3 +111,14 @@ def tetrode_channels(ntet):
     nchans = [nchan, nchan + 1, nchan + 2, nchan + 3]
 
     return nchans
+
+
+def import_subdirectory_module(subdirectory, module_name):
+    path = list(sys.path)
+    sys.path.insert(0, subdirectory)
+    try:
+        module = __import__(module_name)
+    finally:
+        sys.path[:] = path
+
+    return module

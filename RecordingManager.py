@@ -16,7 +16,9 @@ from shutil import copyfile
 import csv
 import time
 from CumulativePosPlot import PosPlot
-from OpenEphysInterface import SendOpenEphysSingleMessage
+from OpenEphysInterface import SendOpenEphysSingleMessage, SubscribeToOpenEphys
+import HelperFunctions as hfunct
+import threading
 
 def show_message(message, message_more=None):
     # This function is used to display a message in a separate window
@@ -275,10 +277,16 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
 
         return RecGUI_Settings
 
+    def start_task(self, TaskSettings, TaskIO):
+        print('Starting Task')
+        TaskModule = hfunct.import_subdirectory_module('Tasks', TaskSettings['name'])
+        self.current_task = TaskModule.Core(TaskSettings, TaskIO)
+        self.current_task.run()
+
     def start_rec(self):
         # Start Open Ephys GUI recording
         date_folder_path = self.get_date_folder_path()
-        command = 'StartRecord RecDir=' + date_folder_path
+        command = 'StartRecord RecDir=' + date_folder_path + ' CreateNewDir=1'
         SendOpenEphysSingleMessage(command)
         # Make sure OpenEphys is recording
         recording_folder = self.get_recording_folder_path(date_folder_path)
@@ -288,6 +296,9 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pt_rec_folder.setPlainText(recording_folder)
         while not check_if_nwb_recording(recording_folder):
             time.sleep(0.5)
+        # Initialize listening to Open Ephys GUI messages
+        self.OEmessages = SubscribeToOpenEphys(verbose=False)
+        self.OEmessages.connect()
         # Load RPi Settings
         with open(self.TEMPfolder + '/RPi/RPiSettings.p','rb') as file:
             self.RPiSettings = pickle.load(file)
@@ -312,12 +323,32 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Start cumulative plot
         if self.rb_posPlot_yes.isChecked():
             self.PosPlot = PosPlot(self.RPiSettings, self.RPIpos, histogramParameters)
+        # Start task
+        if self.rb_task_yes.isChecked():
+            TaskSettings = {'name': 'Foraging_Pellets'}
+            # Put input streams in a default dictionary that can be used by task as needed
+            TaskIO = {'RPIPos': self.RPIpos, 
+                      'OEmessages': self.OEmessages, 
+                      'MessageToOE': SendOpenEphysSingleMessage}
+            threading.Thread(target=self.start_task, args=(TaskSettings, TaskIO)).start()
+
 
     def stop_rec(self):
         # Change start button colors
         self.pb_start_rec.setStyleSheet(self.original_stylesheets['pb_start_rec']) # Start button to default
         self.original_stylesheets['pb_stop_rec'] = self.pb_stop_rec.styleSheet() # Save Stop button default
         self.pb_stop_rec.setStyleSheet('background-color: red') # Change Stop button to Red
+        # Stop Task
+        if self.rb_task_yes.isChecked():
+            self.current_task.stop()
+        # Stop reading Open Ephys messages
+        self.OEmessages.disconnect()
+        # Stop cumulative plot
+        if self.rb_posPlot_yes.isChecked() and hasattr(self, 'PosPlot'):
+            self.PosPlot.close()
+        # Stop updating online tracking data
+        self.RPIpos.close()
+        # Stop RPis
         rpiI.StopRPi(self.RPiSettings)
         # Copy over RPi tracking folder to Recording Folder on PC using rsync
         user = self.RPiSettings['username']
@@ -349,9 +380,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             save_badChan_to_file(str(self.pt_badChan.toPlainText()), str(self.pt_rec_folder.toPlainText()))
         # Change button color back to default
         self.pb_stop_rec.setStyleSheet(self.original_stylesheets['pb_stop_rec'])
-        # Stop cumulative plot
-        if self.rb_posPlot_yes.isChecked() and hasattr(self, 'PosPlot'):
-            self.PosPlot.close()
         # Stop Open Ephys Recording
         while check_if_nwb_recording(str(self.pt_rec_folder.toPlainText())):
             SendOpenEphysSingleMessage('StopRecord')

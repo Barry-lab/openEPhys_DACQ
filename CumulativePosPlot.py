@@ -36,9 +36,12 @@ class PosPlot(object):
         self.RPiSettings = RPiSettings
         self.RPIpos = RPIPos
         self.histogramParameters = HistogramParameters
-        # Only continue once first position data is obtained
-        while len(self.RPIpos.combPosHistory) < 1:
+        # Only continue once first two position datas are obtained
+        combPosHistory = []
+        while len(combPosHistory) < 2:
             time.sleep(0.1)
+            with self.RPIpos.combPosHistoryLock:
+                combPosHistory = self.RPIpos.combPosHistory
         # Initialize plot window
         self.PlotGraphicsWidget = pg.GraphicsLayoutWidget()
         XandYratio = np.float32(self.RPiSettings['arena_size'][0]) / np.float32(self.RPiSettings['arena_size'][1])
@@ -235,7 +238,6 @@ class PosPlot(object):
     def close(self):
         # Close the update loop, RPi Position tracking loop and application window
         self.cumulativePlot_timer.stop()
-        self.RPIpos.close()
         self.mainWindow.close()
         print('Stopped Cumulative Position Plot.')
 
