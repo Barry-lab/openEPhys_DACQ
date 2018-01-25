@@ -49,7 +49,9 @@ class Core(object):
         self.TaskSettings['PelletRewardMinSeparation'] = 10
         self.TaskSettings['PelletRewardMaxSeparation'] = 90
         self.TaskSettings['UsePelletFeeders'] = [2]
-        self.TaskSettings['InitPellets'] = 5
+        self.TaskSettings['UseMilkFeeders'] = [1]
+        self.TaskSettings['InitPelletsReward'] = 5
+        self.TaskSettings['InitMilkReward'] = 2.0
         self.TaskSettings['PelletRewardSize'] = 1
         # Pre-compute variables
         self.one_second_steps = int(np.round(1 / self.TaskIO['RPIPos'].update_interval))
@@ -58,11 +60,18 @@ class Core(object):
         self.ttlTimes = []
         self.ttlTimesLock = threading.Lock()
         self.TaskIO['OEmessages'].add_callback(self.append_ttl_pulses)
-        # Prepare rewards
+        # Prepare Pellet rewards
         self.PelletReward = []
         for n_Pfeeder in self.TaskSettings['UsePelletFeeders']:
             self.PelletReward.append(Rewards.Pellets(n_Pfeeder))
-        self.lastPelletReward = time.time()
+        self.lastPelletReward = 0
+        self.pelletRewardsOn = True
+        # Prepare Milk rewards
+        self.MilkReward = []
+        for n_Mfeeder in self.TaskSettings['UseMilkFeeders']:
+            self.MilkReward.append(Rewards.Milk(n_Mfeeder))
+        self.lastMilkReward = 0
+        self.milkRewardsOn = True
         # Ensure that Position data is available
         posHistory = []
         while len(posHistory) < self.distance_steps:
@@ -105,10 +114,19 @@ class Core(object):
         OEmessage = 'PelletReward ' + actor + ' ' + str(n_Pfeeder + 1) + ' ' + str(n_pellets)
         self.TaskIO['MessageToOE'](OEmessage)
 
+    def depositMilk(self, n_Mfeeder, actor='GameEvent', quantity=1.0):
+        # Release Pellet
+        feeder_list_idx = self.TaskSettings['UseMilkFeeders'].index(n_Mfeeder)
+        self.MilkReward[feeder_list_idx].release(quantity)
+        self.lastMilkReward = time.time()
+        # Send message to Open Ephys GUI
+        OEmessage = 'MilkReward ' + actor + ' ' + str(n_Mfeeder + 1) + ' ' + str(quantity)
+        self.TaskIO['MessageToOE'](OEmessage)
+
     def initRewards(self):
-        if 'InitPellets' in self.TaskSettings.keys() and self.TaskSettings['InitPellets'] > 0:
-            minPellets = int(np.floor(float(self.TaskSettings['InitPellets']) / len(self.TaskSettings['UsePelletFeeders'])))
-            extraPellets = np.mod(self.TaskSettings['InitPellets'], len(self.TaskSettings['UsePelletFeeders']))
+        if 'InitPelletsReward' in self.TaskSettings.keys() and self.TaskSettings['InitPelletsReward'] > 0:
+            minPellets = int(np.floor(float(self.TaskSettings['InitPelletsReward']) / len(self.TaskSettings['UsePelletFeeders'])))
+            extraPellets = np.mod(self.TaskSettings['InitPelletsReward'], len(self.TaskSettings['UsePelletFeeders']))
             n_pellets_Feeders = minPellets * np.ones(len(self.TaskSettings['UsePelletFeeders']), dtype=np.int16)
             n_pellets_Feeders[:extraPellets] = n_pellets_Feeders[:extraPellets] + 1
             for feeder_list_idx, n_pellets in enumerate(n_pellets_Feeders):
@@ -269,7 +287,6 @@ class Core(object):
                                                     'xlen': xlen, 
                                                     'ybottompos': ybottompos, 
                                                     'ymaxlen': ymaxlen}})
-        random.seed(None)
 
         return progress_bars
 
@@ -362,7 +379,7 @@ class Core(object):
         # Initialize interactive elements
         self.screen_size = (600, 300)
         self.screen_margins = 10
-        self.buttonProportions = 0.4
+        self.buttonProportions = 0.2
         self.font = pygame.font.SysFont('Arial', 10)
         self.textColor = (255, 255, 255)
         self.screen = pygame.display.set_mode(self.screen_size)
