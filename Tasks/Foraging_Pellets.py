@@ -32,7 +32,6 @@ def compute_distance_travelled(posHistory, smoothing):
         distances.append(distance)
     total_distance = np.sum(np.array(distances))
 
-
     return total_distance
 
 class Core(object):
@@ -49,6 +48,8 @@ class Core(object):
         self.TaskSettings['Chewing_Target'] = 10
         self.TaskSettings['RewardMinSeparation'] = 10
         self.TaskSettings['UseFeeders'] = [2]
+        self.TaskSettings['InitPellets'] = 5
+        self.TaskSettings['PelletRewardSize'] = 1
         # Pre-compute variables
         self.one_second_steps = int(np.round(1 / self.TaskIO['RPIPos'].update_interval))
         self.distance_steps = int(np.round(self.TaskSettings['LastTravelTime'])) * self.one_second_steps
@@ -97,11 +98,21 @@ class Core(object):
     def releasePellet(self, n_Pfeeder, actor='GameEvent', n_pellets=1):
         # Release Pellet
         feeder_list_idx = self.TaskSettings['UseFeeders'].index(n_Pfeeder)
-        self.PelletReward[feeder_list_idx].release(1)
+        self.PelletReward[feeder_list_idx].release(n_pellets)
         self.lastPelletReward = time.time()
         # Send message to Open Ephys GUI
         OEmessage = 'PelletReward ' + actor + ' ' + str(n_Pfeeder + 1) + ' ' + str(n_pellets)
         self.TaskIO['MessageToOE'](OEmessage)
+
+    def initRewards(self):
+        if 'InitPellets' in self.TaskSettings.keys() and self.TaskSettings['InitPellets'] > 0:
+            minPellets = int(np.floor(float(self.TaskSettings['InitPellets']) / len(self.TaskSettings['UseFeeders'])))
+            extraPellets = np.mod(self.TaskSettings['InitPellets'], len(self.TaskSettings['UseFeeders']))
+            n_pellets_Feeders = minPellets * np.ones(len(self.TaskSettings['UseFeeders']), dtype=np.int16)
+            n_pellets_Feeders[:extraPellets] = n_pellets_Feeders[:extraPellets] + 1
+            for feeder_list_idx, n_pellets in enumerate(n_pellets_Feeders):
+                n_Pfeeder = self.TaskSettings['UseFeeders'][feeder_list_idx]
+                self.releasePellet(n_Pfeeder, actor='GameInit', n_pellets=n_pellets)
 
     def buttonGameOnOff_callback(self):
         # Switch Game On and Off
@@ -328,7 +339,7 @@ class Core(object):
 
     def main_loop(self):
         # Initialize interactive elements
-        self.screen_size = (400, 300)
+        self.screen_size = (600, 300)
         self.screen_margins = 10
         self.buttonProportions = 0.4
         self.font = pygame.font.SysFont('Arial', 10)
@@ -336,8 +347,11 @@ class Core(object):
         self.screen = pygame.display.set_mode(self.screen_size)
         self.buttons = self.createButtons()
         self.progress_bars = self.create_progress_bars()
+        # Signal game start to Open Ephys GUI
+        OEmessage = 'Game On: ' + str(self.gameOn)
+        self.TaskIO['MessageToOE'](OEmessage)
+        self.initRewards()
         lastUpdatedState = 0
-        TaskOn = True
         while self.mainLoopActive:
             self.clock.tick(self.responseRate)
             for event in pygame.event.get():
@@ -363,7 +377,7 @@ class Core(object):
                                             subbutton['callback'](*subbutton['callargs'])
                                         else:
                                             subbutton['callback']()
-            if TaskOn and lastUpdatedState < (time.time() - 1 / float(self.gameRate)):
+            if lastUpdatedState < (time.time() - 1 / float(self.gameRate)):
                 lastUpdatedState = time.time()
                 # TO DO! Make sure somehow that this thread has finished before updating
                 # Show an error of thread is running too slowly
