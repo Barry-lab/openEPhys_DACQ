@@ -239,7 +239,9 @@ Instructions are also on the `Open Ephys website <https://open-ephys.atlassian.n
 Install Dependencies
 --------------------
 
-First grab the current stable version of **plugin-GUI** from `OpenEphys github <https://github.com/open-ephys>_` and run the required scripts in the Resources folder:
+OpenEphys plugin-GUI is being developed rapidly, and the latest developmental version maybe better than the used at the time of writing this ReadMe. `This page <https://github.com/open-ephys/plugin-GUI/commit/8d9b08e424f743649ff01e0660a4add817e1f4f1>`_ is for the specific commit used and on which the instructions are based. The instructions should mostly work for later releases as well.
+
+To install the latest version of **plugin-GUI** from `OpenEphys github <https://github.com/open-ephys>`_ run the required scripts in your home folder:
 
 .. code-block:: none
 
@@ -247,8 +249,8 @@ First grab the current stable version of **plugin-GUI** from `OpenEphys github <
 	cd Programs
 	mkdir OpenEphysGUI
 	cd OpenEphysGUI
-	git clone https://github.com/open-ephys/plugin-GUI
-	# For developmental version use: git clone -b development --single-branch https://github.com/open-ephys/plugin-GUI
+	# The below line should give you the latest developmental version
+	git clone -b development --single-branch https://github.com/open-ephys/plugin-GUI
 	cd plugin-GUI/Resources/Scripts
 	sudo ./install_linux_dependencies.sh
 	sudo cp 40-open-ephys.rules /etc/udev/rules.d
@@ -259,7 +261,7 @@ Install More dependencies with terminal commands:
 
 .. code-block:: none
 
-	sudo apt-get install libtool pkg-config build-essential autoconf automake
+	sudo apt-get install libtool pkg-config build-essential autoconf automake libudev0:i386
 
 Install libsodium with terminal commands:
 
@@ -280,6 +282,14 @@ Install More dependencies with terminal commands:
 	sudo apt-get install libxrandr-dev # To fix a compilation error in JUCE library
 	sudo apt-get install libzmq3-dev # ZeroMQ version 3 is required
 	sudo apt-get install libhdf5-serial-dev # HDF version 1.8.12, or higher, is required
+
+Add the necessary `third-party plugins <https://open-ephys.atlassian.net/wiki/spaces/OEW/pages/47841283/Third-party+plugin+repositories>`_ to the ``~/Programs/OpenEphysGUI/plugin-GUI/Source/Plugins`` folder. The necessary plugins are:
+
+* `VirtualRef <https://github.com/arnefmeyer/VirtualReferencePlugin>`_ (`commit used <https://github.com/arnefmeyer/VirtualReferencePlugin/commit/a8e20cd1df8e0d8003a757391293c75a1089ad7a>`_)
+* `CrossingDetector <https://github.com/tne-lab/crossing-detector>`_ (`commit used <https://github.com/tne-lab/crossing-detector/commit/b402d5785d502c2b1cd7ff394d2c93377500cdc6>`_)
+* `EventPublisher <https://github.com/arnefmeyer/EventPublisherPlugin>`_ (`commit used <https://github.com/arnefmeyer/EventPublisherPlugin/commit/7d195c9ed3ca75e34885ce3e3e7fdf90a7f24dfa>`_)
+
+Each of the plugins github code contains a folder with the plugin name, e.g. ``VirtualRef`` and files with ``.cpp`` and ``.h`` endings in that folder. Copy that entire folder to plugin-GUI Plugin directory ``~/Programs/OpenEphysGUI/plugin-GUI/Source/Plugins``. As you compile the Open Ephys GUI Plugins following instructions below, these plugins will also be compiled and made accessible in the GUI.
 
 Install Open Ephys
 ------------------
@@ -359,6 +369,7 @@ Install the necessary packages with the following terminal commands:
 
 	sudo apt-get install python-qt4 python-dev python-pip python-paramiko python-scipy python-pygame
 	sudo pip install pyzmq # This assumes you have already installed ZMQ for OpenEphys GUI
+	pip install h5py # This assumes you have already installed libhdf5-serial-dev for OpenEphys GUI
 
 Additionally install ``pyqtgraph`` latest version from their website (Here 0.10.0-1 was used). Go to their `website <www.pyqtgraph.org>`_ and download the latest version of Debian/Ubuntu package. Install it by right click on the downloaded *.deb* file -> Open With -> GDebi Package Installer. Click on Install button.
 
@@ -410,4 +421,4 @@ Run this terminal command to make the file executable
 
 You can now run RecordingManager.py by opening the terminal (by default it starts in your home folder) and typing in command ``./RecordingManager``.
 
-Now the Recording PC is ready to use the Python scripts for managing Open Ephys recordings and Raspberry Pis, if the networking and Raspberry Pis are set up as well. To do this, follow this guide : :ref:`raspberryPiSetup`.
+Now the Recording PC is ready to use the Python scripts for managing Open Ephys recordings and Raspberry Pis, if the networking and Raspberry Pis are set up as well. To do this, follow this guide : :ref:`trackingRPiSetup`.

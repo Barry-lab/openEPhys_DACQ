@@ -170,7 +170,7 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>550</width>
+               <width>528</width>
                <height>693</height>
               </rect>
              </property>
@@ -1343,7 +1343,7 @@
                     <bool>false</bool>
                    </property>
                    <property name="plainText">
-                    <string>10.0.0.10</string>
+                    <string>192.168.0.10</string>
                    </property>
                   </widget>
                  </item>
@@ -1649,13 +1649,13 @@
            <widget class="QScrollArea" name="scrollArea_2">
             <property name="minimumSize">
              <size>
-              <width>250</width>
+              <width>275</width>
               <height>0</height>
              </size>
             </property>
             <property name="maximumSize">
              <size>
-              <width>250</width>
+              <width>275</width>
               <height>16777215</height>
              </size>
             </property>
@@ -1667,7 +1667,7 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>248</width>
+               <width>273</width>
                <height>232</height>
               </rect>
              </property>
@@ -1750,13 +1750,13 @@
                   <widget class="QPlainTextEdit" name="plainTextEdit_12">
                    <property name="minimumSize">
                     <size>
-                     <width>85</width>
+                     <width>100</width>
                      <height>28</height>
                     </size>
                    </property>
                    <property name="maximumSize">
                     <size>
-                     <width>85</width>
+                     <width>100</width>
                      <height>28</height>
                     </size>
                    </property>
@@ -1853,13 +1853,13 @@
                   <widget class="QPlainTextEdit" name="pt_rpi_ip_1">
                    <property name="minimumSize">
                     <size>
-                     <width>85</width>
+                     <width>100</width>
                      <height>28</height>
                     </size>
                    </property>
                    <property name="maximumSize">
                     <size>
-                     <width>85</width>
+                     <width>100</width>
                      <height>28</height>
                     </size>
                    </property>
@@ -1867,7 +1867,7 @@
                     <bool>false</bool>
                    </property>
                    <property name="plainText">
-                    <string>10.0.0.20</string>
+                    <string>192.168.0.20</string>
                    </property>
                   </widget>
                  </item>
@@ -1953,13 +1953,13 @@
                   <widget class="QPlainTextEdit" name="pt_rpi_ip_2">
                    <property name="minimumSize">
                     <size>
-                     <width>85</width>
+                     <width>100</width>
                      <height>28</height>
                     </size>
                    </property>
                    <property name="maximumSize">
                     <size>
-                     <width>85</width>
+                     <width>100</width>
                      <height>28</height>
                     </size>
                    </property>
@@ -1967,7 +1967,7 @@
                     <bool>false</bool>
                    </property>
                    <property name="plainText">
-                    <string>10.0.0.21</string>
+                    <string>192.168.0.21</string>
                    </property>
                   </widget>
                  </item>
@@ -2053,13 +2053,13 @@
                   <widget class="QPlainTextEdit" name="pt_rpi_ip_3">
                    <property name="minimumSize">
                     <size>
-                     <width>85</width>
+                     <width>100</width>
                      <height>28</height>
                     </size>
                    </property>
                    <property name="maximumSize">
                     <size>
-                     <width>85</width>
+                     <width>100</width>
                      <height>28</height>
                     </size>
                    </property>
@@ -2067,7 +2067,7 @@
                     <bool>false</bool>
                    </property>
                    <property name="plainText">
-                    <string>10.0.0.22</string>
+                    <string>192.168.0.22</string>
                    </property>
                   </widget>
                  </item>
@@ -2153,13 +2153,13 @@
                   <widget class="QPlainTextEdit" name="pt_rpi_ip_4">
                    <property name="minimumSize">
                     <size>
-                     <width>85</width>
+                     <width>100</width>
                      <height>28</height>
                     </size>
                    </property>
                    <property name="maximumSize">
                     <size>
-                     <width>85</width>
+                     <width>100</width>
                      <height>28</height>
                     </size>
                    </property>
@@ -2167,7 +2167,7 @@
                     <bool>false</bool>
                    </property>
                    <property name="plainText">
-                    <string>10.0.0.23</string>
+                    <string>192.168.0.23</string>
                    </property>
                   </widget>
                  </item>
@@ -2324,7 +2324,7 @@
             <x>0</x>
             <y>0</y>
             <width>3340</width>
-            <height>516</height>
+            <height>519</height>
            </rect>
           </property>
           <layout class="QHBoxLayout" name="horizontalLayout_24">

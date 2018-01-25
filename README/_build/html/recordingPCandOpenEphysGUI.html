@@ -31,7 +31,7 @@
 
   
     <link rel="top" title="Recording PC Setup 0.1 documentation" href="index.html"/>
-        <link rel="next" title="Raspberry Pi tracking and related networking setup" href="raspberryPiSetup.html"/>
+        <link rel="next" title="Raspberry Pi tracking and related networking setup" href="trackingRPiSetup.html"/>
         <link rel="prev" title="Setup for Open Ephys Recordings and Analysis" href="index.html"/> 
 
   
@@ -119,7 +119,7 @@
 </li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="raspberryPiSetup.html">Raspberry Pi tracking and related networking setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="trackingRPiSetup.html">Raspberry Pi tracking and related networking setup</a></li>
 <li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="howToUseTheseScripts.html">Tutorial for using Open Ephys Scripts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="wirelessRewardSetup.html">FEEDER setup</a></li>
@@ -335,13 +335,14 @@ sudo apt-get install brightness-controller
 <p>Instructions are also on the <a class="reference external" href="https://open-ephys.atlassian.net/wiki/display/OEW/Linux">Open Ephys website</a>. The exact steps I made are as follows:</p>
 <div class="section" id="install-dependencies">
 <h3>Install Dependencies<a class="headerlink" href="#install-dependencies" title="Permalink to this headline">¶</a></h3>
-<p>First grab the current stable version of <strong>plugin-GUI</strong> from <cite>OpenEphys github &lt;https://github.com/open-ephys&gt;_</cite> and run the required scripts in the Resources folder:</p>
+<p>OpenEphys plugin-GUI is being developed rapidly, and the latest developmental version maybe better than the used at the time of writing this ReadMe. <a class="reference external" href="https://github.com/open-ephys/plugin-GUI/commit/8d9b08e424f743649ff01e0660a4add817e1f4f1">This page</a> is for the specific commit used and on which the instructions are based. The instructions should mostly work for later releases as well.</p>
+<p>To install the latest version of <strong>plugin-GUI</strong> from <a class="reference external" href="https://github.com/open-ephys">OpenEphys github</a> run the required scripts in your home folder:</p>
 <div class="highlight-none"><div class="highlight"><pre>mkdir Programs
 cd Programs
 mkdir OpenEphysGUI
 cd OpenEphysGUI
-git clone https://github.com/open-ephys/plugin-GUI
-# For developmental version use: git clone -b development --single-branch https://github.com/open-ephys/plugin-GUI
+# The below line should give you the latest developmental version
+git clone -b development --single-branch https://github.com/open-ephys/plugin-GUI
 cd plugin-GUI/Resources/Scripts
 sudo ./install_linux_dependencies.sh
 sudo cp 40-open-ephys.rules /etc/udev/rules.d
@@ -350,7 +351,7 @@ cd ~/
 </pre></div>
 </div>
 <p>Install More dependencies with terminal commands:</p>
-<div class="highlight-none"><div class="highlight"><pre>sudo apt-get install libtool pkg-config build-essential autoconf automake
+<div class="highlight-none"><div class="highlight"><pre>sudo apt-get install libtool pkg-config build-essential autoconf automake libudev0:i386
 </pre></div>
 </div>
 <p>Install libsodium with terminal commands:</p>
@@ -369,6 +370,13 @@ sudo apt-get install libzmq3-dev # ZeroMQ version 3 is required
 sudo apt-get install libhdf5-serial-dev # HDF version 1.8.12, or higher, is required
 </pre></div>
 </div>
+<p>Add the necessary <a class="reference external" href="https://open-ephys.atlassian.net/wiki/spaces/OEW/pages/47841283/Third-party+plugin+repositories">third-party plugins</a> to the <code class="docutils literal"><span class="pre">~/Programs/OpenEphysGUI/plugin-GUI/Source/Plugins</span></code> folder. The necessary plugins are:</p>
+<ul class="simple">
+<li><a class="reference external" href="https://github.com/arnefmeyer/VirtualReferencePlugin">VirtualRef</a> (<a class="reference external" href="https://github.com/arnefmeyer/VirtualReferencePlugin/commit/a8e20cd1df8e0d8003a757391293c75a1089ad7a">commit used</a>)</li>
+<li><a class="reference external" href="https://github.com/tne-lab/crossing-detector">CrossingDetector</a> (<a class="reference external" href="https://github.com/tne-lab/crossing-detector/commit/b402d5785d502c2b1cd7ff394d2c93377500cdc6">commit used</a>)</li>
+<li><a class="reference external" href="https://github.com/arnefmeyer/EventPublisherPlugin">EventPublisher</a> (<a class="reference external" href="https://github.com/arnefmeyer/EventPublisherPlugin/commit/7d195c9ed3ca75e34885ce3e3e7fdf90a7f24dfa">commit used</a>)</li>
+</ul>
+<p>Each of the plugins github code contains a folder with the plugin name, e.g. <code class="docutils literal"><span class="pre">VirtualRef</span></code> and files with <code class="docutils literal"><span class="pre">.cpp</span></code> and <code class="docutils literal"><span class="pre">.h</span></code> endings in that folder. Copy that entire folder to plugin-GUI Plugin directory <code class="docutils literal"><span class="pre">~/Programs/OpenEphysGUI/plugin-GUI/Source/Plugins</span></code>. As you compile the Open Ephys GUI Plugins following instructions below, these plugins will also be compiled and made accessible in the GUI.</p>
 </div>
 <div class="section" id="install-open-ephys">
 <h3>Install Open Ephys<a class="headerlink" href="#install-open-ephys" title="Permalink to this headline">¶</a></h3>
@@ -423,6 +431,7 @@ cd ~/Programs/OpenEphysGUI/plugin-GUI/Builds/Linux/build
 <p>Install the necessary packages with the following terminal commands:</p>
 <div class="highlight-none"><div class="highlight"><pre>sudo apt-get install python-qt4 python-dev python-pip python-paramiko python-scipy python-pygame
 sudo pip install pyzmq # This assumes you have already installed ZMQ for OpenEphys GUI
+pip install h5py # This assumes you have already installed libhdf5-serial-dev for OpenEphys GUI
 </pre></div>
 </div>
 <p>Additionally install <code class="docutils literal"><span class="pre">pyqtgraph</span></code> latest version from their website (Here 0.10.0-1 was used). Go to their <a class="reference external" href="www.pyqtgraph.org">website</a> and download the latest version of Debian/Ubuntu package. Install it by right click on the downloaded <em>.deb</em> file -&gt; Open With -&gt; GDebi Package Installer. Click on Install button.</p>
@@ -461,7 +470,7 @@ python RecordingManager.py
 </pre></div>
 </div>
 <p>You can now run RecordingManager.py by opening the terminal (by default it starts in your home folder) and typing in command <code class="docutils literal"><span class="pre">./RecordingManager</span></code>.</p>
-<p>Now the Recording PC is ready to use the Python scripts for managing Open Ephys recordings and Raspberry Pis, if the networking and Raspberry Pis are set up as well. To do this, follow this guide : <a class="reference internal" href="raspberryPiSetup.html#raspberrypisetup"><span>Raspberry Pi tracking and related networking setup</span></a>.</p>
+<p>Now the Recording PC is ready to use the Python scripts for managing Open Ephys recordings and Raspberry Pis, if the networking and Raspberry Pis are set up as well. To do this, follow this guide : <a class="reference internal" href="trackingRPiSetup.html#trackingrpisetup"><span>Raspberry Pi tracking and related networking setup</span></a>.</p>
 </div>
 </div>
 </div>
@@ -473,7 +482,7 @@ python RecordingManager.py
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="raspberryPiSetup.html" class="btn btn-neutral float-right" title="Raspberry Pi tracking and related networking setup" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="trackingRPiSetup.html" class="btn btn-neutral float-right" title="Raspberry Pi tracking and related networking setup" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="index.html" class="btn btn-neutral" title="Setup for Open Ephys Recordings and Analysis" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>

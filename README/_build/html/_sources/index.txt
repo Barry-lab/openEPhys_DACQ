@@ -15,7 +15,7 @@ The instructions can be worked through in the order they are presented in the be
 .. toctree::
 	
 	recordingPCandOpenEphysGUI
-	raspberryPiSetup
+	trackingRPiSetup
 	recordingPCforDataProcessing
 	howToUseTheseScripts
 	wirelessRewardSetup

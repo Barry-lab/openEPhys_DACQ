@@ -409,7 +409,7 @@
                        </size>
                       </property>
                       <property name="plainText">
-                       <string>MEC</string>
+                       <string>CA1</string>
                       </property>
                      </widget>
                     </item>
@@ -435,7 +435,7 @@
                        </size>
                       </property>
                       <property name="plainText">
-                       <string>CA1</string>
+                       <string>MEC</string>
                       </property>
                      </widget>
                     </item>

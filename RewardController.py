@@ -11,7 +11,7 @@ class Pellets(object):
     # This class allows control of pellet feeders
     def __init__(self, n_feeder):
         # Edit these to correspond to the RPi Zeros controlling the feeders
-        RPiIPs = ['192.168.0.200', '192.168.0.201', '192.168.0.202', '192.168.0.203']
+        RPiIPs = ['192.168.0.60', '192.168.0.61', '192.168.0.62', '192.168.0.63']
         RPiUsername = 'pi'
         RPiPassword = 'raspberry'
         self.n_feeder = n_feeder

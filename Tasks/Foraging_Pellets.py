@@ -46,7 +46,7 @@ class Core(object):
         self.TaskSettings['YRange'] = [60, 130]
         self.TaskSettings['LastTravelDist'] = 50
         self.TaskSettings['Chewing_TTLchan'] = 5
-        self.TaskSettings['Chewing_Target'] = 6
+        self.TaskSettings['Chewing_Target'] = 10
         self.TaskSettings['RewardMinSeparation'] = 10
         self.TaskSettings['UseFeeders'] = [2]
         # Pre-compute variables

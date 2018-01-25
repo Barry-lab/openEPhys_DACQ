@@ -1,4 +1,4 @@
-.. _raspberryPiSetup:
+.. _trackingRPiSetup:
 
 ==================================================
 Raspberry Pi tracking and related networking setup
@@ -103,6 +103,8 @@ Setting up Raspberry Pi networking with recording PC
 
 This part describes setting up networking between the recording PC and one or multiple Raspberry Pis. This setup is based on having two network adapters on the Recording PC. One of them connected to the internet, as in this guide: :ref:`RecPCnetworkInterfaces`. The other can be a USB network adapter or a PCIe card that is then connected to the RPi or to a network switch that has multiple RPis connected to it. (Ubuntu should recognise and automatically install any necessary drivers for a network adapter. This can be verified if a new device shows up in ``ifconfig``) When connecting multiple RPis, the setup is identical, only that each RPi has a different static IP address assigned (see below on how to change ``dhcpcd.conf``).
 
+Note that for the devices to see each other, the static IP addresses of the devices in the internal network must all have the same values, apart from the last digits after the last separator, e.g. ``192.168.0.1`` and ``192.168.0.22``. These first unchanged parts of the IP addresses should not match those of the external network as set up in this guide: :ref:`RecPCnetworkInterfaces`. We chose the ``192.168.0.xx`` address as it did not match the external network IP and made it easiest to work with a WiFi router for Wireless internal network.
+
 Configuring Raspberry Pi
 ------------------------
 
@@ -121,13 +123,13 @@ To set up a static IP address, you will need to edit the ``dhcpcd.conf``. You ca
 
 	# Static IP for connection to Recording PC
 	interface eth0
-	static ip_address=10.0.0.20/24
-	static routers=10.0.0.1
-	static domain_name_servers=10.0.0.1
+	static ip_address=192.168.0.20/24
+	static routers=192.168.0.11
+	static domain_name_servers=192.168.0.11
 
 Here again the ``interface`` variable is set to ``eth0``. This is likely the primary ethernet adapter identity on your RPi, but you can check this using the ``ifconfig`` terminal command. The first value on the left column should be used as the ``interface`` value in ``dhcpcd.conf``.
 
-Note that if you have multiple RPis connected to the Recording PC through a switch, they should have different ``static ip_address`` values in the ``dhcpcd.conf``. These could be for example ``10.0.0.20/24`` and ``10.0.0.21/24``. **Make a note of the IP entered on each RPi, as you will need these to connect to RPi from the Recroding PC.**
+Note that if you have multiple RPis connected to the Recording PC through a switch, they should have different ``static ip_address`` values in the ``dhcpcd.conf``. These could be for example ``192.168.0.20/24`` and ``192.168.0.21/24``. We used the IP values 20 and up for tracking RPis 1, 2, 3 etc.
 
 The ``interfaces`` file will also need to be slightly edited. Open it using the terminal command ``sudo leafpad /etc/network/interfaces``. Find the line that says ``iface eth0 inet manual``, or whatever the correct primary network adapter identity is. Put a ``#`` in front of that line, commenting it out. Just below the line add a new line: ``auto eth0`` or whatever the correct primary network adapter identity is. Save the file. So the two edited lines in the file would look like this:
 
@@ -144,6 +146,8 @@ With this setup the SSH login may be slow. This can be fixed by editing the ``ss
 
 Now after you restart the RPi, it should be ready for connecting to the Recording PC and to be used with the Recording Manager.
 
+.. _RecPCnetworkInterfacesForInternalNetwork:
+
 Configuring the Recording PC
 ----------------------------
 
@@ -156,14 +160,14 @@ Changes need to be made to the ``interfaces`` file. Open this using terminal com
 	# Network adapter interfacing with RPis
 	allow-hotplug eth1
 	iface eth1 inet static
-	address 10.0.0.10
+	address 192.168.0.10
 	netmask 255.255.255.0
-	gateway 10.0.0.1
+	gateway 192.168.0.11
 	dns-nameservers 8.8.8.8
-	post-up ip route add 10.0.0.0/24 dev eth1 src 10.0.0.10 table rt2
-	post-up ip route add default via 10.0.0.1 dev eth1 table rt2
-	post-up ip rule add from 10.0.0.10/32 table rt2
-	post-up ip rule add to 10.0.0.10/32 table rt2
+	post-up ip route add 192.168.0.0/24 dev eth1 src 192.168.0.10 table rt2
+	post-up ip route add default via 192.168.0.11 dev eth1 table rt2
+	post-up ip rule add from 192.168.0.10/32 table rt2
+	post-up ip rule add to 192.168.0.10/32 table rt2
 
 Note that the word ``eth1`` occurs 4 times in this block. This needs to be replaced by the identity of the network adapter that is connected to the RPis. You can find the identiy with the terminal command ``ifconfig`` and checking which adapter identiy (left column) appears and disappears as you change as you connect and disconnect the network adapter from the PC. It should be the second on the list.
 
@@ -173,7 +177,7 @@ The ``rt_tables`` file also needs to be edited. Open it with terminal command ``
 
 	1 rt2
 
-Now after you restart the Recording PC you should be able to connect to the RPi using the terminal command ``ssh pi@10.0.0.20`` or whatever was your chosen static IP address for the RPi. The first time you do this from the Recording PC, it may say *The authenticity of host '10.0.0.20 (10.0.0.20)' can't be established. -//- Are you sure you want to continue connecting (yes/no)?** Type **yes** and hit Enter. The default password for the RPi is ``raspberry``.
+Now after you restart the Recording PC you should be able to connect to the RPi using the terminal command ``ssh pi@192.168.0.20`` or whatever was your chosen static IP address for the RPi. The first time you do this from the Recording PC, it may say *The authenticity of host '192.168.0.20 (192.168.0.20)' can't be established. -//- Are you sure you want to continue connecting (yes/no)?** Type **yes** and hit Enter. The default password for the RPi is ``raspberry``.
 
 Configure SSH keys to avoid Password requests
 ---------------------------------------------
@@ -182,9 +186,9 @@ This is necessary for the Recording Manager to successfully interact with the RP
 
 Generate an SSH key on Recording PC with terminal command ``ssh-keygen -t rsa -C recpc@pi``. Use the default location to save the key by pressing Enter. Leave the passphrase empty by pressing Enter.
 
-Open terminal on Recording PC and enter the connect to your RPi using SSH with command ``ssh pi@10.0.0.20`` and enter ``raspberry`` as password. Enter this command in the terminal where you opened the SSH connection ``install -d -m 700 ~/.ssh``.
+Open terminal on Recording PC and enter the connect to your RPi using SSH with command ``ssh pi@192.168.0.20`` and enter ``raspberry`` as password. Enter this command in the terminal where you opened the SSH connection ``install -d -m 700 ~/.ssh``.
 
-Now exit the SSH session or open a new terminal on Recording PC and enter this command ``cat ~/.ssh/id_rsa.pub | ssh pi@10.0.0.20 'cat >> .ssh/authorized_keys'``. Use the correct IP address (the numbers: ``10.0.0.20``) in that command for the IP address of the RPi you are connecting to. Enter the password ``raspberry`` for your RPi.
+Now exit the SSH session or open a new terminal on Recording PC and enter this command ``cat ~/.ssh/id_rsa.pub | ssh pi@192.168.0.20 'cat >> .ssh/authorized_keys'``. Use the correct IP address (the numbers: ``192.168.0.20``) in that command for the IP address of the RPi you are connecting to. Enter the password ``raspberry`` for your RPi.
 
 Now your RPi should be able to connect to the RPi via SSH without a password.
 
@@ -215,6 +219,6 @@ This should put the virtual copy to your home folder and name it ``RPi-SDcard-Co
 
 Now remove the original RPi SD card from the computer and replace it with a new one. You can now proceed to write the newly made copy of the original SD card onto the new SD card using Etcher, as you did at this part of the guide: :ref:`installingRaspbian`. You just need to choose the newly created ``RPi-SDcard-Copy.img`` to write instead of the Raspbian OS *.img* file you used when installing Raspbian originally.
 
-Once the writing is done, you need to access the newly created SD card. You may need to re-insert it to remount it (Always use eject option if possible, before removing SD cards). You need to edit the ``/etc/dhcpcd.conf`` file on the SD card. Navigate to the SD card directory, go to ``etc`` folder. Open terminal in that folder by right clicking into the folder and choosing *Open in Terminal*. Use this command to open the file in text editor `` sudo gedit dhcpcd.conf``. You need to change one of the lines you added to the ``dhcpcd.conf`` file originally when setting up networking for the RPi. Find the line that says ``static ip_address=10.0.0.20/24``. Edit the IP address to what the address you wish the RPi with this SD card would have, e.g. ``static ip_address=10.0.0.21/24``. Save the text file.
+Once the writing is done, you need to access the newly created SD card. You may need to re-insert it to remount it (Always use eject option if possible, before removing SD cards). You need to edit the ``/etc/dhcpcd.conf`` file on the SD card. Navigate to the SD card directory, go to ``etc`` folder. Open terminal in that folder by right clicking into the folder and choosing *Open in Terminal*. Use this command to open the file in text editor `` sudo gedit dhcpcd.conf``. You need to change one of the lines you added to the ``dhcpcd.conf`` file originally when setting up networking for the RPi. Find the line that says ``static ip_address=192.168.0.20/24``. Edit the IP address to what the address you wish the RPi with this SD card would have, e.g. ``static ip_address=192.168.0.21/24``. Save the text file.
 
-You can now remove the SD card (safely with after ejecting in Ubuntu) and simply plug it into a new Raspberry Pi. It should work perfectly as the one before, only you will need to use the newly set IP address to connect to it. Make sure you test if the SSH connection can be established, with terminal command from Recording PC ``ssh pi@10.0.0.21``. At first time of running, it may say *The authenticity of host '10.0.0.21 (10.0.0.21)' can't be established. -//- Are you sure you want to continue connecting (yes/no)?** Type **yes** and hit Enter.
+You can now remove the SD card (safely with after ejecting in Ubuntu) and simply plug it into a new Raspberry Pi. It should work perfectly as the one before, only you will need to use the newly set IP address to connect to it. **Make sure you test if the SSH connection can be established**, with terminal command from Recording PC ``ssh pi@192.168.0.21``. At first time of running, it may say *The authenticity of host '192.168.0.21 (192.168.0.21)' can't be established. -//- Are you sure you want to continue connecting (yes/no)?** Type **yes** and hit Enter.
