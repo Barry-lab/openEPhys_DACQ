@@ -3,7 +3,7 @@
 import pygame
 import numpy as np
 import threading
-import RewardController as Rewards
+from RPiInterface import RewardControl
 import time
 from scipy.spatial.distance import euclidean
 import random
@@ -48,27 +48,40 @@ class Core(object):
         self.TaskSettings['Chewing_Target'] = 10
         self.TaskSettings['PelletRewardMinSeparation'] = 10
         self.TaskSettings['PelletRewardMaxSeparation'] = 90
-        self.TaskSettings['UsePelletFeeders'] = [2]
         self.TaskSettings['InitPellets'] = 5
         self.TaskSettings['PelletRewardSize'] = 1
+        self.TaskSettings['FEEDERs'] = []
+        self.TaskSettings['FEEDERs'].append({'type': 'pellet', 
+                                             'ID': 2, 
+                                             'active': True, 
+                                             'IP': '192.168.0.62', 
+                                             'username': 'pi', 
+                                             'password': 'raspberry', 
+                                             'position': [30, 30]})
         # Pre-compute variables
-        self.one_second_steps = int(np.round(1 / self.TaskIO['RPIPos'].update_interval))
+        self.one_second_steps = int(np.round(1 / self.TaskIO['RPIPos'].combPos_update_interval))
         self.distance_steps = int(np.round(self.TaskSettings['LastTravelTime'])) * self.one_second_steps
         # Prepare TTL pulse time list
         self.ttlTimes = []
         self.ttlTimesLock = threading.Lock()
         self.TaskIO['OEmessages'].add_callback(self.append_ttl_pulses)
-        # Prepare rewards
-        self.PelletReward = []
-        for n_Pfeeder in self.TaskSettings['UsePelletFeeders']:
-            self.PelletReward.append(Rewards.Pellets(n_Pfeeder))
+        # Initialize FEEDERs
+        print('Initializing FEEDERs...')
+        T_initFEEDER = []
+        self.FEEDER_Lock = threading.Lock()
+        for n_feeder, feeder in enumerate(self.TaskSettings['FEEDERs']):
+            if feeder['active']:
+                T_initFEEDER.append(threading.Thread(target=self.initFEEDER, args=[n_feeder]))
+                T_initFEEDER[n_feeder].start()
+        for T in T_initFEEDER:
+            T.join()
+        print('Initializing FEEDERs Successful')
+        # Set up Pellet Rewards
+        self.activePfeeders = []
+        for n_feeder, feeder in enumerate(self.TaskSettings['FEEDERs']):
+            if feeder['active']:
+                self.activePfeeders.append(n_feeder)
         self.lastPelletReward = time.time()
-        # Ensure that Position data is available
-        posHistory = []
-        while len(posHistory) < self.distance_steps:
-            time.sleep(0.5)
-            with self.TaskIO['RPIPos'].combPosHistoryLock:
-                posHistory = self.TaskIO['RPIPos'].combPosHistory
         # Set game speed
         self.responseRate = 60 # Hz
         self.gameRate = 10 # Hz
@@ -77,6 +90,16 @@ class Core(object):
         self.mainLoopActive = True
         self.clock = pygame.time.Clock()
         pygame.init()
+
+    def initFEEDER(self, n_feeder):
+        with self.FEEDER_Lock:
+            FEEDER_type = self.TaskSettings['FEEDERs'][n_feeder]['type']
+            IP = self.TaskSettings['FEEDERs'][n_feeder]['IP']
+            username = self.TaskSettings['FEEDERs'][n_feeder]['username']
+            password = self.TaskSettings['FEEDERs'][n_feeder]['password']
+        actuator = RewardControl(FEEDER_type, IP, username, password)
+        with self.FEEDER_Lock:
+            self.TaskSettings['FEEDERs'][n_feeder]['actuator'] = actuator
 
     def renderText(self, text):
         renderedText = self.font.render(text, True, self.textColor)
@@ -96,24 +119,27 @@ class Core(object):
 
         return n_chewings
 
-    def releasePellet(self, n_Pfeeder, actor='GameEvent', n_pellets=1):
-        # Release Pellet
-        feeder_list_idx = self.TaskSettings['UsePelletFeeders'].index(n_Pfeeder)
-        self.PelletReward[feeder_list_idx].release(n_pellets)
-        self.lastPelletReward = time.time()
+    def releaseReward(self, n_feeder, action='undefined', quantity=1):
+        self.TaskSettings['FEEDERs'][n_feeder]['actuator'].release(quantity)
         # Send message to Open Ephys GUI
-        OEmessage = 'PelletReward ' + actor + ' ' + str(n_Pfeeder + 1) + ' ' + str(n_pellets)
+        rewardType = self.TaskSettings['FEEDERs'][n_feeder]['type']
+        feederID = self.TaskSettings['FEEDERs'][n_feeder]['ID']
+        OEmessage = 'Reward ' + rewardType + ' ' + str(feederID) + ' ' + action + ' ' + str(quantity)
         self.TaskIO['MessageToOE'](OEmessage)
+        # Reset last reward timer
+        if 'pellet' is self.TaskSettings['FEEDERs'][n_feeder]['type']:
+            self.lastPelletReward = time.time()
 
     def initRewards(self):
         if 'InitPellets' in self.TaskSettings.keys() and self.TaskSettings['InitPellets'] > 0:
-            minPellets = int(np.floor(float(self.TaskSettings['InitPellets']) / len(self.TaskSettings['UsePelletFeeders'])))
-            extraPellets = np.mod(self.TaskSettings['InitPellets'], len(self.TaskSettings['UsePelletFeeders']))
-            n_pellets_Feeders = minPellets * np.ones(len(self.TaskSettings['UsePelletFeeders']), dtype=np.int16)
+            minPellets = int(np.floor(float(self.TaskSettings['InitPellets']) / len(self.activePfeeders)))
+            extraPellets = np.mod(self.TaskSettings['InitPellets'], len(self.activePfeeders))
+            n_pellets_Feeders = minPellets * np.ones(len(self.activePfeeders), dtype=np.int16)
             n_pellets_Feeders[:extraPellets] = n_pellets_Feeders[:extraPellets] + 1
             for feeder_list_idx, n_pellets in enumerate(n_pellets_Feeders):
-                n_Pfeeder = self.TaskSettings['UsePelletFeeders'][feeder_list_idx]
-                self.releasePellet(n_Pfeeder, actor='GameInit', n_pellets=n_pellets)
+                n_feeder = self.activePfeeders[feeder_list_idx]
+                print('reward init: ' + str(n_pellets))
+                self.releaseReward(n_feeder, action='game_init', quantity=n_pellets)
 
     def buttonGameOnOff_callback(self):
         # Switch Game On and Off
@@ -121,9 +147,9 @@ class Core(object):
         OEmessage = 'Game On: ' + str(self.gameOn)
         self.TaskIO['MessageToOE'](OEmessage)
 
-    def buttonReleasePellet_callback(self, n_Pfeeder):
+    def buttonReleaseReward_callback(self, n_feeder):
         # Release pellet from specified feeder and mark as User action
-        self.releasePellet(n_Pfeeder, actor='User')
+        self.releaseReward(n_feeder, action='user')
 
     def buttonManualPellet_callback(self):
         # Update last reward time
@@ -145,10 +171,10 @@ class Core(object):
         # Button to release pellet
         buttonReleasePellet = []
         buttonReleasePellet.append({'text': 'Release Pellet'})
-        for n_Pfeeder in self.TaskSettings['UsePelletFeeders']:
-            nFeederButton = {'callback': self.buttonReleasePellet_callback, 
-                             'callargs': [n_Pfeeder], 
-                             'text': str(n_Pfeeder + 1)}
+        for n_feeder in self.activePfeeders:
+            nFeederButton = {'callback': self.buttonReleaseReward_callback, 
+                             'callargs': [n_feeder], 
+                             'text': str(n_feeder + 1)}
             buttonReleasePellet.append(nFeederButton)
         buttons.append(buttonReleasePellet)
         # Button to mark manually released pellet
@@ -321,13 +347,13 @@ class Core(object):
         game_progress.append(chewingCriteria)
         # Check if animal has been without pellet reward for too long
         timeSinceLastReward = time.time() - self.lastPelletReward
-        rewardDelayCriteria = {'name': 'Inactivity', 
+        inactivityCriteria = {'name': 'Inactivity', 
                                'goals': ['inactivity'], 
                                'target': self.TaskSettings['PelletRewardMaxSeparation'], 
                                'status': int(round(timeSinceLastReward)), 
                                'complete': timeSinceLastReward >= self.TaskSettings['PelletRewardMaxSeparation'], 
                                'percentage': timeSinceLastReward / float(self.TaskSettings['PelletRewardMaxSeparation'])}
-        game_progress.append(rewardDelayCriteria)
+        game_progress.append(inactivityCriteria)
         # If all ok, release reward
         pellet_status_complete = []
         inactivity_complete = []
@@ -337,11 +363,11 @@ class Core(object):
             if 'inactivity' in gp['goals']:
                 inactivity_complete.append(gp['complete'])
         if all(pellet_status_complete):
-            for n_Pfeeder in self.TaskSettings['UsePelletFeeders']:
-                self.releasePellet(n_Pfeeder, actor='Goal_pellet', n_pellets=1)
+            for n_feeder in self.activePfeeders:
+                self.releaseReward(n_feeder, action='goal_pellet', quantity=1)
         elif all(inactivity_complete):
-            n_Pfeeder = self.TaskSettings['UsePelletFeeders'][random.randint(0,len(self.TaskSettings['UsePelletFeeders']) - 1)]
-            self.releasePellet(n_Pfeeder, actor='Goal_inactivity', n_pellets=1)
+            n_feeder = self.activePfeeders[random.randint(0,len(self.activePfeeders) - 1)]
+            self.releaseReward(n_feeder, action='goal_inactivity', quantity=1)
 
         return game_progress
 
@@ -359,6 +385,12 @@ class Core(object):
         self.update_display()
 
     def main_loop(self):
+        # Ensure that Position data is available
+        posHistory = []
+        while len(posHistory) < self.distance_steps:
+            time.sleep(0.5)
+            with self.TaskIO['RPIPos'].combPosHistoryLock:
+                posHistory = self.TaskIO['RPIPos'].combPosHistory
         # Initialize interactive elements
         self.screen_size = (600, 300)
         self.screen_margins = 10
@@ -372,6 +404,10 @@ class Core(object):
         OEmessage = 'Game On: ' + str(self.gameOn)
         self.TaskIO['MessageToOE'](OEmessage)
         self.initRewards()
+        # Initialize game state update thread
+        T_update_states = threading.Thread(target=self.update_states)
+        T_update_states.start()
+        # Activate main loop
         lastUpdatedState = 0
         while self.mainLoopActive:
             self.clock.tick(self.responseRate)
@@ -400,11 +436,10 @@ class Core(object):
                                             subbutton['callback']()
             if lastUpdatedState < (time.time() - 1 / float(self.gameRate)):
                 lastUpdatedState = time.time()
-                # TO DO! Make sure somehow that this thread has finished before updating
-                # Show an error of thread is running too slowly
-                threading.Thread(target=self.update_states).start()
-                
-        # Quite game when out of gameOn loop
+                T_update_states.join()
+                T_update_states = threading.Thread(target=self.update_states)
+                T_update_states.start()
+        # Quit game when out of gameOn loop
         pygame.quit()
 
     def run(self):

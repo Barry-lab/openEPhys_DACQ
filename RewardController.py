@@ -8,9 +8,9 @@ from sshScripts import ssh
 
 class Pellets(object):
     # This class allows control of pellet FEEDERs
-    def __init__(self, n_feeder):
+    def __init__(self, type, RPiIP, RPiUsername, RPiPassword):
         # Edit these to correspond to the RPi Zeros controlling the FEEDERs
-        RPiIPs = ['192.168.0.60', '192.168.0.61', '192.168.0.62', '192.168.0.63']
+        RPiIP = ['192.168.0.60', '192.168.0.61', '192.168.0.62', '192.168.0.63']
         RPiUsername = 'pi'
         RPiPassword = 'raspberry'
         self.n_feeder = n_feeder

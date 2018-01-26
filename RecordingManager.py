@@ -117,8 +117,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pt_root_folder.setPlainText(os.path.expanduser('~') + '/RecordingData')
         self.file_server_path = '/media/QNAP/sanderT/room418'
         self.RecGUI_dataFolder = str(self.pt_root_folder.toPlainText()) + '/RecordingManagerData'
-        # Prepare GUI variables
-        self.original_stylesheets = {}
         # Set GUI interaction connections
         self.pb_load_last.clicked.connect(lambda:self.load_last_settings())
         self.pb_load.clicked.connect(lambda:self.load_settings())
@@ -129,6 +127,10 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_process_data.clicked.connect(lambda:self.process_data())
         self.pb_sync_server.clicked.connect(lambda:self.sync_server())
         self.pb_open_rec_folder.clicked.connect(lambda:self.open_rec_folder())
+        # Store original stylesheets for later use
+        self.original_stylesheets = {}
+        self.original_stylesheets['pb_start_rec'] = self.pb_start_rec.styleSheet()# Keep copy of default button color
+        self.original_stylesheets['pb_stop_rec'] = self.pb_stop_rec.styleSheet() # Save Stop button default
         # Create TEMP folder. If exists, delete and re-create
         # TEMP folder is used sort of as a working memory by the Recording Manager
         self.TEMPfolder = self.RecGUI_dataFolder + '/TEMP'
@@ -284,7 +286,38 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.current_task.run()
 
     def start_rec(self):
+        # Load tracking RPi Settings
+        with open(self.TEMPfolder + '/RPi/RPiSettings.p','rb') as file:
+            self.RPiSettings = pickle.load(file)
+        # Connect to tracking RPis
+        print('Connecting to tracking RPis...')
+        self.trackingControl = rpiI.TrackingControl(self.RPiSettings)
+        print('Connecting to tracking RPis Successful')
+        # Initialize onlineTrackingData class
+        print('Initializing Online Tracking Data...')
+        histogramParameters = {'margins': 10, # histogram data margins in centimeters
+                               'binSize': 2, # histogram binSize in centimeters
+                               'speedLimit': 10}# centimeters of distance in last second to be included
+        self.RPIpos = rpiI.onlineTrackingData(self.RPiSettings, HistogramParameters=histogramParameters, SynthData=False)
+        print('Initializing Online Tracking Data Successful')
+        # Initialize listening to Open Ephys GUI messages
+        print('Connecting to Open Ephys GUI via ZMQ...')
+        self.OEmessages = SubscribeToOpenEphys(verbose=False)
+        self.OEmessages.connect()
+        print('Connecting to Open Ephys GUI via ZMQ Successful')
+        # Initialize Task
+        if self.rb_task_yes.isChecked():
+            print('Initializing Task...')
+            TaskSettings = {'name': 'Foraging_Pellets'}
+            # Put input streams in a default dictionary that can be used by task as needed
+            TaskIO = {'RPIPos': self.RPIpos, 
+                      'OEmessages': self.OEmessages, 
+                      'MessageToOE': SendOpenEphysSingleMessage}
+            TaskModule = hfunct.import_subdirectory_module('Tasks', TaskSettings['name'])
+            self.current_task = TaskModule.Core(TaskSettings, TaskIO)
+            print('Initializing Task Successful')
         # Start Open Ephys GUI recording
+        print('Starting Open Ephys GUI Recording...')
         date_folder_path = self.get_date_folder_path()
         command = 'StartRecord RecDir=' + date_folder_path + ' CreateNewDir=1'
         SendOpenEphysSingleMessage(command)
@@ -293,26 +326,15 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         while not recording_folder:
             time.sleep(0.1)
             recording_folder = self.get_recording_folder_path(date_folder_path)
-        self.pt_rec_folder.setPlainText(recording_folder)
         while not check_if_nwb_recording(recording_folder):
-            time.sleep(0.5)
-        # Initialize listening to Open Ephys GUI messages
-        self.OEmessages = SubscribeToOpenEphys(verbose=False)
-        self.OEmessages.connect()
-        # Load RPi Settings
-        with open(self.TEMPfolder + '/RPi/RPiSettings.p','rb') as file:
-            self.RPiSettings = pickle.load(file)
+            time.sleep(0.1)
+        self.pt_rec_folder.setPlainText(recording_folder)
+        print('Starting Open Ephys GUI Recording Successful')
         # Start the tracking scripts on all RPis
-        rpiI.RPiStarter(self.RPiSettings)
-        if not rpiI.check_if_running(self.RPiSettings): # Only continue if receiving position signal
-            show_message('ERROR: RPis not sending data to Recording PC!')
-        # Initialize onlineTrackingData class
-        histogramParameters = {'margins': 5, # histogram data margins in centimeters
-                               'binSize': 2, # histogram binSize in centimeters
-                               'speedLimit': 10}# centimeters of distance in last second to be included
-        self.RPIpos = rpiI.onlineTrackingData(self.RPiSettings, HistogramParameters=histogramParameters, SynthData=False)
+        print('Starting tracking RPis...')
+        self.trackingControl.start()
+        print('Starting tracking RPis Successful')
         # Change Start button style
-        self.original_stylesheets['pb_start_rec'] = self.pb_start_rec.styleSheet()# Keep copy of default button color
         self.pb_start_rec.setStyleSheet('background-color: red') # Change button to red
         # Disable and Enable Start and Stop buttons, respectively
         self.pb_start_rec.setEnabled(False)
@@ -320,37 +342,47 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_process_data.setEnabled(False)
         self.pb_sync_server.setEnabled(False)
         self.pb_open_rec_folder.setEnabled(False)
-        # Start cumulative plot
-        if self.rb_posPlot_yes.isChecked():
-            self.PosPlot = PosPlot(self.RPiSettings, self.RPIpos, histogramParameters)
         # Start task
         if self.rb_task_yes.isChecked():
-            TaskSettings = {'name': 'Foraging_Pellets'}
-            # Put input streams in a default dictionary that can be used by task as needed
-            TaskIO = {'RPIPos': self.RPIpos, 
-                      'OEmessages': self.OEmessages, 
-                      'MessageToOE': SendOpenEphysSingleMessage}
-            threading.Thread(target=self.start_task, args=(TaskSettings, TaskIO)).start()
+            print('Starting Task...')
+            self.current_task.run()
+            print('Starting Task Successful')
+        # Start cumulative plot
+        if self.rb_posPlot_yes.isChecked():
+            print('Starting Position Plot...')
+            self.PosPlot = PosPlot(self.RPiSettings, self.RPIpos, histogramParameters)
+            print('Starting Position Plot Successful')
 
-
-    def stop_rec(self):
-        # Change start button colors
-        self.pb_start_rec.setStyleSheet(self.original_stylesheets['pb_start_rec']) # Start button to default
-        self.original_stylesheets['pb_stop_rec'] = self.pb_stop_rec.styleSheet() # Save Stop button default
-        self.pb_stop_rec.setStyleSheet('background-color: red') # Change Stop button to Red
-        # Stop Task
+    def stop_rec(self):# Stop Task
         if self.rb_task_yes.isChecked():
+            print('Stopping Task...')
             self.current_task.stop()
+            print('Stopping Task Successful')
         # Stop reading Open Ephys messages
+        print('Closing Open Ephys GUI ZMQ connection...')
         self.OEmessages.disconnect()
+        print('Closing Open Ephys GUI ZMQ connection Successful')
         # Stop cumulative plot
         if self.rb_posPlot_yes.isChecked() and hasattr(self, 'PosPlot'):
+            print('Stopping Position Plot...')
             self.PosPlot.close()
+            print('Stopping Position Plot Successful')
         # Stop updating online tracking data
+        print('Closing Online Tracking Data...')
         self.RPIpos.close()
+        print('Closing Online Tracking Data Successful')
         # Stop RPis
-        rpiI.StopRPi(self.RPiSettings)
+        print('Stopping tracking RPis...')
+        self.trackingControl.stop()
+        print('Stopping tracking RPis Successful')
+        # Stop Open Ephys Recording
+        while check_if_nwb_recording(str(self.pt_rec_folder.toPlainText())):
+            print('Stopping Open Ephys GUI Recording...')
+            SendOpenEphysSingleMessage('StopRecord')
+            time.sleep(0.1)
+        print('Stopping Open Ephys GUI Recording Successful')
         # Copy over RPi tracking folder to Recording Folder on PC using rsync
+        print('Copying over tracking data to Recording PC...')
         user = self.RPiSettings['username']
         trackingFolder = self.RPiSettings['tracking_folder']
         for n_rpi in self.RPiSettings['use_RPi_nrs']:
@@ -363,6 +395,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             src_logfile = str(self.pt_rec_folder.toPlainText()) + '/CameraData' + str(n_rpi) + '/logfile.csv'
             dst_logfile = str(self.pt_rec_folder.toPlainText()) + '/PosLog' + str(n_rpi) + '.csv'
             copyfile(src_logfile, dst_logfile)
+        print('Copying over tracking data to Recording PC Successful')
         # Keep note of RPiSettings and Calibration data on PC for this GUI.
         # These are kept in the RecGUI_dataFolder as specified in the __init__ function.
         rec_folder_name = str(self.pt_rec_folder.toPlainText())
@@ -375,15 +408,13 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             pickle.dump(RecGUI_Settings, file)
         with open(str(self.pt_rec_folder.toPlainText()) + '/RecGUI_Settings.p', 'wb') as file:
             pickle.dump(RecGUI_Settings, file)
+        print('Saved Recording Manager Settings.')
         # Save badChan list from text box to a file in the recording folder
         if len(str(self.pt_badChan.toPlainText())) > 0:
             save_badChan_to_file(str(self.pt_badChan.toPlainText()), str(self.pt_rec_folder.toPlainText()))
-        # Change button color back to default
-        self.pb_stop_rec.setStyleSheet(self.original_stylesheets['pb_stop_rec'])
-        # Stop Open Ephys Recording
-        while check_if_nwb_recording(str(self.pt_rec_folder.toPlainText())):
-            SendOpenEphysSingleMessage('StopRecord')
-            time.sleep(0.1)
+            print('Saved the list of bad channels: ' + str(self.pt_badChan.toPlainText()))
+        # Change start button colors
+        self.pb_start_rec.setStyleSheet(self.original_stylesheets['pb_start_rec']) # Start button to default
         # Disable Stop button and Enable other buttons
         self.pb_start_rec.setEnabled(True)
         self.pb_stop_rec.setEnabled(False)

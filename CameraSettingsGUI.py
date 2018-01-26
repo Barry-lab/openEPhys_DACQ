@@ -447,7 +447,8 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         self.test_tracking_win.setGeometry(300, 200, 250, 20 * (len(RPiSettings['use_RPi_nrs']) + 2))
         # Start the RPis
         self.update_camera_files()
-        rpiI.RPiStarter(RPiSettings)
+        trackingControl = rpiI.TrackingControl(RPiSettings)
+        trackingControl.start()
         # Set up RPi latest position updater
         self.RPIpos = rpiI.onlineTrackingData(RPiSettings)
         # Set up constant update of position fields with QTimer
@@ -457,7 +458,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         # Open up the dialog window
         self.test_tracking_win.exec_()
         # When dialog window closes, stop the RPis
-        rpiI.StopRPi(RPiSettings)
+        trackingControl.stop()
 
 # The following is the default ending for a QtGui application script
 def main():

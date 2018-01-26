@@ -12,91 +12,68 @@ from scipy.spatial.distance import euclidean
 from itertools import combinations
 import CombineTrackingData
 
-def RPiStarter(RPiSettings):
-    # This function starts the tracking.py script in all RPis in the RPiSettings input
-    # Load infromation on all RPis
-    RPiUsername = RPiSettings['username']
-    RPiPassword = RPiSettings['password']
-    RPiIPs = []
-    for n_rpi in RPiSettings['use_RPi_nrs']:
-        RPiIPs.append(RPiSettings['RPiIP'][n_rpi])
-    # Initialize SSH connection with all RPis
-    for nRPi in range(len(RPiIPs)):
-        connection = ssh(RPiIPs[nRPi], RPiUsername, RPiPassword)
+class TrackingControl(object):
+
+    def __init__(self, RPiSettings):
+        # Load infromation on all RPis
+        self.RPiSettings = RPiSettings
+        # Initialize SSH connection with all RPis
+        self.RPiSSH = [None] * len(self.RPiSettings['use_RPi_nrs'])
+        self.RPiSSH_Lock = threading.Lock()
+        T_initRPiSSH = []
+        for n_rpi, nRPi in enumerate(self.RPiSettings['use_RPi_nrs']):
+            T_initRPiSSH.append(threading.Thread(target=self.initRPiSSH, args=[n_rpi, nRPi]))
+            T_initRPiSSH[n_rpi].start()
+        for T in T_initRPiSSH:
+            T.join()
+
+    def initRPiSSH(self, n_rpi, nRPi):
+        connection = ssh(self.RPiSettings['RPiIP'][nRPi], self.RPiSettings['username'], self.RPiSettings['password'])
         connection.sendCommand('pkill python') # Ensure any past processes have closed
-        # Start tracking.py script
-        connection.sendCommand('cd ' + RPiSettings['tracking_folder'] + ' && nohup python tracking.py &')
+        with self.RPiSSH_Lock:
+            self.RPiSSH[n_rpi] = connection
 
-def check_if_running(RPiSettings):
-    # Check if all RPis are transmitting position signals
-    # Get RPiSettings data
-    LocalIP = RPiSettings['centralIP']
-    PosPort = RPiSettings['pos_port']
-    RPiIPs = []
-    for n_rpi in RPiSettings['use_RPi_nrs']:
-        RPiIPs.append(RPiSettings['RPiIP'][n_rpi])
-    # Set ZeroMQ socket to listen on incoming position data from all RPis
-    contextSUB = zmq.Context()
-    sockSUB = contextSUB.socket(zmq.SUB)
-    sockSUB.setsockopt(zmq.SUBSCRIBE, '')
-    sockSUB.RCVTIMEO = 500 # maximum duration to wait for data (in milliseconds)
-    for nRPi in range(len(RPiIPs)):
-        sockSUB.connect('tcp://' + RPiIPs[nRPi] + ':' + PosPort)
-    # Check if all RPis in use are sending data
-    ReceivingPos = [False] * len(RPiSettings['use_RPi_nrs'])
-    duration = 0
-    start_time = time.time()
-    while not all(ReceivingPos) and duration < 5:
-        # This loop continues for 5 seconds, unless all RPis are detected to send data
-        try:
-            message = sockSUB.recv() # Check for message
-        except:
-            message = 'no message'
-        if message != 'no message': # If a message was received
-            posData = json.loads(message) # Convert from string to original format
-            RPi_number = posData[0] # Identify RPi number that sent this message
-            # Find that RPi number in the list and set it to True, as in sending messages
-            RPiIDX = [i for i,x in enumerate(RPiSettings['use_RPi_nrs']) if x == RPi_number]
-            ReceivingPos[RPiIDX[0]] = True
-        duration = time.time() - start_time # Update duration of this while loop
-    # Output True, if receiving position data from all RPis. False otherwise.
-    return all(ReceivingPos)
+    def start(self):
+        for connection in self.RPiSSH:
+            command = 'cd ' + self.RPiSettings['tracking_folder'] + ' && nohup python tracking.py &'
+            connection.sendCommand(command)
 
-def StopRPi(RPiSettings):
-    # Sends 'stop' message until no more position data is received from RPis
-    LocalIP = RPiSettings['centralIP']
-    PosPort = RPiSettings['pos_port']
-    StopPort = RPiSettings['stop_port']
-    RPiIPs = []
-    for n_rpi in RPiSettings['use_RPi_nrs']:
-        RPiIPs.append(RPiSettings['RPiIP'][n_rpi])
-    # Set ZeroMQ socket to listen on incoming position data from all RPis
-    contextSUB = zmq.Context()
-    sockSUB = contextSUB.socket(zmq.SUB)
-    sockSUB.setsockopt(zmq.SUBSCRIBE, '')
-    sockSUB.RCVTIMEO = 500 # maximum duration to wait for data (in milliseconds)
-    for nRPi in range(len(RPiIPs)):
-        sockSUB.connect('tcp://' + RPiIPs[nRPi] + ':' + PosPort)
-    # Set Stop message Publishing ZeroMQ
-    contextPUB = zmq.Context()
-    sockPUB = contextPUB.socket(zmq.PUB)
-    sockPUB.bind('tcp://' + LocalIP + ':' + StopPort)
-    # Pause script for 100ms for sockets to be bound before messages are sent.
-    time.sleep(0.1)
-    # Send Stop command until no more Position data is received
-    command = 'stop'
-    ReceivingPos = True
-    while ReceivingPos:
+    def stop(self):
+        # Sends 'stop' message until no more position data is received from RPis
+        LocalIP = self.RPiSettings['centralIP']
+        PosPort = self.RPiSettings['pos_port']
+        StopPort = self.RPiSettings['stop_port']
+        RPiIPs = []
+        for n_rpi in self.RPiSettings['use_RPi_nrs']:
+            RPiIPs.append(self.RPiSettings['RPiIP'][n_rpi])
+        # Set Stop message Publishing ZeroMQ
+        contextPUB = zmq.Context()
+        sockPUB = contextPUB.socket(zmq.PUB)
+        sockPUB.bind('tcp://' + LocalIP + ':' + StopPort)
+        command = 'stop'
+        time.sleep(0.1) # Pause script for 100ms for sockets to be bound before messages are sent.
+        # Send first Stop message
         sockPUB.send(command)
-        try:
-            message = sockSUB.recv()
-        except:
-            message = 'no message'
-        if message == 'no message':
-            ReceivingPos = False
-    # Close Sockets
-    sockSUB.close()
-    sockPUB.close()
+        # Set ZeroMQ socket to listen on incoming position data from all RPis
+        contextSUB = zmq.Context()
+        sockSUB = contextSUB.socket(zmq.SUB)
+        sockSUB.setsockopt(zmq.SUBSCRIBE, '')
+        sockSUB.RCVTIMEO = 250 # maximum duration to wait for data (in milliseconds)
+        for nRPi in range(len(RPiIPs)):
+            sockSUB.connect('tcp://' + RPiIPs[nRPi] + ':' + PosPort)
+        # Send Stop command until no more Position data is received
+        ReceivingPos = True
+        while ReceivingPos:
+            sockPUB.send(command)
+            try:
+                message = sockSUB.recv()
+            except:
+                message = 'no message'
+            if message == 'no message':
+                ReceivingPos = False
+        # Close Sockets
+        sockSUB.close()
+        sockPUB.close()
 
 
 class onlineTrackingData(object):
@@ -111,34 +88,24 @@ class onlineTrackingData(object):
     # Optional arguments during initialization:
     #   HistogramParameters is a list: [margins, binSize, histogram_speed_limit]
     #   SynthData set to True for debugging using synthetically generated position data
-    def __init__(self, RPiSettings, HistogramParameters, SynthData=False):
+    def __init__(self, RPiSettings, HistogramParameters=None, SynthData=False):
         # Initialise the class with input RPiSettings
+        self.combPos_update_interval = 0.05 # in seconds
         self.SynthData = SynthData
+        if HistogramParameters is None:
+            HistogramParameters = {'margins': 10, # histogram data margins in centimeters
+                                   'binSize': 2, # histogram binSize in centimeters
+                                   'speedLimit': 10}# centimeters of distance in last second to be included
         self.HistogramParameters = HistogramParameters
         self.KeepGettingData = True # Set True for endless while loop of updating latest data
         self.RPiSettings = RPiSettings
         self.posDatas = [None] * len(self.RPiSettings['use_RPi_nrs'])
         self.combPosHistory = []
+        self.setupSocket() # Set up listening of position data
         # Initialize Locks to avoid errors
         self.posDatasLock = threading.Lock()
         self.combPosHistoryLock = threading.Lock()
         self.histogramLock = threading.Lock()
-        if not self.SynthData:
-            # Initialize RPi position data listening, unless synthetic data requested
-            self.setupSocket() # Set up listening of position data
-            threading.Thread(target=self.updatePosDatas).start()
-            # Continue once data is received from each RPi
-            RPi_data_available = np.zeros(len(self.RPiSettings['use_RPi_nrs']), dtype=bool)
-            while not np.all(RPi_data_available):
-                for n_rpi in range(len(self.RPiSettings['use_RPi_nrs'])):
-                    if self.posDatas[n_rpi]:
-                        RPi_data_available[n_rpi] = True
-            print('All RPi data available')
-        else:
-            # Start generating movement data if synthetic data requested
-            threading.Thread(target=self.generatePosData, args=[self.RPiSettings['use_RPi_nrs'][0]]).start()
-            time.sleep(0.5)
-            self.setupSocket() # Set up listening of position data
         # Start updating position data and storing it in history
         threading.Thread(target=self.updateCombPosHistory).start()
 
@@ -242,7 +209,7 @@ class onlineTrackingData(object):
             with self.combPosHistoryLock:
                 combPos = np.array(self.combPosHistory)
             # Keep datapoints above speed limit
-            one_second_steps = int(np.round(1 / self.update_interval))
+            one_second_steps = int(np.round(1 / self.combPos_update_interval))
             idx_keep = np.zeros(combPos.shape[0], dtype=bool)
             for npos in range(one_second_steps, combPos.shape[0] - 1):
                 lastDistance = euclidean(combPos[npos,:2], combPos[npos - one_second_steps,:2])
@@ -259,10 +226,22 @@ class onlineTrackingData(object):
             self.positionHistogramEdges = {'x': xHistogram_edges, 'y': yHistogram_edges}
 
     def updateCombPosHistory(self):
-        # Updates position data information at a fixed interval
-        self.update_interval = 0.05 # in seconds
+        if not self.SynthData:
+            # Initialize RPi position data listening, unless synthetic data requested
+            threading.Thread(target=self.updatePosDatas).start()
+            # Continue once data is received from each RPi
+            RPi_data_available = np.zeros(len(self.RPiSettings['use_RPi_nrs']), dtype=bool)
+            while not np.all(RPi_data_available):
+                for n_rpi in range(len(self.RPiSettings['use_RPi_nrs'])):
+                    if self.posDatas[n_rpi]:
+                        RPi_data_available[n_rpi] = True
+            print('All RPi data available')
+        else:
+            # Start generating movement data if synthetic data requested
+            threading.Thread(target=self.generatePosData, args=[self.RPiSettings['use_RPi_nrs'][0]]).start()
+            time.sleep(0.5)
         # Set up speed tracking
-        one_second_steps = int(np.round(1 / self.update_interval))
+        one_second_steps = int(np.round(1 / self.combPos_update_interval))
         self.lastSecondDistance = 0 # vector distance from position 1 second in past
         # Initialize histogram
         self.initializePosHistogram(self.HistogramParameters)
@@ -274,7 +253,7 @@ class onlineTrackingData(object):
         # Update the data at specific interval
         while self.KeepGettingData:
             time_since_last_datapoint = time.time() - time_of_last_datapoint
-            if time_since_last_datapoint > self.update_interval:
+            if time_since_last_datapoint > self.combPos_update_interval:
                 # If enough time has passed since last update, append to combPosHistory list
                 with self.combPosHistoryLock:
                     lastCombPos = self.combineCurrentLineData(self.combPosHistory[-1])
@@ -299,7 +278,7 @@ class onlineTrackingData(object):
                     else:
                         self.lastSecondDistance = None
             else:
-                time.sleep(0.005)
+                time.sleep(self.combPos_update_interval * 0.1)
 
     def close(self):
         # Closes the updatePosDatas thread and ZeroMQ socket for position listening
@@ -307,3 +286,19 @@ class onlineTrackingData(object):
         time.sleep(0.25) # Allow the thread to run one last time before closing the socket to avoid error
         if not self.SynthData:
             self.sockSUB.close()
+
+class RewardControl(object):
+    # This class allows control of FEEDERs
+    # FEEDER_type can be either 'milk' or 'pellet'
+    def __init__(self, FEEDER_type, RPiIP, RPiUsername, RPiPassword):
+        self.FEEDER_type = FEEDER_type
+        # Set up SSH connection
+        self.ssh_connection = ssh(RPiIP, RPiUsername, RPiPassword)
+        self.ssh_connection.sendCommand('pkill python') # Ensure any past processes have closed
+
+    def release(self, quantity=1):
+        print('release ' + str(quantity))
+        if self.FEEDER_type is 'pellet':
+            self.ssh_connection.sendCommand('nohup python releasePellet.py ' + str(int(quantity)) + ' &')
+        elif self.FEEDER_type is 'milk':
+            self.ssh_connection.sendCommand('nohup python openPinchValve.py ' + str(quantity) + ' &')

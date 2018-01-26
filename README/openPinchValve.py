@@ -11,7 +11,7 @@
 
 import sys
 import piconzero as pz
-import time
+from time import sleep
 
 if len(sys.argv) != 2:
     print('Incorrect input.')
@@ -19,6 +19,6 @@ else:
     duration = float(sys.argv[1])
     pz.init()
     pz.setMotor(1,127)
-    time.sleep(duration)
+    sleep(duration)
     pz.setMotor(1,0)
     pz.cleanup()
