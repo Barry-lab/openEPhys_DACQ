@@ -71,6 +71,10 @@ class PosPlot(object):
         self.marginsBox = QtGui.QLineEdit(str(self.histogramParameters['margins']))
         self.marginsBox.returnPressed.connect(self.updateHistogramParameters)
         self.updateSmoothingValue()
+        self.showPathButton = QtGui.QPushButton('Show Path')
+        self.showPathButton.setCheckable(True)
+        self.showPathButton.setChecked(False)
+        self.showPathButton.clicked.connect(self.showPath)
         # Put all plots into main window and display
         self.mainWindow = QtGui.QWidget()
         self.mainWindow.setWindowTitle('Cumulative Position Plot')
@@ -100,6 +104,7 @@ class PosPlot(object):
         vbox.addWidget(QtGui.QLabel('Margins'))
         vbox.addWidget(QtGui.QLabel('in cm'))
         vbox.addWidget(self.marginsBox)
+        vbox.addWidget(self.showPathButton)
         hbox = QtGui.QHBoxLayout(self.mainWindow)
         hbox.addWidget(self.PlotGraphicsWidget)
         hbox.addWidget(self.ColormapGraphicsWidget)
@@ -164,7 +169,7 @@ class PosPlot(object):
                                [0, self.RPiSettings['arena_size'][1]], \
                                [0, 0]])
         boundaries = boundaries + self.histogramParameters['margins']
-        boundaries = boundaries / self.histogramParameters['binSize']
+        boundaries = boundaries / float(self.histogramParameters['binSize'])
         self.boundaryBox = pg.PlotDataItem()
         self.boundaryBox.setData(boundaries)
         self.boundaryBox.setPen(pg.mkPen('b', width=4))
@@ -188,6 +193,20 @@ class PosPlot(object):
         self.updatePlotAxes()
         self.plotBox.removeItem(self.boundaryBox)
         self.draw_arena_boundaries()
+
+    def showPath(self):
+        if self.showPathButton.isChecked():
+            with self.RPIpos.combPosHistoryLock:
+                posHistory = self.RPIpos.combPosHistory
+            posHistory = np.array(posHistory)[:, :2]
+            posHistory = posHistory + self.histogramParameters['margins']
+            posHistory = posHistory / float(self.histogramParameters['binSize'])
+            self.trackedPath = pg.PlotDataItem()
+            self.trackedPath.setData(posHistory)
+            self.trackedPath.setPen(pg.mkPen('w', width=1))
+            self.plotBox.addItem(self.trackedPath)
+        else:
+            self.plotBox.removeItem(self.trackedPath)
 
     def updatePlot(self):
         binSize = self.histogramParameters['binSize']
