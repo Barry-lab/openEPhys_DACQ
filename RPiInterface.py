@@ -297,7 +297,6 @@ class RewardControl(object):
         self.ssh_connection.sendCommand('pkill python') # Ensure any past processes have closed
 
     def release(self, quantity=1):
-        print('release ' + str(quantity))
         if self.FEEDER_type is 'pellet':
             self.ssh_connection.sendCommand('nohup python releasePellet.py ' + str(int(quantity)) + ' &')
         elif self.FEEDER_type is 'milk':

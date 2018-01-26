@@ -18,8 +18,6 @@ def smooth_edge_padding(data, smoothing):
 
     return data
 
-
-
 def compute_distance_travelled(posHistory, smoothing):
     distances = []
     posHistory = np.array(posHistory)[:, :2]
@@ -49,7 +47,7 @@ class Core(object):
         self.TaskSettings['PelletRewardMinSeparation'] = 10
         self.TaskSettings['PelletRewardMaxSeparation'] = 90
         self.TaskSettings['InitPellets'] = 5
-        self.TaskSettings['PelletRewardSize'] = 1
+        self.TaskSettings['PelletQuantity'] = 1
         self.TaskSettings['FEEDERs'] = []
         self.TaskSettings['FEEDERs'].append({'type': 'pellet', 
                                              'ID': 2, 
@@ -138,8 +136,7 @@ class Core(object):
             n_pellets_Feeders[:extraPellets] = n_pellets_Feeders[:extraPellets] + 1
             for feeder_list_idx, n_pellets in enumerate(n_pellets_Feeders):
                 n_feeder = self.activePfeeders[feeder_list_idx]
-                print('reward init: ' + str(n_pellets))
-                self.releaseReward(n_feeder, action='game_init', quantity=n_pellets)
+                self.releaseReward(n_feeder, 'game_init', n_pellets)
 
     def buttonGameOnOff_callback(self):
         # Switch Game On and Off
@@ -149,7 +146,7 @@ class Core(object):
 
     def buttonReleaseReward_callback(self, n_feeder):
         # Release pellet from specified feeder and mark as User action
-        self.releaseReward(n_feeder, action='user')
+        self.releaseReward(n_feeder, 'user', self.TaskSettings['PelletQuantity'])
 
     def buttonManualPellet_callback(self):
         # Update last reward time
@@ -364,10 +361,10 @@ class Core(object):
                 inactivity_complete.append(gp['complete'])
         if all(pellet_status_complete):
             for n_feeder in self.activePfeeders:
-                self.releaseReward(n_feeder, action='goal_pellet', quantity=1)
+                self.releaseReward(n_feeder, 'goal_pellet', self.TaskSettings['PelletQuantity'])
         elif all(inactivity_complete):
             n_feeder = self.activePfeeders[random.randint(0,len(self.activePfeeders) - 1)]
-            self.releaseReward(n_feeder, action='goal_inactivity', quantity=1)
+            self.releaseReward(n_feeder, 'goal_inactivity', self.TaskSettings['PelletQuantity'])
 
         return game_progress
 
