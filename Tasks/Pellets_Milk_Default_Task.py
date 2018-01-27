@@ -46,7 +46,7 @@ class Core(object):
         self.TaskSettings['PelletRewardMinSeparationMean'] = 10
         self.TaskSettings['PelletRewardMinSeparationVariance'] = 0.5 # As percentage
         self.TaskSettings['PelletRewardMaxSeparation'] = 90
-        self.TaskSettings['InitPellets'] = 1
+        self.TaskSettings['InitPellets'] = 5
         self.TaskSettings['PelletQuantity'] = 1
         self.TaskSettings['MilkQuantity'] = 1.0
         self.TaskSettings['MilkTrialMinSeparationMean'] = 60

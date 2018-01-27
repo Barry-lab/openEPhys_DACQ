@@ -308,7 +308,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Initialize Task
         if self.rb_task_yes.isChecked():
             print('Initializing Task...')
-            TaskSettings = {'name': 'Foraging_Pellets'}
+            TaskSettings = {'name': 'Pellets_Milk_Default_Task'}
             # Put input streams in a default dictionary that can be used by task as needed
             TaskIO = {'RPIPos': self.RPIpos, 
                       'OEmessages': self.OEmessages, 
