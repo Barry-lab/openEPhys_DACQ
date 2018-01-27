@@ -42,18 +42,19 @@ class Core(object):
         self.TaskSettings['LastTravelSmooth'] = 3
         self.TaskSettings['LastTravelDist'] = 50
         self.TaskSettings['Chewing_TTLchan'] = 5
-        self.TaskSettings['Chewing_Target'] = 10
+        self.TaskSettings['Chewing_Target'] = 4
         self.TaskSettings['PelletRewardMinSeparationMean'] = 10
         self.TaskSettings['PelletRewardMinSeparationVariance'] = 0.5 # As percentage
         self.TaskSettings['PelletRewardMaxSeparation'] = 90
         self.TaskSettings['InitPellets'] = 5
         self.TaskSettings['PelletQuantity'] = 1
-        self.TaskSettings['MilkQuantity'] = 1.0
+        self.TaskSettings['MilkQuantity'] = 2.0
         self.TaskSettings['MilkTrialMinSeparationMean'] = 60
         self.TaskSettings['MilkTrialMinSeparationVariance'] = 0.5 # As percentage
         self.TaskSettings['MilkTaskMinStartDistance'] = 80
         self.TaskSettings['MilkTaskMinGoalDistance'] = 20
         self.TaskSettings['MilkTrialMaxDuration'] = 9
+        self.TaskSettings['InitMilk'] = 2.0
         self.TaskSettings['FEEDERs'] = []
         # NOTE! lack of active milk or pellet feeders will turn off the corresponding task
         self.TaskSettings['FEEDERs'].append({'type': 'pellet', 
@@ -69,7 +70,7 @@ class Core(object):
                                              'IP': '192.168.0.41', 
                                              'username': 'pi', 
                                              'password': 'raspberry', 
-                                             'position': [120, 20]})
+                                             'position': [130, 10]})
         # Pre-compute variables
         self.one_second_steps = int(np.round(1 / self.TaskIO['RPIPos'].combPos_update_interval))
         self.distance_steps = int(np.round(self.TaskSettings['LastTravelTime'])) * self.one_second_steps
@@ -182,6 +183,9 @@ class Core(object):
             for feeder_list_idx, n_pellets in enumerate(n_pellets_Feeders):
                 n_feeder = self.activePfeeders[feeder_list_idx]
                 self.releaseReward(n_feeder, 'game_init', n_pellets)
+        if self.milkGameOn and 'InitMilk' in self.TaskSettings.keys() and self.TaskSettings['InitMilk'] > 0:
+            for n_feeder in self.activeMfeeders:
+                self.releaseReward(n_feeder, 'game_init', self.TaskSettings['InitMilk'])
 
     def buttonGameOnOff_callback(self):
         # Switch Game On and Off
@@ -387,6 +391,13 @@ class Core(object):
             position = (pb['position']['xpos'], ypos, pb['position']['xlen'], ylen)
             pygame.draw.rect(self.screen, color, position, 0)
 
+    def choose_pellet_feeder(self):
+        n_feeder = random.randint(0, len(self.activePfeeders) - 1)
+        n_feeder = self.activePfeeders[n_feeder]
+
+        return n_feeder
+
+
     def start_milkTrial(self, n_feeder=None, action='undefined'):
         if n_feeder is None:
             # If no feeder specified, pick one at random
@@ -513,18 +524,17 @@ class Core(object):
                     inactivity_complete.append(gp['complete'])
                 if 'milkTrialStart' in gp['goals']:
                     milkTrialStart_complete.append(gp['complete'])
-            if self.pelletGameOn and all(pellet_status_complete):
+            if self.milkGameOn and all(milkTrialStart_complete):
+                # If conditions met, start milkTrial
+                self.start_milkTrial(action='goal_milkTrialStart')
+            elif self.pelletGameOn and all(pellet_status_complete):
                 # If conditions met, release pellet reward
-                for n_feeder in self.activePfeeders:
-                    self.updatePelletMinSepratation()
-                    self.releaseReward(n_feeder, 'goal_pellet', self.TaskSettings['PelletQuantity'])
+                n_feeder = self.choose_pellet_feeder()
+                self.releaseReward(n_feeder, 'goal_pellet', self.TaskSettings['PelletQuantity'])
             elif self.pelletGameOn and all(inactivity_complete):
                 # If animal has been inactive and without pellet rewards, release pellet reward
                 n_feeder = self.activePfeeders[random.randint(0,len(self.activePfeeders) - 1)]
                 self.releaseReward(n_feeder, 'goal_inactivity', self.TaskSettings['PelletQuantity'])
-            elif self.milkGameOn and all(milkTrialStart_complete):
-                # If conditions met, start milkTrial
-                self.start_milkTrial(action='goal_milkTrialStart')
         elif self.milkTrialOn:
             # If milk trial is currently ongoing
             # Check if any outcome criteria is reached
