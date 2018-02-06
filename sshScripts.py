@@ -32,3 +32,8 @@ class ssh:
         else:
             print("Connection not opened.")
 
+    def disconnect(self):
+        if(self.client):
+            self.client.close()
+        else:
+            print("Connection not opened.")

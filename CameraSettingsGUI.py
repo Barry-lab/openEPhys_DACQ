@@ -191,6 +191,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
             # Run getImage.py on RPi to capture a frame
             com_str = 'cd ' + self.trackingFolder + ' && python getImage.py'
             connection.sendCommand(com_str)
+            connection.disconnect()
             # Copy over output files to local TEMP folder
             callstr = 'scp ' + RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + self.trackingFolder + '/frame.jpg ' + \
                  str(self.TEMPfolder) + '/frame' + str(n_rpi) + '.jpg'
@@ -211,6 +212,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
             # Run calibrate.py on RPi
             com_str = 'cd ' + self.trackingFolder + ' && python calibrate.py'
             connection.sendCommand(com_str)
+            connection.disconnect()
             # Copy over output files to local TEMP folder
             callstr = 'scp ' + RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + self.trackingFolder + '/calibrationData.p ' + \
                  str(self.TEMPfolder) + '/calibrationData' + str(n_rpi) + '.p'
@@ -337,6 +339,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
             # Run calibrate.py on RPi with the overlay argument
             com_str = 'cd ' + self.trackingFolder + ' && python calibrate.py overlay'
             connection.sendCommand(com_str)
+            connection.disconnect()
             # Copy over overlay.jpg image to local TEMP folder
             callstr = 'scp ' + RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + self.trackingFolder + '/overlay.jpg ' + \
                       str(self.TEMPfolder) + '/overlay' + str(n_rpi) + '.jpg'

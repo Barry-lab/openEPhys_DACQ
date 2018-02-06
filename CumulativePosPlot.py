@@ -259,16 +259,3 @@ class PosPlot(object):
         self.cumulativePlot_timer.stop()
         self.mainWindow.close()
         print('Stopped Cumulative Position Plot.')
-
-
-# import pickle
-# import sys
-
-# RPiSettingsLoc = '/media/QNAP/sanderT/Exp_Scale/16-11-17/2017-11-16_20-03-35/CameraData2/RPiSettings.p'
-# with open(RPiSettingsLoc, 'r') as file:
-#     RPiSettings = pickle.load(file)
-
-# app = QtGui.QApplication(sys.argv)
-# PosPlotWindow = PosPlot(RPiSettings=RPiSettings)
-# app.exec_()
-# PosPlotWindow.close()

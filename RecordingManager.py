@@ -19,6 +19,7 @@ from CumulativePosPlot import PosPlot
 from OpenEphysInterface import SendOpenEphysSingleMessage, SubscribeToOpenEphys
 import HelperFunctions as hfunct
 import threading
+import copy
 
 def show_message(message, message_more=None):
     # This function is used to display a message in a separate window
@@ -122,6 +123,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_load.clicked.connect(lambda:self.load_settings())
         self.pb_root_folder.clicked.connect(lambda:self.root_folder_browse())
         self.pb_cam_set.clicked.connect(lambda:self.camera_settings())
+        self.pb_task_set.clicked.connect(lambda:self.task_settings())
         self.pb_start_rec.clicked.connect(lambda:self.start_rec())
         self.pb_stop_rec.clicked.connect(lambda:self.stop_rec())
         self.pb_process_data.clicked.connect(lambda:self.process_data())
@@ -170,6 +172,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pt_badChan.setPlainText(RecGUI_Settings['badChan'])
         self.pt_rec_folder.setPlainText(RecGUI_Settings['rec_folder'])
         self.rb_posPlot_yes.setChecked(RecGUI_Settings['PosPlot'])
+        self.rb_task_yes.setChecked(RecGUI_Settings['TaskActive'])
         if len(RecGUI_Settings['channel_map']) > 0:
             self.pt_chan_map_1.setPlainText(RecGUI_Settings['channel_map'][0][0])
             self.pt_chan_map_1_chans.setPlainText(RecGUI_Settings['channel_map'][0][1])
@@ -189,6 +192,11 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             RPiSettings = pickle.load(file)
         from CameraSettingsGUI import Camera_Files_Update_Function
         Camera_Files_Update_Function(SettingsFolder=self.TEMPfolder, RPiSettings=RPiSettings, useCalibration=True)
+        # Load Task Settings if available
+        TaskSettingsFileName = os.path.join(self.RecGUI_dataFolder, folder_name, 'TaskSettings.p')
+        if os.path.isfile(TaskSettingsFileName):
+            with open(TaskSettingsFileName, 'rb') as file:
+                self.TaskSettings = pickle.load(file)
 
     def load_last_settings(self):
         # Check if specific Animal ID has been entered
@@ -247,6 +255,10 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         if os.path.isfile(RPiSettingsFile):
             self.CamSet.load(loadFile=self.TEMPfolder + '/RPiSettings.p')
 
+    def task_settings(self):
+        from TaskSettingsGUI import TaskSettingsGUI
+        self.TaskSet = TaskSettingsGUI(parent=self)
+
     def get_RecordingGUI_settings(self):
         # Get channel mapping info
         channel_map = []
@@ -275,15 +287,10 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
                            'badChan': str(self.pt_badChan.toPlainText()), 
                            'rec_folder': str(self.pt_rec_folder.toPlainText()), 
                            'PosPlot': self.rb_posPlot_yes.isChecked(), 
-                           'channel_map': channel_map}
+                           'channel_map': channel_map, 
+                           'TaskActive': self.rb_task_yes.isChecked()}
 
         return RecGUI_Settings
-
-    def start_task(self, TaskSettings, TaskIO):
-        print('Starting Task')
-        TaskModule = hfunct.import_subdirectory_module('Tasks', TaskSettings['name'])
-        self.current_task = TaskModule.Core(TaskSettings, TaskIO)
-        self.current_task.run()
 
     def start_rec(self):
         # Load tracking RPi Settings
@@ -308,13 +315,12 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Initialize Task
         if self.rb_task_yes.isChecked():
             print('Initializing Task...')
-            TaskSettings = {'name': 'Pellets_Milk_Default_Task'}
             # Put input streams in a default dictionary that can be used by task as needed
             TaskIO = {'RPIPos': self.RPIpos, 
                       'OEmessages': self.OEmessages, 
                       'MessageToOE': SendOpenEphysSingleMessage}
-            TaskModule = hfunct.import_subdirectory_module('Tasks', TaskSettings['name'])
-            self.current_task = TaskModule.Core(TaskSettings, TaskIO)
+            TaskModule = hfunct.import_subdirectory_module('Tasks', self.TaskSettings['name'])
+            self.current_task = TaskModule.Core(copy.deepcopy(self.TaskSettings), TaskIO)
             print('Initializing Task Successful')
         # Start Open Ephys GUI recording
         print('Starting Open Ephys GUI Recording...')
@@ -409,6 +415,12 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         with open(str(self.pt_rec_folder.toPlainText()) + '/RecGUI_Settings.p', 'wb') as file:
             pickle.dump(RecGUI_Settings, file)
         print('Saved Recording Manager Settings.')
+        # Save task settings if available
+        if self.rb_task_yes.isChecked():
+            with open(RecordingManagerSaveFolder + '/TaskSettings.p', 'wb') as file:
+                pickle.dump(self.TaskSettings, file)
+            with open(str(self.pt_rec_folder.toPlainText()) + '/TaskSettings.p', 'wb') as file:
+                pickle.dump(self.TaskSettings, file)
         # Save badChan list from text box to a file in the recording folder
         if len(str(self.pt_badChan.toPlainText())) > 0:
             save_badChan_to_file(str(self.pt_badChan.toPlainText()), str(self.pt_rec_folder.toPlainText()))

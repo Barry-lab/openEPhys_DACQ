@@ -71,6 +71,9 @@ class TrackingControl(object):
                 message = 'no message'
             if message == 'no message':
                 ReceivingPos = False
+        # Close SSH connections
+        for connection in self.RPiSSH:
+            connection.disconnect()
         # Close Sockets
         sockSUB.close()
         sockPUB.close()
@@ -297,7 +300,10 @@ class RewardControl(object):
         self.ssh_connection.sendCommand('pkill python') # Ensure any past processes have closed
 
     def release(self, quantity=1):
-        if self.FEEDER_type is 'pellet':
+        if self.FEEDER_type == 'pellet':
             self.ssh_connection.sendCommand('nohup python releasePellet.py ' + str(int(quantity)) + ' &')
-        elif self.FEEDER_type is 'milk':
+        elif self.FEEDER_type == 'milk':
             self.ssh_connection.sendCommand('nohup python openPinchValve.py ' + str(quantity) + ' &')
+
+    def close(self):
+        self.ssh_connection.disconnect()
