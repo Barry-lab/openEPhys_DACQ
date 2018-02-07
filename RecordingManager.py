@@ -20,6 +20,7 @@ from OpenEphysInterface import SendOpenEphysSingleMessage, SubscribeToOpenEphys
 import HelperFunctions as hfunct
 import threading
 import copy
+from scipy.io import savemat
 
 def show_message(message, message_more=None):
     # This function is used to display a message in a separate window
@@ -292,6 +293,47 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
 
         return RecGUI_Settings
 
+    def store_RecGUI_parameters(self, path):
+        # Copy over RPi tracking folder to Recording Folder on PC using rsync
+        print('Copying over tracking data to Recording PC...')
+        user = self.RPiSettings['username']
+        trackingFolder = self.RPiSettings['tracking_folder']
+        for n_rpi in self.RPiSettings['use_RPi_nrs']:
+            RPiIP = self.RPiSettings['RPiIP'][n_rpi]
+            callstr = 'rsync -avzh ' + user + '@' + RPiIP + ':' + \
+                      trackingFolder + '/ ' + path + \
+                      '/CameraData' + str(n_rpi) + '/'
+            os.system(callstr)
+            # Create a copy of log file as PosLog.csv file in recording folder
+            src_logfile = path + '/CameraData' + str(n_rpi) + '/logfile.csv'
+            dst_logfile = path + '/PosLog' + str(n_rpi) + '.csv'
+            copyfile(src_logfile, dst_logfile)
+        print('Copying over tracking data to Recording PC Successful')
+        # Keep note of RPiSettings and Calibration data on PC for this GUI.
+        # These are kept in the RecGUI_dataFolder as specified in the __init__ function.
+        rec_folder_name = str(self.pt_rec_folder.toPlainText())
+        rec_folder_name = rec_folder_name[rec_folder_name.rfind('/') + 1:]
+        RecordingManagerSaveFolder = self.RecGUI_dataFolder + '/' + rec_folder_name
+        callstr = 'rsync -avzh ' + self.TEMPfolder + '/ ' + RecordingManagerSaveFolder + '/'
+        os.system(callstr)
+        RecGUI_Settings = self.get_RecordingGUI_settings()
+        with open(RecordingManagerSaveFolder + '/RecGUI_Settings.p', 'wb') as file:
+            pickle.dump(RecGUI_Settings, file)
+        with open(path + '/RecGUI_Settings.p', 'wb') as file:
+            pickle.dump(RecGUI_Settings, file)
+        print('Saved Recording Manager Settings.')
+        # Save task settings if available
+        if self.rb_task_yes.isChecked():
+            with open(RecordingManagerSaveFolder + '/TaskSettings.p', 'wb') as file:
+                pickle.dump(self.TaskSettings, file)
+            with open(path + '/TaskSettings.p', 'wb') as file:
+                pickle.dump(self.TaskSettings, file)
+        # Save badChan list from text box to a file in the recording folder
+        if len(str(self.pt_badChan.toPlainText())) > 0:
+            save_badChan_to_file(str(self.pt_badChan.toPlainText()), path)
+            print('Saved the list of bad channels: ' + str(self.pt_badChan.toPlainText()))
+
+
     def start_rec(self):
         # Load tracking RPi Settings
         with open(self.TEMPfolder + '/RPi/RPiSettings.p','rb') as file:
@@ -387,44 +429,8 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             SendOpenEphysSingleMessage('StopRecord')
             time.sleep(0.1)
         print('Stopping Open Ephys GUI Recording Successful')
-        # Copy over RPi tracking folder to Recording Folder on PC using rsync
-        print('Copying over tracking data to Recording PC...')
-        user = self.RPiSettings['username']
-        trackingFolder = self.RPiSettings['tracking_folder']
-        for n_rpi in self.RPiSettings['use_RPi_nrs']:
-            RPiIP = self.RPiSettings['RPiIP'][n_rpi]
-            callstr = 'rsync -avzh ' + user + '@' + RPiIP + ':' + \
-                      trackingFolder + '/ ' + str(self.pt_rec_folder.toPlainText()) + \
-                      '/CameraData' + str(n_rpi) + '/'
-            os.system(callstr)
-            # Create a copy of log file as PosLog.csv file in recording folder
-            src_logfile = str(self.pt_rec_folder.toPlainText()) + '/CameraData' + str(n_rpi) + '/logfile.csv'
-            dst_logfile = str(self.pt_rec_folder.toPlainText()) + '/PosLog' + str(n_rpi) + '.csv'
-            copyfile(src_logfile, dst_logfile)
-        print('Copying over tracking data to Recording PC Successful')
-        # Keep note of RPiSettings and Calibration data on PC for this GUI.
-        # These are kept in the RecGUI_dataFolder as specified in the __init__ function.
-        rec_folder_name = str(self.pt_rec_folder.toPlainText())
-        rec_folder_name = rec_folder_name[rec_folder_name.rfind('/') + 1:]
-        RecordingManagerSaveFolder = self.RecGUI_dataFolder + '/' + rec_folder_name
-        callstr = 'rsync -avzh ' + self.TEMPfolder + '/ ' + RecordingManagerSaveFolder + '/'
-        os.system(callstr)
-        RecGUI_Settings = self.get_RecordingGUI_settings()
-        with open(RecordingManagerSaveFolder + '/RecGUI_Settings.p', 'wb') as file:
-            pickle.dump(RecGUI_Settings, file)
-        with open(str(self.pt_rec_folder.toPlainText()) + '/RecGUI_Settings.p', 'wb') as file:
-            pickle.dump(RecGUI_Settings, file)
-        print('Saved Recording Manager Settings.')
-        # Save task settings if available
-        if self.rb_task_yes.isChecked():
-            with open(RecordingManagerSaveFolder + '/TaskSettings.p', 'wb') as file:
-                pickle.dump(self.TaskSettings, file)
-            with open(str(self.pt_rec_folder.toPlainText()) + '/TaskSettings.p', 'wb') as file:
-                pickle.dump(self.TaskSettings, file)
-        # Save badChan list from text box to a file in the recording folder
-        if len(str(self.pt_badChan.toPlainText())) > 0:
-            save_badChan_to_file(str(self.pt_badChan.toPlainText()), str(self.pt_rec_folder.toPlainText()))
-            print('Saved the list of bad channels: ' + str(self.pt_badChan.toPlainText()))
+        # Store all parameters for this session
+        self.store_RecGUI_parameters(str(self.pt_rec_folder.toPlainText()))
         # Change start button colors
         self.pb_start_rec.setStyleSheet(self.original_stylesheets['pb_start_rec']) # Start button to default
         # Disable Stop button and Enable other buttons
