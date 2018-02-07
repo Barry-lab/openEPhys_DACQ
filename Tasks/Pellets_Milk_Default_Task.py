@@ -94,7 +94,7 @@ def exportSettings(self):
                     'MilkTrialFailPenalty': int(float(str(self.settings['MilkTrialFailPenalty'].text()))), 
                     'milkGameOn': self.settings['milkGameOn'].isChecked(), 
                     'InitMilk': float(str(self.settings['InitMilk'].text())), 
-                    'MilkQuantity': int(float(str(self.settings['MilkQuantity'].text()))), 
+                    'MilkQuantity': float(str(self.settings['MilkQuantity'].text())), 
                     'MilkTrialMinSeparationMean': int(float(str(self.settings['MilkTrialMinSeparationMean'].text()))), 
                     'MilkTrialMinSeparationVariance': float(str(self.settings['MilkTrialMinSeparationVariance'].text())), 
                     'MilkTaskMinStartDistance': int(float(str(self.settings['MilkTaskMinStartDistance'].text()))), 
@@ -103,7 +103,7 @@ def exportSettings(self):
     FEEDERs = []
     for feeder in self.settings['FEEDERs']:
         FEEDERs.append({'Type': feeder['Type'], 
-                        'ID': int(str(feeder['ID'].text())), 
+                        'ID': int(str(feeder['ID'].text())) - 1, 
                         'Present': feeder['Present'].isChecked(), 
                         'Active': feeder['Active'].isChecked(), 
                         'IP': str(feeder['IP'].text()), 
@@ -124,7 +124,7 @@ def importSettings(self, TaskSettings):
             self.settings['FEEDERs'] = []
             for feeder in TaskSettings[key]:
                 FEEDER_type = feeder['Type']
-                FEEDER_settings = {'ID': str(feeder['ID']), 
+                FEEDER_settings = {'ID': str(feeder['ID'] + 1), 
                                    'Present': feeder['Present'], 
                                    'Active': feeder['Active'], 
                                    'IP': feeder['IP'], 
@@ -378,6 +378,7 @@ class Core(object):
             self.lastMilkTrial = time.time()
             self.updateMilkTrialMinSepratation()
             self.milkTrialFailTime = time.time() - self.TaskSettings['MilkTrialFailPenalty']
+            self.n_feeder_milkTrial = self.chooseMilkTrialFeeder()
         self.milkTrialOn = False
         # Set game speed
         self.responseRate = 60 # Hz
@@ -482,7 +483,8 @@ class Core(object):
 
     def buttonMilkTrial_callback(self, n_feeder):
         # Starts the trial with specific feeder as goal
-        self.start_milkTrial(n_feeder=n_feeder, action='user')
+        self.n_feeder_milkTrial = n_feeder
+        self.start_milkTrial(action='user')
 
     def defineButtons(self):
         # Add or remove buttons from this function
@@ -669,16 +671,16 @@ class Core(object):
 
         return n_feeder
 
-    def start_milkTrial(self, n_feeder=None, action='undefined'):
-        if n_feeder is None:
-            # If no feeder specified, pick one at random
-            n_feeder = random.randint(0, len(self.activeMfeeders) - 1)
-            n_feeder = self.activeMfeeders[n_feeder]
-        self.n_feeder_milkTrial = n_feeder
-        self.updateMilkTrialMinSepratation()
+    def chooseMilkTrialFeeder(self):
+        n_feeder = random.randint(0, len(self.activeMfeeders) - 1)
+        n_feeder = self.activeMfeeders[n_feeder]
+
+        return n_feeder
+
+    def start_milkTrial(self, action='undefined'):
         # These settings put the game_logic into milkTrial mode
         self.milkTrialOn = True
-        self.milkTrialTone = createSineWaveSound(self.TaskSettings['FEEDERs'][n_feeder]['SignalHz'])
+        self.milkTrialTone = createSineWaveSound(self.TaskSettings['FEEDERs'][self.n_feeder_milkTrial]['SignalHz'])
         self.milkTrialTone.play(-1)
         self.lastMilkTrial = time.time()
         feederID = self.TaskSettings['FEEDERs'][self.n_feeder_milkTrial]['ID']
@@ -694,6 +696,9 @@ class Core(object):
             self.releaseReward(self.n_feeder_milkTrial, 'goal_milk', self.TaskSettings['MilkQuantity'])
         else:
             self.milkTrialFailTime = time.time()
+        # Update n_feeder_milkTrial for next trial
+        self.n_feeder_milkTrial = self.chooseMilkTrialFeeder()
+        self.updateMilkTrialMinSepratation()
 
     def game_logic(self):
         game_progress = []
@@ -751,16 +756,13 @@ class Core(object):
                                   'complete': timeSinceLastMilkTrial >= self.TaskSettings['MilkTrialMinSeparation'], 
                                   'percentage': timeSinceLastMilkTrial / float(self.TaskSettings['MilkTrialMinSeparation'])})
             # Check if animal is far enough from milk rewards
-            distances = []
-            for n_feeder in self.activeMfeeders:
-                distances.append(euclidean(np.array(posHistory[-1][:2]), np.array(self.TaskSettings['FEEDERs'][n_feeder]['Position'])))
-            minDistance = min(distances)
+            distance = euclidean(np.array(posHistory[-1][:2]), np.array(self.TaskSettings['FEEDERs'][self.n_feeder_milkTrial]['Position']))
             game_progress.append({'name': 'Milk Distance', 
                                   'goals': ['milkTrialStart'], 
                                   'target': self.TaskSettings['MilkTaskMinStartDistance'], 
-                                  'status': int(round(minDistance)), 
-                                  'complete': minDistance >= self.TaskSettings['MilkTaskMinStartDistance'], 
-                                  'percentage': minDistance / float(self.TaskSettings['MilkTaskMinStartDistance'])})
+                                  'status': int(round(distance)), 
+                                  'complete': distance >= self.TaskSettings['MilkTaskMinStartDistance'], 
+                                  'percentage': distance / float(self.TaskSettings['MilkTaskMinStartDistance'])})
             if self.milkTrialOn:
                 # Check if animal is close enough to goal location
                 distance = euclidean(np.array(posHistory[-1][:2]), np.array(self.TaskSettings['FEEDERs'][self.n_feeder_milkTrial]['Position']))
