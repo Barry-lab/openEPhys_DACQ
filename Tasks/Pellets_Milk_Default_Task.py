@@ -348,17 +348,6 @@ class Core(object):
         self.ttlTimes = []
         self.ttlTimesLock = threading.Lock()
         self.TaskIO['OEmessages'].add_callback(self.append_ttl_pulses)
-        # Initialize FEEDERs
-        print('Initializing FEEDERs...')
-        T_initFEEDER = []
-        self.FEEDER_Lock = threading.Lock()
-        for n_feeder, feeder in enumerate(self.TaskSettings['FEEDERs']):
-            if feeder['Active']:
-                T = threading.Thread(target=self.initFEEDER, args=[n_feeder])
-                T.start()
-        for T in T_initFEEDER:
-            T.join()
-        print('Initializing FEEDERs Successful')
         # Set up Pellet Rewards
         self.pelletGameOn = self.TaskSettings['pelletGameOn']
         if self.pelletGameOn:
@@ -380,6 +369,23 @@ class Core(object):
             self.milkTrialFailTime = time.time() - self.TaskSettings['MilkTrialFailPenalty']
             self.n_feeder_milkTrial = self.chooseMilkTrialFeeder()
         self.milkTrialOn = False
+        # Initialize FEEDERs
+        print('Initializing FEEDERs...')
+        T_initFEEDER = []
+        self.FEEDER_Lock = threading.Lock()
+        for n_feeder, feeder in enumerate(self.TaskSettings['FEEDERs']):
+            if feeder['Active']:
+                if feeder['Type'] == 'pellet' and self.pelletGameOn:
+                    T = threading.Thread(target=self.initFEEDER, args=[n_feeder])
+                    T.start()
+                    T_initFEEDER.append(T)
+                elif feeder['Type'] == 'milk' and self.milkGameOn:
+                    T = threading.Thread(target=self.initFEEDER, args=[n_feeder])
+                    T.start()
+                    T_initFEEDER.append(T)
+        for T in T_initFEEDER:
+            T.join()
+        print('Initializing FEEDERs Successful')
         # Set game speed
         self.responseRate = 60 # Hz
         self.gameRate = 10 # Hz

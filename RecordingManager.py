@@ -333,7 +333,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             save_badChan_to_file(str(self.pt_badChan.toPlainText()), path)
             print('Saved the list of bad channels: ' + str(self.pt_badChan.toPlainText()))
 
-
     def start_rec(self):
         # Load tracking RPi Settings
         with open(self.TEMPfolder + '/RPi/RPiSettings.p','rb') as file:
