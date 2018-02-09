@@ -762,13 +762,16 @@ class Core(object):
                                   'complete': timeSinceLastMilkTrial >= self.TaskSettings['MilkTrialMinSeparation'], 
                                   'percentage': timeSinceLastMilkTrial / float(self.TaskSettings['MilkTrialMinSeparation'])})
             # Check if animal is far enough from milk rewards
-            distance = euclidean(np.array(posHistory[-1][:2]), np.array(self.TaskSettings['FEEDERs'][self.n_feeder_milkTrial]['Position']))
+            distances = []
+            for n_feeder in self.activeMfeeders:
+                distances.append(euclidean(np.array(posHistory[-1][:2]), np.array(self.TaskSettings['FEEDERs'][n_feeder]['Position'])))
+            minDistance = min(distances)
             game_progress.append({'name': 'Milk Distance', 
-                                  'goals': ['milkTrialStart'], 
-                                  'target': self.TaskSettings['MilkTaskMinStartDistance'], 
-                                  'status': int(round(distance)), 
-                                  'complete': distance >= self.TaskSettings['MilkTaskMinStartDistance'], 
-                                  'percentage': distance / float(self.TaskSettings['MilkTaskMinStartDistance'])})
+                              'goals': ['milkTrialStart'], 
+                              'target': self.TaskSettings['MilkTaskMinStartDistance'], 
+                              'status': int(round(minDistance)), 
+                              'complete': minDistance >= self.TaskSettings['MilkTaskMinStartDistance'], 
+                              'percentage': minDistance / float(self.TaskSettings['MilkTaskMinStartDistance'])})
             if self.milkTrialOn:
                 # Check if animal is close enough to goal location
                 distance = euclidean(np.array(posHistory[-1][:2]), np.array(self.TaskSettings['FEEDERs'][self.n_feeder_milkTrial]['Position']))
