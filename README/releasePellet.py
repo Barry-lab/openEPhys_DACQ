@@ -7,20 +7,50 @@
 # edit script variables LoadingAngle and ReleaseAngle
 
 from RPi import GPIO
-from time import sleep
+import time
 import sys
+import threading
+
+GPIO.setmode(GPIO.BOARD) # Use board numbering for TTL pin
+
+class detect_pellet(object):
+    # This class keeps checking if a pellet has been released
+    # as soon as it is instantiated
+    # Use the following to check if pellet was detected
+    # pellet_checker = detect_pellet()
+    # with pellet_checker.pelletDetectedLock:
+    #     print(pellet_checker.pelletDetected)
+    # Use pellet_checker.close() to stop
+
+    def __init__(self,beamPin=15):
+        self.beamPin = beamPin
+        GPIO.setup(self.beamPin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        self.pelletDetected = False
+        self.pelletDetectedLock = threading.Lock()
+        threading.Thread(target=self.wait_for_pellet).start()
+
+    def wait_for_pellet(self):
+        while not self.pelletDetected:
+            val = GPIO.input(self.beamPin)
+            if val == 0:
+                with self.pelletDetectedLock:
+                    self.pelletDetected = True
+
+    def close(self):
+        with self.pelletDetectedLock:
+            self.pelletDetected = True
+        GPIO.cleanup(self.beamPin)
 
 class servo_controller(object):
     # This class activates servo SG-5010 with PWM signal
     # setAngle function allows setting the servo to a specific angle    
-    def __init__(self,ttlPin=12):
+    def __init__(self,servoPin=12):
         frequency = 50.0 # PWM cycle frequency
-        self.ttlPin = ttlPin # Specify the TTL pin to be used for signal on RPi board
-        GPIO.setmode(GPIO.BOARD) # Use board numbering for TTL pin
-        GPIO.setup(self.ttlPin, GPIO.OUT)
+        self.servoPin = servoPin # Specify the TTL pin to be used for signal on RPi board
+        GPIO.setup(self.servoPin, GPIO.OUT)
         # Initialize PWM signalling
-        self.pwm = GPIO.PWM(self.ttlPin, frequency)
-        GPIO.output(self.ttlPin, False) # Keep signal off until first movement command to avoid jitter
+        self.pwm = GPIO.PWM(self.servoPin, frequency)
+        GPIO.output(self.servoPin, False) # Keep signal off until first movement command to avoid jitter
         self.pwm.start(0)
 
     def setAngle(self, angle):
@@ -28,14 +58,14 @@ class servo_controller(object):
         duty = angle / 19.5 + 2.0
         self.pwm.ChangeDutyCycle(duty)
         # This ensures the TTL pin is active and sending signal
-        GPIO.output(self.ttlPin, True)
+        GPIO.output(self.servoPin, True)
     
     def close(self):
         # Stops sending the signal to the servo
-        GPIO.output(self.ttlPin, False)
-        sleep(0.1)
+        GPIO.output(self.servoPin, False)
+        time.sleep(0.1)
         self.pwm.stop()
-        GPIO.cleanup(self.ttlPin)
+        GPIO.cleanup(self.servoPin)
 
 # Set these angles to work with your feeder
 LoadingAngle = 30
@@ -49,15 +79,26 @@ else:
 sc = servo_controller()
 # Drop as many pellets as requested
 for n_pellet  in range(n_pellets):
-    # Moves the servo to the loading position
-    sc.setAngle(LoadingAngle)
-    sleep(0.4) # Allows time for movement
-    # Jitter in the loading position to make sure a pellet falls in
-    for jitter in [-15, 15, -15, 15, -15, 15]:
-        sc.setAngle(LoadingAngle + jitter)
-        sleep(0.1)
-    # Move the servo to the pellet releasing position
-    sc.setAngle(ReleaseAngle)
-    sleep(0.4) # Allow time for movement
+    release_successful = False
+    while not release_successful:
+        pellet_checker = detect_pellet()
+        # Moves the servo to the loading position
+        sc.setAngle(LoadingAngle)
+        time.sleep(0.4) # Allows time for movement
+        # Jitter in the loading position to make sure a pellet falls in
+        for jitter in [-15, 15, -15, 15, -15, 15]:
+            sc.setAngle(LoadingAngle + jitter)
+            time.sleep(0.1)
+        # Move the servo to the pellet releasing position
+        sc.setAngle(ReleaseAngle)
+        time.sleep(0.4) # Allow time for movement
+        # Check if pellet was dropped.
+        waiting_started = time.time()
+        max_wait_time = 1
+        while not release_successful and time.time() - waiting_started < max_wait_time:
+            time.sleep(0.05)
+            with pellet_checker.pelletDetectedLock:
+                release_successful = pellet_checker.pelletDetected
+        pellet_checker.close()
 # Stop signalling to the servo
 sc.close()
