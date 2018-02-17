@@ -24,7 +24,7 @@ class detect_pellet(object):
 
     def __init__(self,beamPin=15):
         self.beamPin = beamPin
-        GPIO.setup(self.beamPin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        GPIO.setup(self.beamPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         self.pelletDetected = False
         self.pelletDetectedLock = threading.Lock()
         threading.Thread(target=self.wait_for_pellet).start()
