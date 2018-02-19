@@ -198,6 +198,7 @@ class PosPlot(object):
         if self.showPathButton.isChecked():
             with self.RPIpos.combPosHistoryLock:
                 posHistory = self.RPIpos.combPosHistory
+            posHistory = [i for i in posHistory if i is not None]
             posHistory = np.array(posHistory)[:, :2]
             posHistory = posHistory + self.histogramParameters['margins']
             posHistory = posHistory / float(self.histogramParameters['binSize'])
@@ -228,7 +229,7 @@ class PosPlot(object):
         self.imageItem.setImage(image, autoLevels=False, lut=self.CMapLut)
         # Draw arrow for position if position data available
         self.plotBox.removeItem(self.arrow) # Remove previous arrow
-        if not np.isnan(currPos[0]):
+        if not (currPos is None) and not (pastPos is None):
             arrowPos = ((currPos[0] + margins) / binSize, (currPos[1] + margins) / binSize)
             if self.RPiSettings['LEDmode'] == 'double' and not np.any(np.isnan(currPos[2:])):
                 # Compute arrow angle with to align the line connecting the points
@@ -248,6 +249,7 @@ class PosPlot(object):
                                           brush=pg.mkBrush('b'), pen=pg.mkPen('c', width=3))
                 self.plotBox.addItem(self.arrow)
         else:
+            # Add invisible arrow item to keep loop consistent
             self.arrow = pg.ArrowItem(pos=[0, 0], 
                                       angle=0, headLen=0, tailLen=0, 
                                       headWidth=0, tailWidth=0, 

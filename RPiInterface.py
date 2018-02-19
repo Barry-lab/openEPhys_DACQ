@@ -250,8 +250,10 @@ class onlineTrackingData(object):
         self.initializePosHistogram(self.HistogramParameters)
         # Check data is available before proceeding
         with self.combPosHistoryLock:
-            lastCombPos = self.combineCurrentLineData(None)
-            self.combPosHistory.append(lastCombPos)
+            lastCombPos = None
+            while lastCombPos is None:
+                lastCombPos = self.combineCurrentLineData(None)
+            self.combPosHistory.append(list(lastCombPos))
         time_of_last_datapoint = time.time()
         # Update the data at specific interval
         while self.KeepGettingData:
@@ -260,14 +262,17 @@ class onlineTrackingData(object):
                 # If enough time has passed since last update, append to combPosHistory list
                 with self.combPosHistoryLock:
                     lastCombPos = self.combineCurrentLineData(self.combPosHistory[-1])
-                    self.combPosHistory.append(lastCombPos)
+                    if not (lastCombPos is None):
+                        self.combPosHistory.append(list(lastCombPos))
+                    else:
+                        self.combPosHistory.append(lastCombPos)
                 time_of_last_datapoint = time.time()
                 if len(self.combPosHistory) > one_second_steps:
                     # Compute distance from one second in the past if enough data available
                     with self.combPosHistoryLock:
                         currPos = self.combPosHistory[-1]
                         pastPos = self.combPosHistory[-one_second_steps]
-                    if not np.isnan(currPos[0]) and not np.isnan(pastPos[0]):
+                    if not (currPos is None) and not (pastPos is None):
                         self.lastSecondDistance = euclidean(currPos[:2], pastPos[:2])
                         if self.lastSecondDistance > self.HistogramParameters['speedLimit']:
                             # If animal has been moving enough, update histogram

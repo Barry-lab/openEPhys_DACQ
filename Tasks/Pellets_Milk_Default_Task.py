@@ -711,147 +711,148 @@ class Core(object):
         # Get animal position history
         with self.TaskIO['RPIPos'].combPosHistoryLock:
             posHistory = self.TaskIO['RPIPos'].combPosHistory[-self.distance_steps:]
-        if self.pelletGameOn: # The following progress is monitored only if pellet reward used
-            # Check if animal has been without pellet reward for too long
-            timeSinceLastReward = time.time() - self.lastReward
-            game_progress.append({'name': 'Inactivity', 
-                                  'goals': ['inactivity'], 
-                                  'target': self.TaskSettings['MaxInactivityDuration'], 
-                                  'status': int(round(timeSinceLastReward)), 
-                                  'complete': timeSinceLastReward >= self.TaskSettings['MaxInactivityDuration'], 
-                                  'percentage': timeSinceLastReward / float(self.TaskSettings['MaxInactivityDuration'])})
-            # Check if enough time as passed since last pellet reward
-            timeSinceLastReward = time.time() - self.lastPelletReward
-            game_progress.append({'name': 'Since Pellet', 
-                                  'goals': ['pellet', 'milkTrialStart'], 
-                                  'target': self.TaskSettings['PelletRewardMinSeparation'], 
-                                  'status': int(round(timeSinceLastReward)), 
-                                  'complete': timeSinceLastReward >= self.TaskSettings['PelletRewardMinSeparation'], 
-                                  'percentage': timeSinceLastReward / float(self.TaskSettings['PelletRewardMinSeparation'])})
-            # Check if animal has been chewing enough since last reward
-            n_chewings = self.number_of_chewings(self.lastPelletReward)
-            game_progress.append({'name': 'Chewing', 
-                                  'goals': ['pellet'], 
-                                  'target': self.TaskSettings['Chewing_Target'], 
-                                  'status': n_chewings, 
-                                  'complete': n_chewings >= self.TaskSettings['Chewing_Target'], 
-                                  'percentage': n_chewings / float(self.TaskSettings['Chewing_Target'])})
-            # Check if has been moving enough in the last few seconds
-            total_distance = compute_distance_travelled(posHistory, self.TaskSettings['LastTravelSmooth'])
-            game_progress.append({'name': 'Mobility', 
-                                  'goals': ['pellet', 'milkTrialStart'], 
-                                  'target': self.TaskSettings['LastTravelDist'], 
-                                  'status': int(round(total_distance)), 
-                                  'complete': total_distance >= self.TaskSettings['LastTravelDist'], 
-                                  'percentage': total_distance / float(self.TaskSettings['LastTravelDist'])})
-        if self.milkGameOn: # The following progress is monitored only if milk reward used
-            # Check if milk trial penalty still applies to pellet rewards
-            timeSinceLastMilkFailedTrial = time.time() - self.milkTrialFailTime
-            game_progress.append({'name': 'Fail Penalty', 
-                                  'goals': ['pellet'], 
-                                  'target': self.TaskSettings['MilkTrialFailPenalty'], 
-                                  'status': int(round(timeSinceLastMilkFailedTrial)), 
-                                  'complete': timeSinceLastMilkFailedTrial >= self.TaskSettings['MilkTrialFailPenalty'], 
-                                  'percentage': timeSinceLastMilkFailedTrial / float(self.TaskSettings['MilkTrialFailPenalty'])})
-            # Check if enough time as passed since last milk trial
-            timeSinceLastMilkTrial = time.time() - self.lastMilkTrial
-            game_progress.append({'name': 'Since Trial', 
+        if not (None in posHistory):
+            if self.pelletGameOn: # The following progress is monitored only if pellet reward used
+                # Check if animal has been without pellet reward for too long
+                timeSinceLastReward = time.time() - self.lastReward
+                game_progress.append({'name': 'Inactivity', 
+                                      'goals': ['inactivity'], 
+                                      'target': self.TaskSettings['MaxInactivityDuration'], 
+                                      'status': int(round(timeSinceLastReward)), 
+                                      'complete': timeSinceLastReward >= self.TaskSettings['MaxInactivityDuration'], 
+                                      'percentage': timeSinceLastReward / float(self.TaskSettings['MaxInactivityDuration'])})
+                # Check if enough time as passed since last pellet reward
+                timeSinceLastReward = time.time() - self.lastPelletReward
+                game_progress.append({'name': 'Since Pellet', 
+                                      'goals': ['pellet', 'milkTrialStart'], 
+                                      'target': self.TaskSettings['PelletRewardMinSeparation'], 
+                                      'status': int(round(timeSinceLastReward)), 
+                                      'complete': timeSinceLastReward >= self.TaskSettings['PelletRewardMinSeparation'], 
+                                      'percentage': timeSinceLastReward / float(self.TaskSettings['PelletRewardMinSeparation'])})
+                # Check if animal has been chewing enough since last reward
+                n_chewings = self.number_of_chewings(self.lastPelletReward)
+                game_progress.append({'name': 'Chewing', 
+                                      'goals': ['pellet'], 
+                                      'target': self.TaskSettings['Chewing_Target'], 
+                                      'status': n_chewings, 
+                                      'complete': n_chewings >= self.TaskSettings['Chewing_Target'], 
+                                      'percentage': n_chewings / float(self.TaskSettings['Chewing_Target'])})
+                # Check if has been moving enough in the last few seconds
+                total_distance = compute_distance_travelled(posHistory, self.TaskSettings['LastTravelSmooth'])
+                game_progress.append({'name': 'Mobility', 
+                                      'goals': ['pellet', 'milkTrialStart'], 
+                                      'target': self.TaskSettings['LastTravelDist'], 
+                                      'status': int(round(total_distance)), 
+                                      'complete': total_distance >= self.TaskSettings['LastTravelDist'], 
+                                      'percentage': total_distance / float(self.TaskSettings['LastTravelDist'])})
+            if self.milkGameOn: # The following progress is monitored only if milk reward used
+                # Check if milk trial penalty still applies to pellet rewards
+                timeSinceLastMilkFailedTrial = time.time() - self.milkTrialFailTime
+                game_progress.append({'name': 'Fail Penalty', 
+                                      'goals': ['pellet'], 
+                                      'target': self.TaskSettings['MilkTrialFailPenalty'], 
+                                      'status': int(round(timeSinceLastMilkFailedTrial)), 
+                                      'complete': timeSinceLastMilkFailedTrial >= self.TaskSettings['MilkTrialFailPenalty'], 
+                                      'percentage': timeSinceLastMilkFailedTrial / float(self.TaskSettings['MilkTrialFailPenalty'])})
+                # Check if enough time as passed since last milk trial
+                timeSinceLastMilkTrial = time.time() - self.lastMilkTrial
+                game_progress.append({'name': 'Since Trial', 
+                                      'goals': ['milkTrialStart'], 
+                                      'target': self.TaskSettings['MilkTrialMinSeparation'], 
+                                      'status': int(round(timeSinceLastMilkTrial)), 
+                                      'complete': timeSinceLastMilkTrial >= self.TaskSettings['MilkTrialMinSeparation'], 
+                                      'percentage': timeSinceLastMilkTrial / float(self.TaskSettings['MilkTrialMinSeparation'])})
+                # Check if animal is far enough from milk rewards
+                distances = []
+                for n_feeder in self.activeMfeeders:
+                    distances.append(euclidean(np.array(posHistory[-1][:2]), np.array(self.TaskSettings['FEEDERs'][n_feeder]['Position'])))
+                minDistance = min(distances)
+                game_progress.append({'name': 'Milk Distance', 
                                   'goals': ['milkTrialStart'], 
-                                  'target': self.TaskSettings['MilkTrialMinSeparation'], 
-                                  'status': int(round(timeSinceLastMilkTrial)), 
-                                  'complete': timeSinceLastMilkTrial >= self.TaskSettings['MilkTrialMinSeparation'], 
-                                  'percentage': timeSinceLastMilkTrial / float(self.TaskSettings['MilkTrialMinSeparation'])})
-            # Check if animal is far enough from milk rewards
-            distances = []
-            for n_feeder in self.activeMfeeders:
-                distances.append(euclidean(np.array(posHistory[-1][:2]), np.array(self.TaskSettings['FEEDERs'][n_feeder]['Position'])))
-            minDistance = min(distances)
-            game_progress.append({'name': 'Milk Distance', 
-                              'goals': ['milkTrialStart'], 
-                              'target': self.TaskSettings['MilkTaskMinStartDistance'], 
-                              'status': int(round(minDistance)), 
-                              'complete': minDistance >= self.TaskSettings['MilkTaskMinStartDistance'], 
-                              'percentage': minDistance / float(self.TaskSettings['MilkTaskMinStartDistance'])})
-            if self.milkTrialOn:
-                # Check if animal is close enough to goal location
-                distance = euclidean(np.array(posHistory[-1][:2]), np.array(self.TaskSettings['FEEDERs'][self.n_feeder_milkTrial]['Position']))
-                game_progress.append({'name': 'Goal Distance', 
-                                      'goals': ['milkTrialSuccess'], 
-                                      'target': self.TaskSettings['MilkTaskMinGoalDistance'], 
-                                      'status': int(round(distance)), 
-                                      'complete': distance <= self.TaskSettings['MilkTaskMinGoalDistance'], 
-                                      'percentage': 1 - (distance - self.TaskSettings['MilkTaskMinGoalDistance']) / float(self.max_distance_in_arena)})
-                trial_run_time = time.time() - self.lastMilkTrial
-                # Check if trial has been running for too long
-                game_progress.append({'name': 'Trial Duration', 
-                                      'goals': ['milkTrialFail'], 
-                                      'target': self.TaskSettings['MilkTrialMaxDuration'], 
-                                      'status': int(round(trial_run_time)), 
-                                      'complete': trial_run_time > self.TaskSettings['MilkTrialMaxDuration'], 
-                                      'percentage': trial_run_time / float(self.TaskSettings['MilkTrialMaxDuration'])})
-            else:
-                # Create empty progress info if trial not ongoing
-                game_progress.append({'name': 'Goal Distance', 
-                                      'goals': ['milkTrialSuccess'], 
-                                      'target': self.TaskSettings['MilkTaskMinGoalDistance'], 
-                                      'status': 0, 
-                                      'complete': False, 
-                                      'percentage': 0})
-                game_progress.append({'name': 'Trial Duration', 
-                                      'goals': ['milkTrialFail'], 
-                                      'target': self.TaskSettings['MilkTrialMaxDuration'], 
-                                      'status': 0, 
-                                      'complete': False, 
-                                      'percentage': 0})
-        if not self.milkTrialOn:
-            # If milk trial currently not active
-            # Check if game progress complete for any outcome
-            pellet_status_complete = []
-            inactivity_complete = []
-            milkTrialStart_complete = []
-            for gp in game_progress:
-                if 'pellet' in gp['goals']:
-                    pellet_status_complete.append(gp['complete'])
-                if 'inactivity' in gp['goals']:
-                    inactivity_complete.append(gp['complete'])
-                if 'milkTrialStart' in gp['goals']:
-                    milkTrialStart_complete.append(gp['complete'])
-            if self.pelletGameOn and self.milkGameOn and all(pellet_status_complete) and all(milkTrialStart_complete):
-                # Conditions for both pellet release and milkTrial are met, choose one based on chance
-                if random.uniform(0, 1) < self.TaskSettings['PelletMilkRatio']:
+                                  'target': self.TaskSettings['MilkTaskMinStartDistance'], 
+                                  'status': int(round(minDistance)), 
+                                  'complete': minDistance >= self.TaskSettings['MilkTaskMinStartDistance'], 
+                                  'percentage': minDistance / float(self.TaskSettings['MilkTaskMinStartDistance'])})
+                if self.milkTrialOn:
+                    # Check if animal is close enough to goal location
+                    distance = euclidean(np.array(posHistory[-1][:2]), np.array(self.TaskSettings['FEEDERs'][self.n_feeder_milkTrial]['Position']))
+                    game_progress.append({'name': 'Goal Distance', 
+                                          'goals': ['milkTrialSuccess'], 
+                                          'target': self.TaskSettings['MilkTaskMinGoalDistance'], 
+                                          'status': int(round(distance)), 
+                                          'complete': distance <= self.TaskSettings['MilkTaskMinGoalDistance'], 
+                                          'percentage': 1 - (distance - self.TaskSettings['MilkTaskMinGoalDistance']) / float(self.max_distance_in_arena)})
+                    trial_run_time = time.time() - self.lastMilkTrial
+                    # Check if trial has been running for too long
+                    game_progress.append({'name': 'Trial Duration', 
+                                          'goals': ['milkTrialFail'], 
+                                          'target': self.TaskSettings['MilkTrialMaxDuration'], 
+                                          'status': int(round(trial_run_time)), 
+                                          'complete': trial_run_time > self.TaskSettings['MilkTrialMaxDuration'], 
+                                          'percentage': trial_run_time / float(self.TaskSettings['MilkTrialMaxDuration'])})
+                else:
+                    # Create empty progress info if trial not ongoing
+                    game_progress.append({'name': 'Goal Distance', 
+                                          'goals': ['milkTrialSuccess'], 
+                                          'target': self.TaskSettings['MilkTaskMinGoalDistance'], 
+                                          'status': 0, 
+                                          'complete': False, 
+                                          'percentage': 0})
+                    game_progress.append({'name': 'Trial Duration', 
+                                          'goals': ['milkTrialFail'], 
+                                          'target': self.TaskSettings['MilkTrialMaxDuration'], 
+                                          'status': 0, 
+                                          'complete': False, 
+                                          'percentage': 0})
+            if not self.milkTrialOn:
+                # If milk trial currently not active
+                # Check if game progress complete for any outcome
+                pellet_status_complete = []
+                inactivity_complete = []
+                milkTrialStart_complete = []
+                for gp in game_progress:
+                    if 'pellet' in gp['goals']:
+                        pellet_status_complete.append(gp['complete'])
+                    if 'inactivity' in gp['goals']:
+                        inactivity_complete.append(gp['complete'])
+                    if 'milkTrialStart' in gp['goals']:
+                        milkTrialStart_complete.append(gp['complete'])
+                if self.pelletGameOn and self.milkGameOn and all(pellet_status_complete) and all(milkTrialStart_complete):
+                    # Conditions for both pellet release and milkTrial are met, choose one based on chance
+                    if random.uniform(0, 1) < self.TaskSettings['PelletMilkRatio']:
+                        n_feeder = self.choose_pellet_feeder()
+                        self.releaseReward(n_feeder, 'goal_pellet', self.TaskSettings['PelletQuantity'])
+                        self.updatePelletMinSepratation()
+                    else:
+                        self.start_milkTrial(action='goal_milkTrialStart')
+                elif self.milkGameOn and all(milkTrialStart_complete):
+                    # If conditions met, start milkTrial
+                    self.start_milkTrial(action='goal_milkTrialStart')
+                elif self.pelletGameOn and all(pellet_status_complete):
+                    # If conditions met, release pellet reward
                     n_feeder = self.choose_pellet_feeder()
                     self.releaseReward(n_feeder, 'goal_pellet', self.TaskSettings['PelletQuantity'])
                     self.updatePelletMinSepratation()
-                else:
-                    self.start_milkTrial(action='goal_milkTrialStart')
-            elif self.milkGameOn and all(milkTrialStart_complete):
-                # If conditions met, start milkTrial
-                self.start_milkTrial(action='goal_milkTrialStart')
-            elif self.pelletGameOn and all(pellet_status_complete):
-                # If conditions met, release pellet reward
-                n_feeder = self.choose_pellet_feeder()
-                self.releaseReward(n_feeder, 'goal_pellet', self.TaskSettings['PelletQuantity'])
-                self.updatePelletMinSepratation()
-            elif self.pelletGameOn and all(inactivity_complete):
-                # If animal has been inactive and without pellet rewards, release pellet reward
-                n_feeder = self.activePfeeders[random.randint(0,len(self.activePfeeders) - 1)]
-                self.releaseReward(n_feeder, 'goal_inactivity', self.TaskSettings['PelletQuantity'])
-        elif self.milkTrialOn:
-            # If milk trial is currently ongoing
-            # Check if any outcome criteria is reached
-            milkTrialSuccess_complete = []
-            milkTrialFail_complete = []
-            for gp in game_progress:
-                if 'milkTrialSuccess' in gp['goals']:
-                    milkTrialSuccess_complete.append(gp['complete'])
-                if 'milkTrialFail' in gp['goals']:
-                    milkTrialFail_complete.append(gp['complete'])
-            if all(milkTrialSuccess_complete):
-                # If animal has reached to goal, stop trial and give reward
-                self.stop_milkTrial(successful=True)
-            elif all(milkTrialFail_complete):
-                # If time has run out, stop trial
-                self.stop_milkTrial(successful=False)
+                elif self.pelletGameOn and all(inactivity_complete):
+                    # If animal has been inactive and without pellet rewards, release pellet reward
+                    n_feeder = self.activePfeeders[random.randint(0,len(self.activePfeeders) - 1)]
+                    self.releaseReward(n_feeder, 'goal_inactivity', self.TaskSettings['PelletQuantity'])
+            elif self.milkTrialOn:
+                # If milk trial is currently ongoing
+                # Check if any outcome criteria is reached
+                milkTrialSuccess_complete = []
+                milkTrialFail_complete = []
+                for gp in game_progress:
+                    if 'milkTrialSuccess' in gp['goals']:
+                        milkTrialSuccess_complete.append(gp['complete'])
+                    if 'milkTrialFail' in gp['goals']:
+                        milkTrialFail_complete.append(gp['complete'])
+                if all(milkTrialSuccess_complete):
+                    # If animal has reached to goal, stop trial and give reward
+                    self.stop_milkTrial(successful=True)
+                elif all(milkTrialFail_complete):
+                    # If time has run out, stop trial
+                    self.stop_milkTrial(successful=False)
 
         return game_progress
 
@@ -876,9 +877,9 @@ class Core(object):
             with self.TaskIO['RPIPos'].combPosHistoryLock:
                 posHistory = self.TaskIO['RPIPos'].combPosHistory
         # Initialize interactive elements
-        self.screen_size = (800, 300)
+        self.screen_size = (1000, 300)
         self.screen_margins = 20
-        self.buttonProportions = 0.2
+        self.buttonProportions = 0.3
         self.font = pygame.font.SysFont('Arial', 10)
         self.textColor = (255, 255, 255)
         self.screen = pygame.display.set_mode(self.screen_size)
