@@ -8,6 +8,7 @@ import HelperFunctions as hfunct
 from KlustaKwikWrapper import klustakwik
 import tempfile
 import shutil
+import copy
 
 def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, badChan=[], threshold=50):
     # Load data
@@ -87,6 +88,34 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, badChan=[], thresh
 
     return spike_data
 
+def applyKlustaKwik(waveform_data):
+    hfunct.print_progress(0, len(waveform_data), prefix='Applying KlustaKwik:', suffix=' Tet: 0/' + str(len(waveform_data)), initiation=True)
+    for ntet in range(len(waveform_data)):
+        if len(waveform_data[ntet]['spiketimes']) > 1:
+            # Create temporary processing folder
+            KlustaKwikProcessingFolder = tempfile.mkdtemp('KlustaKwikProcessing')
+            # Prepare input to KlustaKwik
+            waves = np.swapaxes(waveform_data[ntet]['waveforms'],1,2)
+            features2use = ['PC1', 'PC2', 'PC3', 'Amp', 'Vt']
+            d = {0: features2use}
+            klustakwik(waves, d, os.path.join(KlustaKwikProcessingFolder, 'KlustaKwikTemp'))
+            # Read in cluster IDs
+            cluFileName = os.path.join(KlustaKwikProcessingFolder, 'KlustaKwikTemp.clu.0')
+            with open(cluFileName, 'rb') as file:
+                lines = file.readlines()
+            clusterIDs = []
+            for line in lines:
+                clusterIDs.append(int(line.rstrip()))
+            clusterIDs = clusterIDs[1:] # Drop the first value which is number of spikes
+            waveform_data[ntet]['clusterIDs'] = np.array(clusterIDs, dtype=np.int16)
+            # Delete KlustaKwik temporary processing folder
+            shutil.rmtree(KlustaKwikProcessingFolder)
+        else:
+            print('No spikes on tetrode ' + str(ntet + 1))
+            waveform_data[ntet]['clusterIDs'] = np.ones(waveform_data[ntet]['spiketimes'].shape, dtype=np.int16)
+        hfunct.print_progress(ntet + 1, len(waveform_data), prefix='Applying KlustaKwik:', suffix=' Tet: ' + str(ntet + 1) + '/' + str(len(waveform_data)))
+
+    return waveform_data
 
 def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=False, noise_cut_off=500, threshold=50):
     # This function processes NWB data captured spikes with KlustaKwik and organises data into dictonaries
@@ -157,75 +186,81 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=Fal
                'badChan': badChan, 
                'bitVolts': float(0.195)}
         waveform_data.append(tmp)
-    # Apply Klustakwik on each tetrode
-    for ntet in range(len(spike_data)):
-        if len(waveform_data[ntet]['spiketimes']) > 1:
-            print('Applying KlustaKwik on tetrode ' + str(ntet + 1) + ' of ' + str(len(waveform_data)))
-            # Create temporary processing folder
-            KlustaKwikProcessingFolder = tempfile.mkdtemp('KlustaKwikProcessing')
-            # Prepare input to KlustaKwik
-            waves = np.swapaxes(waveform_data[ntet]['waveforms'],1,2)
-            features2use = ['PC1', 'PC2', 'PC3', 'Amp', 'Vt']
-            d = {0: features2use}
-            klustakwik(waves, d, os.path.join(KlustaKwikProcessingFolder, 'KlustaKwikTemp'))
-            # Read in cluster IDs
-            cluFileName = os.path.join(KlustaKwikProcessingFolder, 'KlustaKwikTemp.clu.0')
-            with open(cluFileName, 'rb') as file:
-                lines = file.readlines()
-            clusterIDs = []
-            for line in lines:
-                clusterIDs.append(int(line.rstrip()))
-            clusterIDs = clusterIDs[1:] # Drop the first value which is number of spikes
-            waveform_data[ntet]['clusterIDs'] = np.array(clusterIDs, dtype=np.int16)
-            # Delete KlustaKwik temporary processing folder
-            shutil.rmtree(KlustaKwikProcessingFolder)
-        else:
-            print('No spikes on tetrode ' + str(ntet + 1))
-            waveform_data[ntet]['clusterIDs'] = np.ones(waveform_data[ntet]['spiketimes'].shape, dtype=np.int16)
 
     return waveform_data
 
 
-def main(OpenEphysDataPath, UseChans=False, UseRaw=False, noise_cut_off=500, threshold=50):
-    # Assume NWB file has name experiment_1.nwb
-    NWBfilePath = os.path.join(OpenEphysDataPath,'experiment_1.nwb')
-    # Get bad channels and renumber according to used channels
-    badChan = hfunct.listBadChannels(OpenEphysDataPath)
-    if badChan:
-        print('Ignoring bad channels: ' + str(list(np.array(badChan) + 1)))
-        badChan = np.array(badChan, dtype=np.int16)
-        if UseChans:
-            # Correct bad channel number depending on used channels
-            badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
-            badChan = badChan - np.array(UseChans[0], dtype=np.int16)
-            badChan = badChan[badChan < UseChans[1] - UseChans[0]]
-        badChan = list(badChan)
-    # Make sure position data is available
-    if not os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'PosLogComb.csv')):
-        print('Creating PosLogComb.csv')
-        if NWBio.check_if_binary_pos(NWBfilePath):
-            _ = NWBio.load_pos(NWBfilePath, savecsv=True, postprocess=True)
-        else:
-            CombineTrackingData.combdata(NWBfilePath)
-    # Extract spikes into a dictonary
-    waveform_data = createWaveformDict(OpenEphysDataPath, UseChans=UseChans, 
-                                       badChan=badChan, UseRaw=UseRaw, 
-                                       noise_cut_off=noise_cut_off, threshold=threshold)
-    # Define Axona data subfolder name based on specific channels if requested
-    if UseChans:
-        subfolder = 'AxonaData_' + str(UseChans[0] + 1) + '-' + str(UseChans[1])
+def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=500, threshold=50):
+    badChans = []
+    for OpenEphysDataPath in OpenEphysDataPaths:
+        # Assume NWB file has name experiment_1.nwb
+        NWBfilePath = os.path.join(OpenEphysDataPath,'experiment_1.nwb')
+        # Get bad channels and renumber according to used channels
+        badChan = hfunct.listBadChannels(OpenEphysDataPath)
+        if badChan:
+            print('Ignoring bad channels: ' + str(list(np.array(badChan) + 1)))
+            badChan = np.array(badChan, dtype=np.int16)
+            if UseChans:
+                # Correct bad channel number depending on used channels
+                badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
+                badChan = badChan - np.array(UseChans[0], dtype=np.int16)
+                badChan = badChan[badChan < UseChans[1] - UseChans[0]]
+            badChan = list(badChan)
+        badChans.append(badChan)
+        # Make sure position data is available
+        if not os.path.exists(os.path.join(os.path.dirname(NWBfilePath),'PosLogComb.csv')):
+            print('Creating PosLogComb.csv')
+            if NWBio.check_if_binary_pos(NWBfilePath):
+                _ = NWBio.load_pos(NWBfilePath, savecsv=True, postprocess=True)
+            else:
+                CombineTrackingData.combdata(NWBfilePath)
+    # Extract spikes for each tetrode in each recording into a dictonary
+    waveform_datas = []
+    for OpenEphysDataPath, badChan in zip(OpenEphysDataPaths, badChans):
+        waveform_data = createWaveformDict(OpenEphysDataPath, UseChans=UseChans, 
+                                           badChan=badChan, UseRaw=UseRaw, 
+                                           noise_cut_off=noise_cut_off, threshold=threshold)
+        # Add this dictonary to list of all dictionaries
+        waveform_datas.append(waveform_data)
+    # Apply Klustakwik on each tetrode
+    if len(waveform_datas) == 1:
+        waveform_datas[0] = applyKlustaKwik(waveform_datas[0])
     else:
-        subfolder = 'AxonaData'
-    # Create Axona data
-    createAxonaData.createAxonaData(OpenEphysDataPath, waveform_data, 
-                                    subfolder=subfolder, eegChan=1)
-
+        print('Combining recordings')
+        # Combine all waveform_datas into a single waveform_data
+        waveform_datas_comb = copy.deepcopy(waveform_datas[0])
+        for tmp_waveform_data in waveform_datas[1:]:
+            for ntet in range(len(tmp_waveform_data)):
+                waveform_datas_comb[ntet]['waveforms'] = np.append(waveform_datas_comb[ntet]['waveforms'], 
+                                                                   tmp_waveform_data[ntet]['waveforms'], axis=0)
+                waveform_datas_comb[ntet]['spiketimes'] = np.append(waveform_datas_comb[ntet]['spiketimes'], 
+                                                                    tmp_waveform_data[ntet]['spiketimes'], axis=0)   
+        # Apply KlustaKwik on the combined waveform_data
+        waveform_datas_comb = applyKlustaKwik(waveform_datas_comb)
+        # Extract clusters for each original waveform_data
+        for ndata in range(len(waveform_datas)):
+            for ntet in range(len(waveform_datas[ndata])):
+                # Get clusterIDs for this dataset and tetrode
+                nspikes = len(waveform_datas[ndata][ntet]['spiketimes'])
+                clusterIDs = waveform_datas_comb[ntet]['clusterIDs'][range(nspikes)]
+                waveform_datas[ndata][ntet]['clusterIDs'] = clusterIDs
+                # Remove these clusterIDs from the list
+                waveform_datas_comb[ntet]['clusterIDs'] = np.delete(waveform_datas_comb[ntet]['clusterIDs'], range(nspikes), axis=0)
+    for OpenEphysDataPath, waveform_data in zip(OpenEphysDataPaths, waveform_datas):
+        # Define Axona data subfolder name based on specific channels if requested
+        if UseChans:
+            subfolder = 'AxonaData_' + str(UseChans[0] + 1) + '-' + str(UseChans[1])
+        else:
+            subfolder = 'AxonaData'
+        # Create Axona data
+        createAxonaData.createAxonaData(OpenEphysDataPath, waveform_data, 
+                                        subfolder=subfolder, eegChan=1)
 
 if __name__ == '__main__':
     # Input argument handling and help info
     parser = argparse.ArgumentParser(description='Apply KlustaKwik and export into Axona format.')
-    parser.add_argument('path', type=str,
-                        help='recording data folder')
+    parser.add_argument('paths', type=str, nargs='*', 
+                        help='recording data folder(s) (can enter multiple paths separated by spaces to KlustaKwik simultaneously)')
     parser.add_argument('--chan', type=int, nargs = 2, 
                         help='list the first and last channel to process (counting starts from 1)')
     parser.add_argument('--noisecut', type=int, nargs = 1, 
@@ -235,8 +270,8 @@ if __name__ == '__main__':
     parser.add_argument('--useraw', action='store_true',
                         help='extract spikes from raw continuous data')
     args = parser.parse_args()
-    # Form path to recording file
-    OpenEphysDataPath = args.path
+    # Get paths to recording files
+    OpenEphysDataPaths = args.paths
     # Get UseChans input variable
     if args.chan:
         UseChans = [args.chan[0] - 1, args.chan[1]]
@@ -253,4 +288,4 @@ if __name__ == '__main__':
     else:
         threshold = 50
     # Run the script
-    main(OpenEphysDataPath, UseChans, args.useraw, noise_cut_off, threshold)
+    main(OpenEphysDataPaths, UseChans, args.useraw, noise_cut_off, threshold)

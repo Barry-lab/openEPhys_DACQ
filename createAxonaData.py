@@ -86,7 +86,7 @@ def create_DACQ_waveform_data(waveform_data, pos_edges):
         # Input timestamp values to the dacq data matrix
         tmp_waveform_data_dacq['ts'] = timestamps_dacq
         waveform_data_dacq.append(tmp_waveform_data_dacq)
-        hfunct.print_progress(ntet, len(waveform_data), prefix = 'Converting Waveforms:')
+        hfunct.print_progress(ntet + 1, len(waveform_data), prefix = 'Converting Waveforms:')
         
     return waveform_data_dacq
     
@@ -291,9 +291,11 @@ def createAxonaData(OpenEphysDataPath, waveform_data, subfolder='AxonaData', eeg
     pos_edges = hfunct.get_position_data_edges(OpenEphysDataPath)
     # Convert data to DACQ format
     waveform_data_dacq = create_DACQ_waveform_data(waveform_data, pos_edges)
+    print('Converting position data')
     pos_data_dacq = create_DACQ_pos_data(os.path.join(OpenEphysDataPath,'PosLogComb.csv'))
     OpenEphys_SamplingRate = 30000
     dacq_eeg_samplingRate = 250 # Sampling rate in Hz
+    print('Converting LFP to EEG data')
     eeg_data_dacq = create_DACQ_eeg_data(OpenEphysDataPath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges, eegChan)
     # Get headers for both datatypes
     header_wave, keyorder_wave = header_templates('waveforms')
@@ -406,6 +408,7 @@ def createAxonaData(OpenEphysDataPath, waveform_data, subfolder='AxonaData', eeg
         # Write the end token string
         f.write(DATA_END_TOKEN)
     # Write CLU files
+    print('Writing CLU files')
     for ntet in range(len(waveform_data_dacq)):
         clufileName = os.path.join(AxonaDataPath, file_basename + '.clu.' + str(waveform_data[ntet]['nr_tetrode'] + 1))
         lines = [str(waveform_data[ntet]['clusterIDs'].size) + '\r\n']
