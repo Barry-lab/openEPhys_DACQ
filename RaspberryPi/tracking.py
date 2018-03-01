@@ -15,6 +15,13 @@ from RPi import GPIO
 import os
 import cPickle as pickle
 from scipy.spatial.distance import euclidean
+import sys
+
+# Write output to a log file
+orig_stdout = sys.stdout
+logFile = open('log.txt', 'w')
+sys.stdout = logFile
+sys.stderr = open('errorLog','w')
 
 # Get assigned RPi number
 RPi_number = int(open('RPiNumber','r').read().splitlines()[0]) # The number to identify logs and messages from this RPi
@@ -40,8 +47,11 @@ LED_separation = RPiSettings['LED_separation']
 LED_max_distance = LED_separation * 1.25
 LED_radius = LED_separation / 2.0 # Later converted to pixel value
 # Load the Calibration Matrix
-with open('calibrationTmatrix.p', 'rb') as file:
-    calibrationTmatrix = pickle.load(file)
+with open('calibrationData.p', 'rb') as file:
+    calibrationData = pickle.load(file)
+    if calibrationData is None:
+        raise ValueError('Calibration data does is None.')
+    calibrationTmatrix = calibrationData['calibrationTmatrix']
 # Simple stupid code to figure out how many pixels provides required LED radius in centimeters
 tmp_loc1 = np.reshape(np.array([int(imageres[0] / 2), int(imageres[1] / 2)],dtype=np.float32),(1,1,2))
 tmp_loc2 = np.reshape(np.array([int(imageres[0] / 2), int(imageres[1] / 2) + 1],dtype=np.float32),(1,1,2))
@@ -156,3 +166,5 @@ GPIO.cleanup(ttlPin) # Close GPIO system
 # Close zeroMQ system
 sockpub.close()
 sockrec.close()
+# Close log file
+logFile.close()

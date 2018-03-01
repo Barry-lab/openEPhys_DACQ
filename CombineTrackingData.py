@@ -174,9 +174,10 @@ def combdata(filename):
     # This main function utilizes all the other functions in this script
     RPi_nrs, filenames = findPosLogs(rootfolder) # Get PosLog*.csv file names
     # Get RPiSettings
-    RPiSettingsFile = rootfolder + '/CameraData' + str(RPi_nrs[0]) + '/RPiSettings.p'
-    with open(RPiSettingsFile, 'rb') as f:
-        RPiSettings = pickle.load(f)
+    SettingsFile = os.path.join(rootfolder, 'RecordingSettings.p')
+    with open(SettingsFile,'rb') as file:
+        settings = pickle.load(file)
+        RPiSettings = settings['RPiSettings']
     # Get OpenEphysGUI events data (TTL pulse times in reference to electrophysiological signal)
     data_events = NWBio.load_events(filename)
     # Process position data from all PosLog*.csv's from all cameras

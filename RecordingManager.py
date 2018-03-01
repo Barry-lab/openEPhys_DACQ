@@ -8,19 +8,19 @@ import RecordingManagerDesign
 import sys
 from datetime import datetime
 import os
-import shutil
 import RPiInterface as rpiI
 import cPickle as pickle
 import subprocess
-from shutil import copyfile
+from shutil import copyfile, copytree, rmtree
 import csv
 import time
 from CumulativePosPlot import PosPlot
 from OpenEphysInterface import SendOpenEphysSingleMessage, SubscribeToOpenEphys
 import HelperFunctions as hfunct
 import threading
-import copy
+from copy import deepcopy
 from scipy.io import savemat
+from tempfile import mkdtemp
 
 def show_message(message, message_more=None):
     # This function is used to display a message in a separate window
@@ -40,7 +40,7 @@ def findLatestDateFolder(path):
     item_nrs = []
     for n_item in range(len(dir_items)):
         try: # Use only items for which the name converts to correct date time format
-            item_time = datetime.strptime(dir_items[n_item], '%d-%m-%y')
+            item_time = datetime.strptime(dir_items[n_item], '%y-%m-%d')
             item_nrs.append(n_item)
             dir_times.append(item_time)
         except:
@@ -69,26 +69,45 @@ def findLatestTimeFolder(path):
     return latest_folder
 
 def save_badChan_to_file(badChanString, targetFolder):
-    # Separate input string into a list using ',' as deliminaters
-    if badChanString.find(',') > -1: # If more than one channel specified
-        # Find all values tetrode and channel values listed
-        badChanStringList = badChanString.split(',')
+    if len(badChanString) > 0:
+        # Separate input string into a list using ',' as deliminaters
+        if badChanString.find(',') > -1: # If more than one channel specified
+            # Find all values tetrode and channel values listed
+            badChanStringList = badChanString.split(',')
+        else:
+            badChanStringList = [badChanString]
+        # Identify any ranges specified with '-' and append these channels to the list
+        for chanString in badChanStringList:
+            if chanString.find('-') > -1:
+                chan_from = chanString[:chanString.find('-')]
+                chan_to = chanString[chanString.find('-') + 1:]
+                for nchan in range(int(chan_to) - int(chan_from) + 1):
+                    badChanStringList.append(str(nchan + int(chan_from)))
+                badChanStringList.remove(chanString) # Remove the '-' containing list element
+        # Reorder list of bad channels
+        badChanStringList.sort(key=int)
+        # Save as a text file to target location
+        with open(targetFolder + '/BadChan', 'wb') as file:
+            for chan_nr_str in badChanStringList:
+                file.write(chan_nr_str + os.linesep)
     else:
-        badChanStringList = [badChanString]
-    # Identify any ranges specified with '-' and append these channels to the list
-    for chanString in badChanStringList:
-        if chanString.find('-') > -1:
-            chan_from = chanString[:chanString.find('-')]
-            chan_to = chanString[chanString.find('-') + 1:]
-            for nchan in range(int(chan_to) - int(chan_from) + 1):
-                badChanStringList.append(str(nchan + int(chan_from)))
-            badChanStringList.remove(chanString) # Remove the '-' containing list element
-    # Reorder list of bad channels
-    badChanStringList.sort(key=int)
-    # Save as a text file to target location
-    with open(targetFolder + '/BadChan', 'wb') as file:
-        for chan_nr_str in badChanStringList:
-            file.write(chan_nr_str + os.linesep)
+        with open(targetFolder + '/BadChan', 'wb') as file:
+            file.write('')
+
+def get_recording_folder_path(recording_folder_root):
+    if os.path.isdir(recording_folder_root):
+        # Get the name of the folder with latest date time as name
+        latest_folder = findLatestTimeFolder(recording_folder_root)
+        foldertime = datetime.strptime(latest_folder, '%Y-%m-%d_%H-%M-%S')
+        # If the folder time is less than 60 seconds behind rec_time_dt
+        if (datetime.now() - foldertime).total_seconds() < 5:
+            recording_folder = os.path.join(recording_folder_root, latest_folder)
+        else: # Display error in text box
+            recording_folder = False
+    else: # Display error in text box
+        recording_folder = False
+
+    return recording_folder
 
 def check_if_nwb_recording(path):
     # Find NWB file in the path
@@ -108,6 +127,57 @@ def check_if_nwb_recording(path):
 
     return file_recording
 
+def update_specific_camera(RPiSettings, n_rpi, tmpFolder):
+    # Use up to date scripts
+    copytree('RaspberryPi', tmpFolder)
+    # Store RPiSettings
+    with open(os.path.join(tmpFolder, 'RPiSettings.p'),'wb') as file:
+        pickle.dump(RPiSettings, file)
+    # Specify RPi number
+    with open(os.path.join(tmpFolder, 'RPiNumber'), 'wb') as file:
+        file.write(str(n_rpi))
+    # Store correct calibration data
+    calibrationFile = os.path.join(tmpFolder, 'calibrationData.p')
+    with open(calibrationFile, 'wb') as file:
+        pickle.dump(RPiSettings['calibrationData'][n_rpi], file)
+    # Recreate this folder on the tracking RPi
+    tmp_path = os.path.join(tmpFolder, '')
+    callstr = 'rsync -qavrP -e "ssh -l server" ' + tmp_path + ' ' + \
+              RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + \
+              RPiSettings['tracking_folder'] + ' --delete'
+    _ = os.system(callstr)
+
+def update_tracking_camera_files(RPiSettings):
+    # Updates settings and scripts on all tracking cameras in use (based on settings)
+    # Create temporary working directory
+    RPiTempFolder = mkdtemp('RPiTempFolder')
+    T_updateRPi = []
+    for n_rpi in RPiSettings['use_RPi_nrs']:
+        RPiTempSubFolder = os.path.join(RPiTempFolder, str(n_rpi))
+        T = threading.Thread(target=update_specific_camera, args=[RPiSettings, n_rpi, RPiTempSubFolder])
+        T.start()
+        T_updateRPi.append(T)
+    for T in T_updateRPi:
+        T.join()
+    rmtree(RPiTempFolder)
+
+def retrieve_specific_camera_tracking_data(n_rpi, RPiSettings, folder_path):
+    src_file = RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + \
+               RPiSettings['tracking_folder'] + '/logfile.csv'
+    dst_file = os.path.join(folder_path, 'PosLog' + str(n_rpi) + '.csv')
+    callstr = 'scp -q ' + src_file + ' ' + dst_file
+    _ = os.system(callstr)
+
+def retrieve_tracking_data(RPiSettings, folder_path):
+    # Copies all tracking data from active RPis to designated folder
+    T_retrievePosLogsRPi = []
+    for n_rpi in RPiSettings['use_RPi_nrs']:
+        T = threading.Thread(target=retrieve_specific_camera_tracking_data, args=[n_rpi, RPiSettings, folder_path])
+        T.start()
+        T_retrievePosLogsRPi.append(T)
+    for T in T_retrievePosLogsRPi:
+        T.join()
+
 
 class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
 
@@ -115,13 +185,15 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         super(RecordingManager, self).__init__(parent=parent)
         self.setupUi(self)
         # Set GUI environment
-        self.scripts_root = os.path.expanduser('~') + '/openEPhys_DACQ'
         self.pt_root_folder.setPlainText(os.path.expanduser('~') + '/RecordingData')
+        self.RecordingManagerSettingsFolder = 'RecordingManagerSettings'
         self.file_server_path = '/media/QNAP/sanderT/room418'
-        self.RecGUI_dataFolder = str(self.pt_root_folder.toPlainText()) + '/RecordingManagerData'
+        # Create empty settings dictonary
+        self.Settings = {}
         # Set GUI interaction connections
         self.pb_load_last.clicked.connect(lambda:self.load_last_settings())
         self.pb_load.clicked.connect(lambda:self.load_settings())
+        self.pb_save.clicked.connect(lambda:self.save_settings())
         self.pb_root_folder.clicked.connect(lambda:self.root_folder_browse())
         self.pb_cam_set.clicked.connect(lambda:self.camera_settings())
         self.pb_task_set.clicked.connect(lambda:self.task_settings())
@@ -134,13 +206,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.original_stylesheets = {}
         self.original_stylesheets['pb_start_rec'] = self.pb_start_rec.styleSheet()# Keep copy of default button color
         self.original_stylesheets['pb_stop_rec'] = self.pb_stop_rec.styleSheet() # Save Stop button default
-        # Create TEMP folder. If exists, delete and re-create
-        # TEMP folder is used sort of as a working memory by the Recording Manager
-        self.TEMPfolder = self.RecGUI_dataFolder + '/TEMP'
-        if os.path.isdir(self.TEMPfolder):
-            shutil.rmtree(self.TEMPfolder)
-        os.mkdir(self.TEMPfolder)
-        self.pb_start_rec.setEnabled(True)
 
     def openFolderDialog(self, caption='Select folder'):
         # Pops up a GUI to select a folder
@@ -156,30 +221,64 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
 
         return selected_folder
 
-    def load_settings(self, folder_name=None):
-        if not folder_name: # Get user to select settings to load if not given
-            recording_folder_full_path = self.openFolderDialog(caption='Select Recording Folder')
-            folder_name = os.path.basename(recording_folder_full_path)
-        # Copy over settings to TEMP folder
-        callstr = 'rsync -avzh ' + self.RecGUI_dataFolder + '/' + folder_name + '/ ' + self.TEMPfolder + '/'
-        os.system(callstr)
+    def get_RecordingGUI_settings(self):
+        # Get channel mapping info
+        channel_map = {}
+        if len(str(self.pt_chan_map_1.toPlainText())) > 0:
+            channel_map_1 = str(self.pt_chan_map_1.toPlainText())
+            chanString = str(self.pt_chan_map_1_chans.toPlainText())
+            chan_from = int(chanString[:chanString.find('-')])
+            chan_to = int(chanString[chanString.find('-') + 1:])
+            chan_list = range(chan_from - 1, chan_to)
+            channel_map[channel_map_1] = {'string': chanString, 'list': chan_list}
+            if len(str(self.pt_chan_map_2.toPlainText())) > 0:
+                channel_map_2 = str(self.pt_chan_map_2.toPlainText())
+                chanString = str(self.pt_chan_map_2_chans.toPlainText())
+                chan_from = int(chanString[:chanString.find('-')])
+                chan_to = int(chanString[chanString.find('-') + 1:])
+                chan_list = range(chan_from - 1, chan_to)
+                channel_map[channel_map_2] = {'string': chanString, 'list': chan_list}
+        # Grabs all options in the Recording Manager and puts them into a dictionary
+        RecGUI_Settings = {'root_folder': str(self.pt_root_folder.toPlainText()), 
+                           'animal': str(self.pt_animal.toPlainText()), 
+                           'experiment_id': str(self.pt_experiment_id.toPlainText()), 
+                           'experimenter': str(self.pt_experimenter.toPlainText()), 
+                           'badChan': str(self.pt_badChan.toPlainText()), 
+                           'rec_folder': str(self.pt_rec_folder.toPlainText()), 
+                           'PosPlot': self.rb_posPlot_yes.isChecked(), 
+                           'channel_map': channel_map, 
+                           'TaskActive': self.rb_task_yes.isChecked()}
+
+        return RecGUI_Settings
+
+    def load_settings(self, path=None):
+        if path is None: # Get user to select settings to load if not given
+            path = hfunct.openSingleFileDialog('load', suffix='p', caption='Select file to load')
         # Load RecGUI_Settings and update settings in GUI
-        with open(self.TEMPfolder + '/RecGUI_Settings.p','rb') as file:
-            RecGUI_Settings = pickle.load(file)
+        with open(path,'rb') as file:
+            self.Settings = pickle.load(file)
+        RecGUI_Settings = self.Settings['General']
         self.pt_root_folder.setPlainText(RecGUI_Settings['root_folder'])
         self.pt_animal.setPlainText(RecGUI_Settings['animal'])
         self.pt_experiment_id.setPlainText(RecGUI_Settings['experiment_id'])
         self.pt_experimenter.setPlainText(RecGUI_Settings['experimenter'])
         self.pt_badChan.setPlainText(RecGUI_Settings['badChan'])
         self.pt_rec_folder.setPlainText(RecGUI_Settings['rec_folder'])
-        self.rb_posPlot_yes.setChecked(RecGUI_Settings['PosPlot'])
-        self.rb_task_yes.setChecked(RecGUI_Settings['TaskActive'])
-        if len(RecGUI_Settings['channel_map']) > 0:
-            self.pt_chan_map_1.setPlainText(RecGUI_Settings['channel_map'][0][0])
-            self.pt_chan_map_1_chans.setPlainText(RecGUI_Settings['channel_map'][0][1])
+        if RecGUI_Settings['PosPlot']:
+            self.rb_posPlot_yes.setChecked(True)
+        else:
+            self.rb_posPlot_no.setChecked(True)
+        if RecGUI_Settings['TaskActive']:
+            self.rb_task_yes.setChecked(True)
+        else:
+            self.rb_task_no.setChecked(True)
+        channel_locations = RecGUI_Settings['channel_map'].keys()
+        if len(channel_locations) > 0:
+            self.pt_chan_map_1.setPlainText(channel_locations[0])
+            self.pt_chan_map_1_chans.setPlainText(RecGUI_Settings['channel_map'][channel_locations[0]]['string'])
             if len(RecGUI_Settings['channel_map']) > 1:
-                self.pt_chan_map_2.setPlainText(RecGUI_Settings['channel_map'][1][0])
-                self.pt_chan_map_2_chans.setPlainText(RecGUI_Settings['channel_map'][1][1])
+                self.pt_chan_map_2.setPlainText(channel_locations[1])
+                self.pt_chan_map_2_chans.setPlainText(RecGUI_Settings['channel_map'][channel_locations[1]]['string'])
             else:
                 self.pt_chan_map_2.setPlainText('')
                 self.pt_chan_map_2_chans.setPlainText('')
@@ -188,16 +287,21 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             self.pt_chan_map_1_chans.setPlainText('')
             self.pt_chan_map_2.setPlainText('')
             self.pt_chan_map_2_chans.setPlainText('')
-        # Update RPi Camera Settings
-        with open(self.TEMPfolder + '/RPiSettings.p','rb') as file:
-            RPiSettings = pickle.load(file)
-        from CameraSettingsGUI import Camera_Files_Update_Function
-        Camera_Files_Update_Function(SettingsFolder=self.TEMPfolder, RPiSettings=RPiSettings, useCalibration=True)
-        # Load Task Settings if available
-        TaskSettingsFileName = os.path.join(self.RecGUI_dataFolder, folder_name, 'TaskSettings.p')
-        if os.path.isfile(TaskSettingsFileName):
-            with open(TaskSettingsFileName, 'rb') as file:
-                self.TaskSettings = pickle.load(file)
+
+    def save_settings(self, path=None, matlab=False):
+        # Saves current settings into a file
+        if path is None:
+            path = hfunct.openSingleFileDialog('save', suffix='p', caption='Save file name and location')
+        self.Settings['General'] = self.get_RecordingGUI_settings()
+        self.Settings['Time'] = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        with open(path, 'wb') as file:
+            pickle.dump(self.Settings, file)
+        if matlab:
+            matFilePath = path[:-path[::-1].index('.')] + 'mat'
+            settings = deepcopy(self.Settings)
+            # Replace None with 0 in calibrationData so it could be saved as MATLAB file
+            settings['RPiSettings']['calibrationData'] = map(lambda x: 0 if x is None else x, settings['RPiSettings']['calibrationData'])
+            savemat(matFilePath, settings, long_field_names=True)
 
     def load_last_settings(self):
         # Check if specific Animal ID has been entered
@@ -221,77 +325,22 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Get directory names
         root_folder = str(self.pt_root_folder.toPlainText())
         animal = str(self.pt_animal.toPlainText())
-        date_folder_path = os.path.join(root_folder,animal,datetime.now().strftime('%d-%m-%y'))
+        date_folder_path = os.path.join(root_folder,animal,datetime.now().strftime('%y-%m-%d'))
 
         return date_folder_path
-
-    def get_recording_folder_path(self, date_folder_path):
-        if os.path.isdir(date_folder_path):
-            # Get the name of the folder with latest date time as name
-            latest_folder = findLatestTimeFolder(date_folder_path)
-            foldertime = datetime.strptime(latest_folder, '%Y-%m-%d_%H-%M-%S')
-            # If the folder time is less than 60 seconds behind rec_time_dt
-            if (datetime.now() - foldertime).total_seconds() < 5:
-                recording_folder = os.path.join(date_folder_path, latest_folder)
-            else: # Display error in text box
-                recording_folder = False
-        else: # Display error in text box
-            recording_folder = False
-
-        return recording_folder
 
     def camera_settings(self):
         # Opens up a new window for Camera Settings
         from CameraSettingsGUI import CameraSettings
-        self.CamSet = CameraSettings(self)
+        self.CamSet = CameraSettings(parent=self)
         self.CamSet.show()
-        # Pass on paths to the Camera Settings GUI
-        self.CamSet.TEMPfolder = self.TEMPfolder
-        self.CamSet.RecGUI_dataFolder = self.RecGUI_dataFolder
-        self.CamSet.pb_load_last.setEnabled(True) # Make this button available, as RecGUI_dataFolder info is passed on
-        self.CamSet.scripts_root = self.scripts_root
-        self.CamSet.data_root = str(self.pt_root_folder.toPlainText())
-        # Check if Settings available in TEMP folder, if so Load them.
-        RPiSettingsFile = self.TEMPfolder + '/RPiSettings.p'
-        if os.path.isfile(RPiSettingsFile):
-            self.CamSet.load(loadFile=self.TEMPfolder + '/RPiSettings.p')
+        # Check if RPiSettings available, if so Load them.
+        if 'RPiSettings' in self.Settings.keys():
+            self.CamSet.load(deepcopy(self.Settings['RPiSettings']))
 
     def task_settings(self):
         from TaskSettingsGUI import TaskSettingsGUI
         self.TaskSet = TaskSettingsGUI(parent=self)
-
-    def get_RecordingGUI_settings(self):
-        # Get channel mapping info
-        channel_map = []
-        if len(str(self.pt_chan_map_1.toPlainText())) > 0:
-            channel_map_1 = [str(self.pt_chan_map_1.toPlainText())]
-            chanString = str(self.pt_chan_map_1_chans.toPlainText())
-            channel_map_1.append(chanString)
-            chan_from = int(chanString[:chanString.find('-')])
-            chan_to = int(chanString[chanString.find('-') + 1:])
-            channel_map_1.append(range(chan_from - 1, chan_to))
-            channel_map.append(channel_map_1)
-            if len(str(self.pt_chan_map_2.toPlainText())) > 0:
-                channel_map_2 = [str(self.pt_chan_map_2.toPlainText())]
-                chanString = str(self.pt_chan_map_2_chans.toPlainText())
-                channel_map_2.append(chanString)
-                chan_from = int(chanString[:chanString.find('-')])
-                chan_to = int(chanString[chanString.find('-') + 1:])
-                channel_map_2.append(range(chan_from - 1, chan_to))
-                channel_map.append(channel_map_2)
-
-        # Grabs all options in the Recording Manager and puts them into a dictionary
-        RecGUI_Settings = {'root_folder': str(self.pt_root_folder.toPlainText()), 
-                           'animal': str(self.pt_animal.toPlainText()), 
-                           'experiment_id': str(self.pt_experiment_id.toPlainText()), 
-                           'experimenter': str(self.pt_experimenter.toPlainText()), 
-                           'badChan': str(self.pt_badChan.toPlainText()), 
-                           'rec_folder': str(self.pt_rec_folder.toPlainText()), 
-                           'PosPlot': self.rb_posPlot_yes.isChecked(), 
-                           'channel_map': channel_map, 
-                           'TaskActive': self.rb_task_yes.isChecked()}
-
-        return RecGUI_Settings
 
     def store_RecGUI_parameters(self, path):
         # Copy over RPi tracking folder to Recording Folder on PC using rsync
@@ -323,7 +372,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             pickle.dump(RecGUI_Settings, file)
         print('Saved Recording Manager Settings.')
         # Save task settings if available
-        if self.rb_task_yes.isChecked():
+        if self.Settings['General']['TaskActive']:
             with open(RecordingManagerSaveFolder + '/TaskSettings.p', 'wb') as file:
                 pickle.dump(self.TaskSettings, file)
             with open(path + '/TaskSettings.p', 'wb') as file:
@@ -334,19 +383,18 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             print('Saved the list of bad channels: ' + str(self.pt_badChan.toPlainText()))
 
     def start_rec(self):
-        # Load tracking RPi Settings
-        with open(self.TEMPfolder + '/RPi/RPiSettings.p','rb') as file:
-            self.RPiSettings = pickle.load(file)
+        self.Settings['General'] = self.get_RecordingGUI_settings()
         # Connect to tracking RPis
         print('Connecting to tracking RPis...')
-        self.trackingControl = rpiI.TrackingControl(self.RPiSettings)
+        update_tracking_camera_files(self.Settings['RPiSettings'])
+        self.trackingControl = rpiI.TrackingControl(self.Settings['RPiSettings'])
         print('Connecting to tracking RPis Successful')
         # Initialize onlineTrackingData class
         print('Initializing Online Tracking Data...')
         histogramParameters = {'margins': 10, # histogram data margins in centimeters
                                'binSize': 2, # histogram binSize in centimeters
                                'speedLimit': 10}# centimeters of distance in last second to be included
-        self.RPIpos = rpiI.onlineTrackingData(self.RPiSettings, HistogramParameters=histogramParameters, SynthData=False)
+        self.RPIpos = rpiI.onlineTrackingData(self.Settings['RPiSettings'], HistogramParameters=histogramParameters, SynthData=False)
         print('Initializing Online Tracking Data Successful')
         # Initialize listening to Open Ephys GUI messages
         print('Connecting to Open Ephys GUI via ZMQ...')
@@ -354,28 +402,29 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.OEmessages.connect()
         print('Connecting to Open Ephys GUI via ZMQ Successful')
         # Initialize Task
-        if self.rb_task_yes.isChecked():
+        if self.Settings['General']['TaskActive']:
             print('Initializing Task...')
             # Put input streams in a default dictionary that can be used by task as needed
             TaskIO = {'RPIPos': self.RPIpos, 
                       'OEmessages': self.OEmessages, 
                       'MessageToOE': SendOpenEphysSingleMessage}
-            TaskModule = hfunct.import_subdirectory_module('Tasks', self.TaskSettings['name'])
-            self.current_task = TaskModule.Core(copy.deepcopy(self.TaskSettings), TaskIO)
+            TaskModule = hfunct.import_subdirectory_module('Tasks', self.Settings['TaskSettings']['name'])
+            self.current_task = TaskModule.Core(deepcopy(self.Settings['TaskSettings']), TaskIO)
             print('Initializing Task Successful')
         # Start Open Ephys GUI recording
         print('Starting Open Ephys GUI Recording...')
-        date_folder_path = self.get_date_folder_path()
-        command = 'StartRecord RecDir=' + date_folder_path + ' CreateNewDir=1'
+        recording_folder_root = os.path.join(self.Settings['General']['root_folder'], str(self.pt_animal.toPlainText()))
+        command = 'StartRecord RecDir=' + recording_folder_root + ' CreateNewDir=1'
         SendOpenEphysSingleMessage(command)
         # Make sure OpenEphys is recording
-        recording_folder = self.get_recording_folder_path(date_folder_path)
+        recording_folder = get_recording_folder_path(recording_folder_root)
         while not recording_folder:
             time.sleep(0.1)
-            recording_folder = self.get_recording_folder_path(date_folder_path)
+            recording_folder = get_recording_folder_path(recording_folder_root)
         while not check_if_nwb_recording(recording_folder):
             time.sleep(0.1)
         self.pt_rec_folder.setPlainText(recording_folder)
+        self.Settings['General']['rec_folder'] = recording_folder
         print('Starting Open Ephys GUI Recording Successful')
         # Start the tracking scripts on all RPis
         print('Starting tracking RPis...')
@@ -390,18 +439,20 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_sync_server.setEnabled(False)
         self.pb_open_rec_folder.setEnabled(False)
         # Start task
-        if self.rb_task_yes.isChecked():
+        if self.Settings['General']['TaskActive']:
             print('Starting Task...')
             self.current_task.run()
             print('Starting Task Successful')
         # Start cumulative plot
-        if self.rb_posPlot_yes.isChecked():
+        if self.Settings['General']['PosPlot']:
             print('Starting Position Plot...')
-            self.PosPlot = PosPlot(self.RPiSettings, self.RPIpos, histogramParameters)
+            self.PosPlot = PosPlot(self.Settings['RPiSettings'], self.RPIpos, histogramParameters)
             print('Starting Position Plot Successful')
+        # Store recording settings to recording folder (is overwritten at stop_rec)
+        self.save_settings(path=os.path.join(self.Settings['General']['rec_folder'], 'RecordingSettings.p'))
 
     def stop_rec(self):# Stop Task
-        if self.rb_task_yes.isChecked():
+        if self.Settings['General']['TaskActive']:
             print('Stopping Task...')
             self.current_task.stop()
             print('Stopping Task Successful')
@@ -410,7 +461,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.OEmessages.disconnect()
         print('Closing Open Ephys GUI ZMQ connection Successful')
         # Stop cumulative plot
-        if self.rb_posPlot_yes.isChecked() and hasattr(self, 'PosPlot'):
+        if self.Settings['General']['PosPlot'] and hasattr(self, 'PosPlot'):
             print('Stopping Position Plot...')
             self.PosPlot.close()
             print('Stopping Position Plot Successful')
@@ -423,13 +474,28 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.trackingControl.stop()
         print('Stopping tracking RPis Successful')
         # Stop Open Ephys Recording
-        while check_if_nwb_recording(str(self.pt_rec_folder.toPlainText())):
+        while check_if_nwb_recording(self.Settings['General']['rec_folder']):
             print('Stopping Open Ephys GUI Recording...')
             SendOpenEphysSingleMessage('StopRecord')
             time.sleep(0.1)
         print('Stopping Open Ephys GUI Recording Successful')
-        # Store all parameters for this session
-        self.store_RecGUI_parameters(str(self.pt_rec_folder.toPlainText()))
+        # Copy over tracking data
+        print('Copying over tracking data to Recording PC...')
+        retrieve_tracking_data(self.Settings['RPiSettings'], self.Settings['General']['rec_folder'])
+        print('Copying over tracking data to Recording PC Successful')
+        # Save badChan list to a file in the recording folder
+        save_badChan_to_file(str(self.pt_badChan.toPlainText()), self.Settings['General']['rec_folder'])
+        print('Saved the list of bad channels: ' + str(self.pt_badChan.toPlainText()))
+        # Store recording settings to recording folder (overwrite in case changes made during recording)
+        self.save_settings(path=os.path.join(self.Settings['General']['rec_folder'], 'RecordingSettings.p'), matlab=True)
+        # Store settings for RecordingManager history reference
+        RecordingManagerSettingsPath = os.path.join(self.Settings['General']['root_folder'], 
+                                                    self.RecordingManagerSettingsFolder)
+        if not os.path.isdir(RecordingManagerSettingsPath):
+            os.mkdir(RecordingManagerSettingsPath)
+        RecordingManagerSettingsFilePath = os.path.join(RecordingManagerSettingsPath, 
+                                                        os.path.basename(self.Settings['General']['rec_folder']) + '.p')
+        self.save_settings(path=RecordingManagerSettingsFilePath)
         # Change start button colors
         self.pb_start_rec.setStyleSheet(self.original_stylesheets['pb_start_rec']) # Start button to default
         # Disable Stop button and Enable other buttons
@@ -447,7 +513,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_open_rec_folder.setEnabled(False)
         time.sleep(0.1)
         import Processing_KlustaKwik
-        Processing_KlustaKwik.main(str(self.pt_rec_folder.toPlainText()))
+        Processing_KlustaKwik.main(self.Settings['General']['rec_folder'])
         self.pb_start_rec.setEnabled(True)
         self.pb_process_data.setEnabled(True)
         self.pb_sync_server.setEnabled(True)

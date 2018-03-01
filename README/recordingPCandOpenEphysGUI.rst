@@ -367,7 +367,8 @@ Install the necessary packages with the following terminal commands:
 
 .. code-block:: none
 
-	sudo apt-get install python-qt4 python-dev python-pip python-paramiko python-scipy python-pygame
+	sudo apt-get install python-qt4 python-dev python-pip python-scipy python-pygame
+	sudo pip install paramiko
 	sudo pip install pyzmq # This assumes you have already installed ZMQ for OpenEphys GUI
 	pip install h5py # This assumes you have already installed libhdf5-serial-dev for OpenEphys GUI
 

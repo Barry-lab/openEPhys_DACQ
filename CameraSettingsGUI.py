@@ -11,7 +11,7 @@
 
 # How to add more general camera settings:
 # Add new edited copies of the frames to the General Settings list with QDesigner
-# Include the new input fields in self.get_camera_settings_dict(self) and self.load(self)
+# Include the new input fields in self.get_RPiSettings(self) and self.load(self)
 
 from PyQt4 import QtGui
 import CameraSettingsGUIDesign
@@ -21,8 +21,13 @@ from sshScripts import ssh
 import cPickle as pickle
 import pyqtgraph as pg
 import numpy as np
-from shutil import copyfile
+from shutil import copyfile, rmtree
 from PIL import Image
+from HelperFunctions import openSingleFileDialog
+from tempfile import mkdtemp
+from RecordingManager import update_tracking_camera_files
+import threading
+from copy import deepcopy
 
 def show_message(message, message_more=None):
     # This function is used to display a message in a separate window
@@ -37,6 +42,8 @@ def show_message(message, message_more=None):
 
 def plotImage(im_view, image):
     # This function is used to display an image in any of the plots in the bottom
+    # Add white padding to frame the image
+    image = np.pad(image, [(1, 1), (1, 1), (0, 0)], mode='constant', constant_values=255)
     im_view.clear()
     view = im_view.addViewBox()
     view.setAspectLocked(True)
@@ -44,80 +51,78 @@ def plotImage(im_view, image):
     view.addItem(im_item)
     im_item.setImage(np.swapaxes(np.flipud(image),0,1))
 
-def Camera_Files_Update_Function(SettingsFolder, RPiSettings, useCalibration=True):
-    # This function updates all RPis with information saved on disk and RPiSettings file
-    for n_rpi in RPiSettings['use_RPi_nrs']:
-        # Adjust RPiNumber
-        with open(SettingsFolder + '/RPi/RPiNumber', 'wb') as file:
-            file.write(str(n_rpi))
-        # Include calibration files
-        if useCalibration:
-            calibrationFile = SettingsFolder + '/calibrationData' + str(n_rpi) + '.p'
-            calibrationTmatrixFile = SettingsFolder + '/calibrationTmatrix' + str(n_rpi) + '.p'
-            dst_calibrationFile = SettingsFolder + '/RPi/calibrationData.p'
-            dst_calibrationTmatrixFile = SettingsFolder + '/RPi/calibrationTmatrix.p'
-            if os.path.isfile(calibrationFile):
-                copyfile(calibrationFile, dst_calibrationFile)
-                copyfile(calibrationTmatrixFile, dst_calibrationTmatrixFile)
-            else:
-                show_message('Calibration file not found for RPi ' + str(n_rpi + 1) + '.')
-        # Push files to RPi
-        callstr = 'rsync -avrP -e "ssh -l server" ' + SettingsFolder + '/RPi/ ' + RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + RPiSettings['tracking_folder'] + '/ --delete'
-        os.system(callstr)
+def get_current_image(RPiSettings, n_rpi, RPiImageTempFolder):
+    # Use SSH connection to send commands
+    connection = ssh(RPiSettings['RPiIP'][n_rpi], RPiSettings['username'], RPiSettings['password'])
+    # Run getImage.py on RPi to capture a frame
+    com_str = 'cd ' + RPiSettings['tracking_folder'] + ' && python getImage.py'
+    connection.sendCommand(com_str)
+    connection.disconnect()
+    # Copy over output files to local TEMP folder
+    src_file = RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + \
+               RPiSettings['tracking_folder'] + '/frame.jpg'
+    dst_file = os.path.join(RPiImageTempFolder, 'frame' + str(n_rpi) + '.jpg')
+    callstr = 'scp -q ' + src_file + ' ' + dst_file
+    _ = os.system(callstr)
+
+def calibrate_camera(RPiSettings, n_rpi, RPiCalibrationTempFolder):
+    # Use SSH connection to send commands
+    connection = ssh(RPiSettings['RPiIP'][n_rpi], RPiSettings['username'], RPiSettings['password'])
+    # Run calibrate.py on RPi
+    com_str = 'cd ' + RPiSettings['tracking_folder'] + ' && python calibrate.py'
+    connection.sendCommand(com_str)
+    connection.disconnect()
+    # Copy over output files to local TEMP folder
+    src_file = RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + \
+               RPiSettings['tracking_folder'] + '/calibrationData.p'
+    dst_file = os.path.join(RPiCalibrationTempFolder, 'calibrationData' + str(n_rpi) + '.p')
+    callstr = 'scp -q ' + src_file + ' ' + dst_file
+    _ = os.system(callstr)
+
+def get_overlay_on_current_image(RPiSettings, n_rpi, RPiImageTempFolder):
+    # Use SSH connection to send commands
+    connection = ssh(RPiSettings['RPiIP'][n_rpi], RPiSettings['username'], RPiSettings['password'])
+    # Run getImage.py on RPi to capture a frame
+    com_str = 'cd ' + RPiSettings['tracking_folder'] + ' && python calibrate.py overlay'
+    connection.sendCommand(com_str)
+    connection.disconnect()
+    # Copy over output files to local TEMP folder
+    src_file = RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + \
+               RPiSettings['tracking_folder'] + '/overlay.jpg'
+    dst_file = os.path.join(RPiImageTempFolder, 'overlay' + str(n_rpi) + '.jpg')
+    callstr = 'scp -q ' + src_file + ' ' + dst_file
+    _ = os.system(callstr)
+
 
 class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
     def __init__(self, parent=None):
         super(CameraSettings, self).__init__(parent=parent)
         self.setupUi(self)
+        self.parent = parent
         # Set up GUI variables
         self.trackingFolder = '/home/pi/Tracking'
         self.pt_rpi_ips = [self.pt_rpi_ip_1, self.pt_rpi_ip_2, self.pt_rpi_ip_3, self.pt_rpi_ip_4]
         self.cb_rpis = [self.cb_rpi_1, self.cb_rpi_2, self.cb_rpi_3, self.cb_rpi_4]
         self.pt_rpi_loc = [self.pt_rpi_loc_1, self.pt_rpi_loc_2, self.pt_rpi_loc_3, self.pt_rpi_loc_4]
         self.im_views = [self.im_view_1, self.im_view_2, self.im_view_3, self.im_view_4]
+        self.calibrationData = [None] * len(self.cb_rpis)
         # Set GUI interaction connections
         self.pb_show_image.clicked.connect(lambda:self.show_image())
         self.pb_calibrate.clicked.connect(lambda:self.calibrate())
         self.pb_show_calibration.clicked.connect(lambda:self.show_calibration())
         self.pb_overlay_calibration.clicked.connect(lambda:self.overlay())
         self.pb_test_tracking.clicked.connect(lambda:self.test_tracking())
-        self.pb_load_last.clicked.connect(lambda:self.load_last())
         self.pb_load.clicked.connect(lambda:self.load())
         self.pb_save.clicked.connect(lambda:self.save())
         self.pb_apply.clicked.connect(lambda:self.apply())
+        self.pb_cancel.clicked.connect(lambda:self.cancel())
         # Initialize Exposure Setting list
         itemstrings = ['off', 'auto', 'night', 'nightpreview', 'backlight', 'spotlight', 'sports', \
                        'snow', 'beach', 'verylong', 'fixedfps', 'antishake', 'fireworks']
         self.lw_exposure_settings.addItems(itemstrings)
         self.lw_exposure_settings.setCurrentRow(1)
 
-    def openFolderDialog(self, caption, directory):
-        # Pops up a GUI to select a folder
-        dialog = QtGui.QFileDialog(self, caption, directory)
-        dialog.setFileMode(QtGui.QFileDialog.Directory)
-        dialog.setOption(QtGui.QFileDialog.ShowDirsOnly, True)
-        if dialog.exec_():
-            # Get paths of selected folder
-            tmp = dialog.selectedFiles()
-            selected_folder = str(tmp[0])
-        else:
-            selected_folder = 'No folder selected'
-
-        return selected_folder
-
-    def openSingleFileDialog(self, caption='Select a file', directory=None):
-        # Pops up a GUI to select a single file. All others with same prefix will be loaded
-        dialog = QtGui.QFileDialog(self, caption, directory)
-        dialog.setFileMode(QtGui.QFileDialog.ExistingFile)
-        dialog.setViewMode(QtGui.QFileDialog.List) # or Detail
-        if dialog.exec_():
-            # Get path and file name of selection
-            tmp = dialog.selectedFiles()
-            selected_file = str(tmp[0])
-
-        return selected_file
-
-    def get_camera_settings_dict(self):
+    def get_RPiSettings(self):
         # Check which LED option is checked
         if self.rb_led_single.isChecked():
             LEDmode = 'single'
@@ -166,94 +171,20 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
                        'RPi_Usage': RPi_Usage, 
                        'use_RPi_nrs': use_RPi_nrs, 
                        'RPi_location': RPi_location, 
-                       'tracking_folder': self.trackingFolder}
+                       'tracking_folder': self.trackingFolder, 
+                       'calibrationData': self.calibrationData}
 
         return RPiSettings
 
-    def update_camera_files(self, useCalibration=True):
-        # Recreate original RPi folder in the TEMP folder
-        callstr = 'rsync -avzh ' + self.scripts_root + '/RaspberryPi/ ' + self.TEMPfolder + '/RPi/'
-        os.system(callstr)
-        RPiSettings = self.get_camera_settings_dict()
-        # Save dictionary to RPi folder
-        with open(self.TEMPfolder + '/RPi/RPiSettings.p','wb') as file:
-            pickle.dump(RPiSettings, file)
-        # Sync each RPi with the TEMP/RPi folder, including the correct RPiNumber file
-        # and correct calibrationData if available
-        Camera_Files_Update_Function(SettingsFolder=self.TEMPfolder, RPiSettings=RPiSettings, useCalibration=useCalibration)
-
-    def show_image(self):
-        self.update_camera_files(useCalibration = False)
-        RPiSettings = self.get_camera_settings_dict()
-        for n_rpi in RPiSettings['use_RPi_nrs']:
-            # Use SSH connection to send commands
-            connection = ssh(RPiSettings['RPiIP'][n_rpi], RPiSettings['username'], RPiSettings['password'])
-            # Run getImage.py on RPi to capture a frame
-            com_str = 'cd ' + self.trackingFolder + ' && python getImage.py'
-            connection.sendCommand(com_str)
-            connection.disconnect()
-            # Copy over output files to local TEMP folder
-            callstr = 'scp ' + RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + self.trackingFolder + '/frame.jpg ' + \
-                 str(self.TEMPfolder) + '/frame' + str(n_rpi) + '.jpg'
-            os.system(callstr)
-        # Plot current frame for each RPi
-        for n_rpi in RPiSettings['use_RPi_nrs']:
-            image = Image.open(str(self.TEMPfolder) + '/frame' + str(n_rpi) + '.jpg')
-            plotImage(self.im_views[n_rpi], image)
-
-    def calibrate(self):
-        self.update_camera_files(useCalibration = False)
-        RPiSettings = self.get_camera_settings_dict()
-        for n_rpi in RPiSettings['use_RPi_nrs']:
-            print('Calibrating camera ' + str(n_rpi) + ' of ' + str(RPiSettings['use_RPi_nrs']))
-            # Use SSH connection to send commands
-            connection = ssh(RPiSettings['RPiIP'][n_rpi], RPiSettings['username'], RPiSettings['password'])
-            # connection.sendCommand('cd ' + self.trackingFolder + ' && nohup python calibrate.py >/dev/null 2>&1 &')
-            # Run calibrate.py on RPi
-            com_str = 'cd ' + self.trackingFolder + ' && python calibrate.py'
-            connection.sendCommand(com_str)
-            connection.disconnect()
-            # Copy over output files to local TEMP folder
-            callstr = 'scp ' + RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + self.trackingFolder + '/calibrationData.p ' + \
-                 str(self.TEMPfolder) + '/calibrationData' + str(n_rpi) + '.p'
-            os.system(callstr)
-            callstr = 'scp ' + RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + self.trackingFolder + '/calibrationTmatrix.p ' + \
-                 self.TEMPfolder + '/calibrationTmatrix' + str(n_rpi) + '.p'
-            os.system(callstr)
-        # Save current RPiSettings also to TEMP folder with the calibration data
-        RPiSettingsFile = self.TEMPfolder + '/RPiSettings.p'
-        with open(RPiSettingsFile, 'wb') as file:
-            pickle.dump(RPiSettings, file)
-        # Show calibration data
-        self.show_calibration()
-
-    def save(self):
-        self.load(loadFile=self.TEMPfolder + '/RPiSettings.p')
-        RPiSettings = self.get_camera_settings_dict()
-        # Get folder to which data will be saved
-        saveFolder = self.openFolderDialog(caption='Select folder', directory=self.data_root)
-        RPiSettingsFile = saveFolder + '/RPiSettings.p'
-        with open(RPiSettingsFile, 'wb') as file:
-            pickle.dump(RPiSettings, file)
-        # Save calibration data for each RPi if present
-        for n_rpi in RPiSettings['use_RPi_nrs']:
-            calibrationFile = self.TEMPfolder + '/calibrationData' + str(n_rpi) + '.p'
-            if os.path.isfile(calibrationFile):
-                calibrationTmatrixFile = self.TEMPfolder + '/calibrationTmatrix' + str(n_rpi) + '.p'
-                dst_calibrationFile = saveFolder + '/calibrationData' + str(n_rpi) + '.p'
-                dst_calibrationTmatrixFile = saveFolder + '/calibrationTmatrix' + str(n_rpi) + '.p'
-                copyfile(calibrationFile, dst_calibrationFile)
-                copyfile(calibrationTmatrixFile, dst_calibrationTmatrixFile)
-            else:
-                show_message('Calibration file not found for RPi ' + str(n_rpi + 1) + '.')
-
-    def load(self,loadFile=None):
-        # Get RPiSettings file path
-        if not loadFile:
-            loadFile = self.openSingleFileDialog(caption='Select RPiSettings.p', directory=self.data_root)
-        # Load RPiSettings
-        with open(loadFile,'rb') as file:
-            RPiSettings = pickle.load(file)
+    def load(self,RPiSettings=None):
+        if RPiSettings is None:
+            # Load RPiSettings
+            loadFile = openSingleFileDialog('load', suffix='p', caption='Select settings file to load')
+            with open(loadFile,'rb') as file:
+                settings = pickle.load(file)
+                RPiSettings = settings['RPiSettings']
+        # Set current calibration data
+        self.calibrationData = RPiSettings['calibrationData']
         # Put RPiSettings to GUI
         if RPiSettings['LEDmode'] == 'single':
             self.rb_led_single.setChecked(True)
@@ -290,74 +221,109 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
             self.cb_rpis[n_rpi].setChecked(RPiSettings['RPi_Usage'][n_rpi])
             self.pt_rpi_loc[n_rpi].setPlainText(RPiSettings['RPi_location'][n_rpi])
         self.trackingFolder = RPiSettings['tracking_folder']
-        # Copy calibration data to local TEMP folder for use in GUI
-        loadFolder = loadFile[:loadFile.rfind('/')]
-        if loadFolder != self.TEMPfolder:
-            for n_rpi in RPiSettings['use_RPi_nrs']:
-                calibrationFile = loadFolder + '/calibrationData' + str(n_rpi) + '.p'
-                calibrationTmatrixFile = loadFolder + '/calibrationTmatrix' + str(n_rpi) + '.p'
-                dst_calibrationFile = self.TEMPfolder + '/calibrationData' + str(n_rpi) + '.p'
-                dst_calibrationTmatrixFile = self.TEMPfolder + '/calibrationTmatrix' + str(n_rpi) + '.p'
-                if os.path.isfile(calibrationFile):
-                    copyfile(calibrationFile, dst_calibrationFile)
-                    copyfile(calibrationTmatrixFile, dst_calibrationTmatrixFile)
-        # Save current RPiSettings also to TEMP folder with the calibration data
-        RPiSettingsFile = self.TEMPfolder + '/RPiSettings.p'
-        with open(RPiSettingsFile, 'wb') as file:
-            pickle.dump(RPiSettings, file)
-        # Show calibration data
-        self.show_calibration()
 
-    def load_last(self):
-        # Find the latest saved Camera Settings
-        from RecordingManager import findLatestTimeFolder
-        latest_folder = findLatestTimeFolder(self.RecGUI_dataFolder)
-        # Compile full path to the RecGUI_Settings.p file in this folder and load the settings
-        latest_CameraSettings_FullPath = self.RecGUI_dataFolder + '/' + latest_folder + '/RPiSettings.p'
-        self.load(loadFile=latest_CameraSettings_FullPath)
+    def save(self):
+        RPiSettings = self.get_RPiSettings()
+        # Get folder to which data will be saved
+        path = openSingleFileDialog('save', suffix='p', caption='Save file name and location')
+        # Save data
+        Settings = {'RPiSettings': RPiSettings}
+        with open(path, 'wb') as file:
+            pickle.dump(Settings, file)
+
+    def apply(self):
+        RPiSettings = self.get_RPiSettings()
+        update_tracking_camera_files(RPiSettings)
+        self.parent.Settings['RPiSettings'] = deepcopy(RPiSettings)
+        self.close()
+
+    def cancel(self):
+        self.close()
+
+    def show_image(self):
+        RPiSettings = self.get_RPiSettings()
+        update_tracking_camera_files(RPiSettings)
+        if len(RPiSettings['use_RPi_nrs']) == 0:
+            print('No cameras selected')
+        else:
+            print('Getting images ...')
+            # Acquire current image from all tracking RPis
+            RPiImageTempFolder = mkdtemp('RPiImageTempFolder')
+            T_getRPiImage = []
+            for n_rpi in RPiSettings['use_RPi_nrs']:
+                T = threading.Thread(target=get_current_image, args=[RPiSettings, n_rpi, RPiImageTempFolder])
+                T.start()
+                T_getRPiImage.append(T)
+            for T in T_getRPiImage:
+                T.join()
+            # Plot current frame for each RPi
+            for n_rpi in RPiSettings['use_RPi_nrs']:
+                image = Image.open(os.path.join(RPiImageTempFolder, 'frame' + str(n_rpi) + '.jpg'))
+                plotImage(self.im_views[n_rpi], image)
+            rmtree(RPiImageTempFolder)
+            print('Images displayed.')
+
+    def calibrate(self):
+        RPiSettings = self.get_RPiSettings()
+        update_tracking_camera_files(RPiSettings)
+        if len(RPiSettings['use_RPi_nrs']) == 0:
+            print('No cameras selected')
+        else:
+            print('Calibrating cameras ...')
+            # Get calibration data from all cameras
+            RPiCalibrationTempFolder = mkdtemp('RPiCalibrationTempFolder')
+            T_calibrateRPi = []
+            for n_rpi in RPiSettings['use_RPi_nrs']:
+                T = threading.Thread(target=calibrate_camera, args=[RPiSettings, n_rpi, RPiCalibrationTempFolder])
+                T.start()
+                T_calibrateRPi.append(T)
+            for T in T_calibrateRPi:
+                T.join()
+            # Load calibration data
+            for n_rpi in RPiSettings['use_RPi_nrs']:
+                with open(os.path.join(RPiCalibrationTempFolder, 'calibrationData' + str(n_rpi) + '.p'), 'rb') as file:
+                    self.calibrationData[n_rpi] = pickle.load(file)
+            # Delete temporary folder
+            rmtree(RPiCalibrationTempFolder)
+            # Show calibration data
+            self.show_calibration()
 
     def show_calibration(self):
         # Loads current calibrationData and shows it in the plots
-        RPiSettings = self.get_camera_settings_dict()
-        for n_rpi in RPiSettings['use_RPi_nrs']:
-            calibrationFile = self.TEMPfolder + '/calibrationData' + str(n_rpi) + '.p'
-            if os.path.isfile(calibrationFile):
-                with open(calibrationFile,'rb') as file:
-                    calibrationData = pickle.load(file)
-                    image = calibrationData['image']
-                    plotImage(self.im_views[n_rpi], image)
-            else:
-                show_message('Calibration file not found for RPi ' + str(n_rpi + 1) + '.')
+        RPiSettings = self.get_RPiSettings()
+        if len(RPiSettings['use_RPi_nrs']) == 0:
+            print('No cameras selected')
+        else:
+            for n_rpi in RPiSettings['use_RPi_nrs']:
+                if not (RPiSettings['calibrationData'][n_rpi] is None):
+                    image = RPiSettings['calibrationData'][n_rpi]['image']
+                else:
+                    image = np.zeros((608,800,3), dtype=np.uint8)
+                    image[:,:,0] = 255
+                plotImage(self.im_views[n_rpi], image)
 
     def overlay(self):
         # Captures current image and overlays on it the currently active calibration chessboard corner pattern.
-        self.update_camera_files()
-        RPiSettings = self.get_camera_settings_dict()
-        for n_rpi in RPiSettings['use_RPi_nrs']:
-            # Use SSH connection to send commands
-            connection = ssh(RPiSettings['RPiIP'][n_rpi], RPiSettings['username'], RPiSettings['password'])
-            # Run calibrate.py on RPi with the overlay argument
-            com_str = 'cd ' + self.trackingFolder + ' && python calibrate.py overlay'
-            connection.sendCommand(com_str)
-            connection.disconnect()
-            # Copy over overlay.jpg image to local TEMP folder
-            callstr = 'scp ' + RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + self.trackingFolder + '/overlay.jpg ' + \
-                      str(self.TEMPfolder) + '/overlay' + str(n_rpi) + '.jpg'
-            os.system(callstr)
-        # Plot current image with overlay for each RPi
-        for n_rpi in RPiSettings['use_RPi_nrs']:
-            image = Image.open(str(self.TEMPfolder) + '/overlay' + str(n_rpi) + '.jpg')
-            plotImage(self.im_views[n_rpi], image)
-
-    def apply(self):
-        # Save current RPiSettings also to TEMP folder with the calibration data
-        RPiSettings = self.get_camera_settings_dict()
-        RPiSettingsFile = self.TEMPfolder + '/RPiSettings.p'
-        with open(RPiSettingsFile, 'wb') as file:
-            pickle.dump(RPiSettings, file)
-        # Update camera files and close the window
-        self.update_camera_files()
-        self.close()
+        RPiSettings = self.get_RPiSettings()
+        update_tracking_camera_files(RPiSettings)
+        if len(RPiSettings['use_RPi_nrs']) == 0:
+            print('No cameras selected')
+        else:
+            print('Getting calibration overlay images ...')
+            # Acquire current image from all tracking RPis
+            RPiImageTempFolder = mkdtemp('RPiImageTempFolder')
+            T_getRPiImage = []
+            for n_rpi in RPiSettings['use_RPi_nrs']:
+                T = threading.Thread(target=get_overlay_on_current_image, args=[RPiSettings, n_rpi, RPiImageTempFolder])
+                T.start()
+                T_getRPiImage.append(T)
+            for T in T_getRPiImage:
+                T.join()
+            # Plot current image with overlay for each RPi
+            for n_rpi in RPiSettings['use_RPi_nrs']:
+                image = Image.open(os.path.join(RPiImageTempFolder, 'overlay' + str(n_rpi) + '.jpg'))
+                plotImage(self.im_views[n_rpi], image)
+            print('Calibration overlay displayed.')
 
     def test_tracking(self):
         # Opens up a new window for displaying the primary LED positions as detected
@@ -396,7 +362,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
                     self.pt_poserror[nRPi].setText('%.1f' % distance)
 
         # Get RPi Settings
-        RPiSettings = self.get_camera_settings_dict()
+        RPiSettings = self.get_RPiSettings()
         # Set up dialog box
         self.test_tracking_win = QtGui.QDialog()
         self.test_tracking_win.setWindowTitle('Test Tracking')
@@ -449,7 +415,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         self.test_tracking_win.setLayout(vbox)
         self.test_tracking_win.setGeometry(300, 200, 250, 20 * (len(RPiSettings['use_RPi_nrs']) + 2))
         # Start the RPis
-        self.update_camera_files()
+        update_tracking_camera_files(RPiSettings)
         trackingControl = rpiI.TrackingControl(RPiSettings)
         trackingControl.start()
         # Set up RPi latest position updater

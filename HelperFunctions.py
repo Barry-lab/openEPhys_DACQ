@@ -3,6 +3,7 @@ import sys
 from scipy.signal import butter, lfilter
 import os
 import numpy as np
+from PyQt4 import QtGui
 
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
@@ -122,3 +123,21 @@ def import_subdirectory_module(subdirectory, module_name):
         sys.path[:] = path
 
     return module
+
+def openSingleFileDialog(loadsave, directory=os.path.expanduser("~"), suffix='', caption='Choose File'):
+    # Pops up a GUI to select a single file.
+    dialog = QtGui.QFileDialog(directory=directory, caption=caption)
+    if loadsave is 'save':
+        dialog.setFileMode(QtGui.QFileDialog.AnyFile)
+    elif loadsave is 'load':
+        dialog.setFileMode(QtGui.QFileDialog.ExistingFile)
+    dialog.setViewMode(QtGui.QFileDialog.List) # or Detail
+    if len(suffix) > 0:
+        dialog.setNameFilter('*.' + suffix)
+        dialog.setDefaultSuffix(suffix)
+    if dialog.exec_():
+        # Get path and file name of selection
+        tmp = dialog.selectedFiles()
+        selected_file = str(tmp[0])
+
+    return selected_file

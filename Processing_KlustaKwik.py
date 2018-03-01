@@ -89,7 +89,7 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, badChan=[], thresh
     return spike_data
 
 def applyKlustaKwik(waveform_data):
-    hfunct.print_progress(0, len(waveform_data), prefix='Applying KlustaKwik:', suffix=' Tet: 0/' + str(len(waveform_data)), initiation=True)
+    hfunct.print_progress(0, len(waveform_data), prefix='Applying KlustaKwik:', suffix=' T: 0/' + str(len(waveform_data)), initiation=True)
     for ntet in range(len(waveform_data)):
         if len(waveform_data[ntet]['spiketimes']) > 1:
             # Create temporary processing folder
@@ -113,7 +113,7 @@ def applyKlustaKwik(waveform_data):
         else:
             print('No spikes on tetrode ' + str(ntet + 1))
             waveform_data[ntet]['clusterIDs'] = np.ones(waveform_data[ntet]['spiketimes'].shape, dtype=np.int16)
-        hfunct.print_progress(ntet + 1, len(waveform_data), prefix='Applying KlustaKwik:', suffix=' Tet: ' + str(ntet + 1) + '/' + str(len(waveform_data)))
+        hfunct.print_progress(ntet + 1, len(waveform_data), prefix='Applying KlustaKwik:', suffix=' T: ' + str(ntet + 1) + '/' + str(len(waveform_data)))
 
     return waveform_data
 
@@ -191,6 +191,8 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, badChan=[], UseRaw=Fal
 
 
 def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=500, threshold=50):
+    if isinstance(OpenEphysDataPaths, basestring):
+        OpenEphysDataPaths = [OpenEphysDataPaths]
     badChans = []
     for OpenEphysDataPath in OpenEphysDataPaths:
         # Assume NWB file has name experiment_1.nwb

@@ -66,10 +66,15 @@ def processFrames(frames, ndots_x, ndots_y, spacing, overlay=False):
                 patterns.append([])
         # Find average pattern
         tmp_patterns = [x for x in patterns if x != []]
-        print(str(len(tmp_patterns)) + ' of ' + str(len(frames)) + ' images used.')
-        tmp = np.concatenate(tmp_patterns, axis=1)
-        pattern_mean = np.mean(tmp, axis=1)
-        pattern_mean = pattern_mean.reshape((pattern_mean.shape[0],1,2), order='C')
+        n_successful_patterns = len(tmp_patterns)
+        print('RPi Nr ' + str(RPi_number + 1) + ': ' + \
+              str(n_successful_patterns) + ' of ' + str(len(frames)) + ' images used.')
+        if n_successful_patterns >= 1:
+            tmp = np.concatenate(tmp_patterns, axis=1)
+            pattern_mean = np.mean(tmp, axis=1)
+            pattern_mean = pattern_mean.reshape((pattern_mean.shape[0],1,2), order='C')
+        else:
+            pattern_mean = None
     # Find average image
     image = np.concatenate(frames, axis=2)
     image = image.reshape((frames[0].shape[0],frames[0].shape[1],frames[0].shape[2],len(frames)), order='F')
@@ -78,8 +83,12 @@ def processFrames(frames, ndots_x, ndots_y, spacing, overlay=False):
     if overlay: # Use pre-existing corners, if overlay requested
         with open('calibrationData.p', 'rb') as file:
             calibrationData = pickle.load(file)
-        pattern_mean = calibrationData['pattern']
-    image = cv2.drawChessboardCorners(image, (ndots_y, ndots_x), pattern_mean, True)
+        if not (calibrationData is None):
+            pattern_mean = calibrationData['pattern']
+        else:
+            pattern_mean = None
+    if not (pattern_mean is None):
+        image = cv2.drawChessboardCorners(image, (ndots_y, ndots_x), pattern_mean, True)
 
     return image, pattern_mean
 
@@ -99,9 +108,9 @@ def getTransformMatrix(pattern, ndots_x, ndots_y, spacing):
     # Add the zeros to force pattern onto the plane in 3D world
     objp = np.concatenate((objp, np.zeros((objp.shape[0],1))), 1)
     # Compute transformation matrix
-    transformMatrix, mask = cv2.findHomography(pattern, objp, cv2.RANSAC,5.0)
+    calibrationTmatrix, mask = cv2.findHomography(pattern, objp, cv2.RANSAC,5.0)
     
-    return transformMatrix
+    return calibrationTmatrix
 
 # Here is the actual core of the script
 # Aquire a series of images with same script as used for tracking
@@ -128,10 +137,13 @@ if len(sys.argv) > 1:
 image, pattern = processFrames(frames, ndots_x, ndots_y, spacing, overlay)
 if not overlay:
     # Compute transformation matrix and save it as well as calibration data
-    transformMatrix = getTransformMatrix(pattern, ndots_x, ndots_y, spacing)
-    with open('calibrationTmatrix.p', 'wb') as file:
-        pickle.dump(transformMatrix, file)
-    calibrationData = {'image': image, 'pattern': pattern, 'ndots_x': ndots_x, 'ndots_y': ndots_y, 'spacing': spacing}
+    if not (pattern is None):
+        calibrationTmatrix = getTransformMatrix(pattern, ndots_x, ndots_y, spacing)
+    else:
+        calibrationTmatrix = None
+    calibrationData = {'calibrationTmatrix': calibrationTmatrix, 'image': image, 
+                       'pattern': pattern, 'ndots_x': ndots_x, 
+                       'ndots_y': ndots_y, 'spacing': spacing}
     with open('calibrationData.p', 'wb') as file:
         pickle.dump(calibrationData, file)
 else: # If requested, simply save the current image with overlay of previous pattern

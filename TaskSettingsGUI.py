@@ -3,7 +3,7 @@ from PyQt4 import QtGui
 import HelperFunctions as hfunct
 import os
 import pickle
-import copy
+from copy import deepcopy
 
 class TaskSettingsGUI(object):
     def __init__(self, parent=None):
@@ -55,8 +55,8 @@ class TaskSettingsGUI(object):
         # Show MainWindow
         self.mainWindow.show()
         # If TaskSettings available, load them
-        if hasattr(self.parent, 'TaskSettings'):
-            self.loadSettings(self.parent.TaskSettings)
+        if 'TaskSettings' in self.parent.Settings.keys():
+            self.loadSettings(self.parent.Settings['TaskSettings'])
 
     def clearLayout(self, layout, keep=0):
         # This function clears the layout so that it could be regenerated
@@ -73,23 +73,6 @@ class TaskSettingsGUI(object):
         currentTask = str(item.text())
         self.loadTaskGUI(currentTask)
 
-    def openSingleFileDialog(self, loadsave, directory=os.path.expanduser("~"), caption='Choose File'):
-        # Pops up a GUI to select a single file. All others with same prefix will be loaded
-        dialog = QtGui.QFileDialog(directory=directory, caption=caption)
-        if loadsave is 'save':
-            dialog.setFileMode(QtGui.QFileDialog.AnyFile)
-        elif loadsave is 'load':
-            dialog.setFileMode(QtGui.QFileDialog.ExistingFile)
-        dialog.setViewMode(QtGui.QFileDialog.List) # or Detail
-        dialog.setNameFilter('Pickle(*.p)')
-        dialog.setDefaultSuffix('p')
-        if dialog.exec_():
-            # Get path and file name of selection
-            tmp = dialog.selectedFiles()
-            selected_file = str(tmp[0])
-
-        return selected_file
-
     def loadTaskGUI(self, currentTask):
         # Load the GUI for currently selected task
         TaskModule = hfunct.import_subdirectory_module('Tasks', currentTask)
@@ -99,9 +82,10 @@ class TaskSettingsGUI(object):
 
     def loadSettings(self, TaskSettings=None):
         if not TaskSettings:
-            selected_file = self.openSingleFileDialog('load', caption='Choose file to load')
+            selected_file = hfunct.openSingleFileDialog('load', suffix='p', caption='Choose file to load')
             with open(selected_file, 'rb') as file:
-                TaskSettings = pickle.load(file)
+                settings = pickle.load(file)
+            TaskSettings = settings['TaskSettings']
         self.loadTaskGUI(TaskSettings['name'])
         TaskSettings.pop('name')
         self.importSettings(self, TaskSettings)
@@ -111,16 +95,16 @@ class TaskSettingsGUI(object):
         # Save TaskSettings to disk using dialog box
         TaskSettings = self.exportSettings(self)
         TaskSettings['name'] = str(self.taskSelectionList.currentItem().text())
-        selected_file = self.openSingleFileDialog('save', caption='Save file name and location')
+        selected_file = hfunct.openSingleFileDialog('save', suffix='p', caption='Save file name and location')
         with open(selected_file, 'wb') as file:
-            pickle.dump(TaskSettings, file)
+            pickle.dump({'TaskSettings': TaskSettings}, file)
 
     def applySettings(self):
         # Grab all info from self.settings and put to TaskSettings
         # By overwriting self.TaskSettings, it should also overwrite it in RecGUI
         TaskSettings = self.exportSettings(self)
         TaskSettings['name'] = str(self.taskSelectionList.currentItem().text())
-        self.parent.TaskSettings = copy.deepcopy(TaskSettings)
+        self.parent.Settings['TaskSettings'] = deepcopy(TaskSettings)
         self.mainWindow.close()
 
     def cancelSettings(self):
