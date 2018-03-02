@@ -81,10 +81,8 @@ def processFrames(frames, ndots_x, ndots_y, spacing, overlay=False):
     image = np.uint8(np.mean(image, axis=3))
     # Draw image with corners
     if overlay: # Use pre-existing corners, if overlay requested
-        with open('calibrationData.p', 'rb') as file:
-            calibrationData = pickle.load(file)
-        if not (calibrationData is None):
-            pattern_mean = calibrationData['pattern']
+        if str(RPi_number) in RPiSettings['calibrationData'].keys():
+            pattern_mean = RPiSettings['calibrationData'][str(RPi_number)]['pattern']
         else:
             pattern_mean = None
     if not (pattern_mean is None):
@@ -141,9 +139,12 @@ if not overlay:
         calibrationTmatrix = getTransformMatrix(pattern, ndots_x, ndots_y, spacing)
     else:
         calibrationTmatrix = None
-    calibrationData = {'calibrationTmatrix': calibrationTmatrix, 'image': image, 
-                       'pattern': pattern, 'ndots_x': ndots_x, 
-                       'ndots_y': ndots_y, 'spacing': spacing}
+    if calibrationTmatrix is None or pattern is None:
+        calibrationData = {'image': image, 'ndots_x': ndots_x, 'ndots_y': ndots_y, 'spacing': spacing}
+    else:
+        calibrationData = {'calibrationTmatrix': calibrationTmatrix, 'image': image, 
+                           'pattern': pattern, 'ndots_x': ndots_x, 
+                           'ndots_y': ndots_y, 'spacing': spacing}
     with open('calibrationData.p', 'wb') as file:
         pickle.dump(calibrationData, file)
 else: # If requested, simply save the current image with overlay of previous pattern

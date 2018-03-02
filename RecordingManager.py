@@ -21,6 +21,7 @@ import threading
 from copy import deepcopy
 from scipy.io import savemat
 from tempfile import mkdtemp
+import numpy as np
 
 def show_message(message, message_more=None):
     # This function is used to display a message in a separate window
@@ -137,13 +138,14 @@ def update_specific_camera(RPiSettings, n_rpi, tmpFolder):
     with open(os.path.join(tmpFolder, 'RPiNumber'), 'wb') as file:
         file.write(str(n_rpi))
     # Store correct calibration data
-    calibrationFile = os.path.join(tmpFolder, 'calibrationData.p')
-    with open(calibrationFile, 'wb') as file:
-        pickle.dump(RPiSettings['calibrationData'][n_rpi], file)
+    if str(n_rpi) in RPiSettings['calibrationData'].keys():
+        calibrationFile = os.path.join(tmpFolder, 'calibrationData.p')
+        with open(calibrationFile, 'wb') as file:
+            pickle.dump(RPiSettings['calibrationData'][str(n_rpi)], file)
     # Recreate this folder on the tracking RPi
     tmp_path = os.path.join(tmpFolder, '')
     callstr = 'rsync -qavrP -e "ssh -l server" ' + tmp_path + ' ' + \
-              RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + \
+              RPiSettings['username'] + '@' + RPiSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
               RPiSettings['tracking_folder'] + ' --delete'
     _ = os.system(callstr)
 
@@ -162,7 +164,7 @@ def update_tracking_camera_files(RPiSettings):
     rmtree(RPiTempFolder)
 
 def retrieve_specific_camera_tracking_data(n_rpi, RPiSettings, folder_path):
-    src_file = RPiSettings['username'] + '@' + RPiSettings['RPiIP'][n_rpi] + ':' + \
+    src_file = RPiSettings['username'] + '@' + RPiSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
                RPiSettings['tracking_folder'] + '/logfile.csv'
     dst_file = os.path.join(folder_path, 'PosLog' + str(n_rpi) + '.csv')
     callstr = 'scp -q ' + src_file + ' ' + dst_file
@@ -229,14 +231,14 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             chanString = str(self.pt_chan_map_1_chans.toPlainText())
             chan_from = int(chanString[:chanString.find('-')])
             chan_to = int(chanString[chanString.find('-') + 1:])
-            chan_list = range(chan_from - 1, chan_to)
+            chan_list = np.arange(chan_from - 1, chan_to, dtype=np.int64)
             channel_map[channel_map_1] = {'string': chanString, 'list': chan_list}
             if len(str(self.pt_chan_map_2.toPlainText())) > 0:
                 channel_map_2 = str(self.pt_chan_map_2.toPlainText())
                 chanString = str(self.pt_chan_map_2_chans.toPlainText())
                 chan_from = int(chanString[:chanString.find('-')])
                 chan_to = int(chanString[chanString.find('-') + 1:])
-                chan_list = range(chan_from - 1, chan_to)
+                chan_list = np.arange(chan_from - 1, chan_to, dtype=np.int64)
                 channel_map[channel_map_2] = {'string': chanString, 'list': chan_list}
         # Grabs all options in the Recording Manager and puts them into a dictionary
         RecGUI_Settings = {'root_folder': str(self.pt_root_folder.toPlainText()), 
@@ -245,18 +247,29 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
                            'experimenter': str(self.pt_experimenter.toPlainText()), 
                            'badChan': str(self.pt_badChan.toPlainText()), 
                            'rec_folder': str(self.pt_rec_folder.toPlainText()), 
-                           'PosPlot': self.rb_posPlot_yes.isChecked(), 
+                           'PosPlot': np.array(self.rb_posPlot_yes.isChecked()), 
                            'channel_map': channel_map, 
-                           'TaskActive': self.rb_task_yes.isChecked()}
+                           'TaskActive': np.array(self.rb_task_yes.isChecked())}
 
         return RecGUI_Settings
 
     def load_settings(self, path=None):
         if path is None: # Get user to select settings to load if not given
             path = hfunct.openSingleFileDialog('load', suffix='p', caption='Select file to load')
-        # Load RecGUI_Settings and update settings in GUI
+        # Load Settings file
         with open(path,'rb') as file:
-            self.Settings = pickle.load(file)
+            Settings = pickle.load(file)
+        # # Load calibration images if available
+        # calibrationImagesFile = path[:-path[::-1].index('.')] + 'calibrationImages.npy'
+        # if 'calibrationData' in Settings['RPiSettings'].keys() and os.path.isfile(calibrationImagesFile):
+        #     calibrationImages = np.load(calibrationImagesFile)
+        #     for n_rpi in range(len(Settings['RPiSettings']['calibrationData'])):
+        #         image_pos = 0
+        #         if n_rpi in Settings['RPiSettings']['use_RPi_nrs']:
+        #             Settings['RPiSettings']['calibrationData'][str(n_rpi)]['image'] = calibrationImages[image_pos, :, :, :]
+        #             image_pos += 1
+        self.Settings = Settings
+        # Put Recording Manager General settings into GUI
         RecGUI_Settings = self.Settings['General']
         self.pt_root_folder.setPlainText(RecGUI_Settings['root_folder'])
         self.pt_animal.setPlainText(RecGUI_Settings['animal'])
@@ -294,14 +307,27 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             path = hfunct.openSingleFileDialog('save', suffix='p', caption='Save file name and location')
         self.Settings['General'] = self.get_RecordingGUI_settings()
         self.Settings['Time'] = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        Settings = deepcopy(self.Settings)
+        # if 'calibrationData' in Settings['RPiSettings'].keys():
+        #     # Separate calibration images and save separately
+        #     calibrationImages = []
+        #     for n_rpi in range(len(Settings['RPiSettings']['calibrationData'])):
+        #         if n_rpi in Settings['RPiSettings']['use_RPi_nrs']:
+        #             calibrationImages.append(Settings['RPiSettings']['calibrationData'][n_rpi].pop('image'))
+        #     calibrationImages = np.array(calibrationImages)
+        #     calibrationImagesFile = path[:-path[::-1].index('.')] + 'calibrationImages.npy'
+        #     np.save(calibrationImagesFile, calibrationImages, allow_pickle=False)
+        # Save settings into a pickle file
         with open(path, 'wb') as file:
-            pickle.dump(self.Settings, file)
-        if matlab:
-            matFilePath = path[:-path[::-1].index('.')] + 'mat'
-            settings = deepcopy(self.Settings)
-            # Replace None with 0 in calibrationData so it could be saved as MATLAB file
-            settings['RPiSettings']['calibrationData'] = map(lambda x: 0 if x is None else x, settings['RPiSettings']['calibrationData'])
-            savemat(matFilePath, settings, long_field_names=True)
+            pickle.dump(Settings, file)
+        # if matlab:
+        #     # Save MATLAB compatible file
+        #     matFilePath = path[:-path[::-1].index('.')] + 'mat'
+        #     settings = deepcopy(self.Settings)
+        #     # Replace None with 0 in calibrationData so it could be saved as MATLAB file
+        #     settings['RPiSettings']['calibrationData'] = map(lambda x: 0 if x is None else x, settings['RPiSettings']['calibrationData'])
+        #     savemat(matFilePath, settings, long_field_names=True)
+        print('Settings saved.')
 
     def load_last_settings(self):
         # Check if specific Animal ID has been entered
@@ -341,46 +367,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
     def task_settings(self):
         from TaskSettingsGUI import TaskSettingsGUI
         self.TaskSet = TaskSettingsGUI(parent=self)
-
-    def store_RecGUI_parameters(self, path):
-        # Copy over RPi tracking folder to Recording Folder on PC using rsync
-        print('Copying over tracking data to Recording PC...')
-        user = self.RPiSettings['username']
-        trackingFolder = self.RPiSettings['tracking_folder']
-        for n_rpi in self.RPiSettings['use_RPi_nrs']:
-            RPiIP = self.RPiSettings['RPiIP'][n_rpi]
-            callstr = 'rsync -avzh ' + user + '@' + RPiIP + ':' + \
-                      trackingFolder + '/ ' + path + \
-                      '/CameraData' + str(n_rpi) + '/'
-            os.system(callstr)
-            # Create a copy of log file as PosLog.csv file in recording folder
-            src_logfile = path + '/CameraData' + str(n_rpi) + '/logfile.csv'
-            dst_logfile = path + '/PosLog' + str(n_rpi) + '.csv'
-            copyfile(src_logfile, dst_logfile)
-        print('Copying over tracking data to Recording PC Successful')
-        # Keep note of RPiSettings and Calibration data on PC for this GUI.
-        # These are kept in the RecGUI_dataFolder as specified in the __init__ function.
-        rec_folder_name = str(self.pt_rec_folder.toPlainText())
-        rec_folder_name = rec_folder_name[rec_folder_name.rfind('/') + 1:]
-        RecordingManagerSaveFolder = self.RecGUI_dataFolder + '/' + rec_folder_name
-        callstr = 'rsync -avzh ' + self.TEMPfolder + '/ ' + RecordingManagerSaveFolder + '/'
-        os.system(callstr)
-        RecGUI_Settings = self.get_RecordingGUI_settings()
-        with open(RecordingManagerSaveFolder + '/RecGUI_Settings.p', 'wb') as file:
-            pickle.dump(RecGUI_Settings, file)
-        with open(path + '/RecGUI_Settings.p', 'wb') as file:
-            pickle.dump(RecGUI_Settings, file)
-        print('Saved Recording Manager Settings.')
-        # Save task settings if available
-        if self.Settings['General']['TaskActive']:
-            with open(RecordingManagerSaveFolder + '/TaskSettings.p', 'wb') as file:
-                pickle.dump(self.TaskSettings, file)
-            with open(path + '/TaskSettings.p', 'wb') as file:
-                pickle.dump(self.TaskSettings, file)
-        # Save badChan list from text box to a file in the recording folder
-        if len(str(self.pt_badChan.toPlainText())) > 0:
-            save_badChan_to_file(str(self.pt_badChan.toPlainText()), path)
-            print('Saved the list of bad channels: ' + str(self.pt_badChan.toPlainText()))
 
     def start_rec(self):
         self.Settings['General'] = self.get_RecordingGUI_settings()

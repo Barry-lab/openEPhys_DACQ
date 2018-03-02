@@ -88,21 +88,22 @@ class TaskSettingsGUI(object):
             TaskSettings = settings['TaskSettings']
         self.loadTaskGUI(TaskSettings['name'])
         TaskSettings.pop('name')
-        self.importSettings(self, TaskSettings)
+        self.importSettingsToGUI(self, TaskSettings)
 
     def saveSettings(self):
         # Grab all info from self.settings and put to TaskSettings
         # Save TaskSettings to disk using dialog box
-        TaskSettings = self.exportSettings(self)
+        TaskSettings = self.exportSettingsFromGUI(self)
         TaskSettings['name'] = str(self.taskSelectionList.currentItem().text())
         selected_file = hfunct.openSingleFileDialog('save', suffix='p', caption='Save file name and location')
         with open(selected_file, 'wb') as file:
             pickle.dump({'TaskSettings': TaskSettings}, file)
+        print('Settings saved.')
 
     def applySettings(self):
         # Grab all info from self.settings and put to TaskSettings
         # By overwriting self.TaskSettings, it should also overwrite it in RecGUI
-        TaskSettings = self.exportSettings(self)
+        TaskSettings = self.exportSettingsFromGUI(self)
         TaskSettings['name'] = str(self.taskSelectionList.currentItem().text())
         self.parent.Settings['TaskSettings'] = deepcopy(TaskSettings)
         self.mainWindow.close()

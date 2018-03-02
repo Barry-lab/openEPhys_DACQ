@@ -21,17 +21,17 @@ class TrackingControl(object):
         self.RPiSSH = [None] * len(self.RPiSettings['use_RPi_nrs'])
         self.RPiSSH_Lock = threading.Lock()
         T_initRPiSSH = []
-        for n_rpi, nRPi in enumerate(self.RPiSettings['use_RPi_nrs']):
+        for nRPi, n_rpi in enumerate(self.RPiSettings['use_RPi_nrs']):
             T_initRPiSSH.append(threading.Thread(target=self.initRPiSSH, args=[n_rpi, nRPi]))
-            T_initRPiSSH[n_rpi].start()
+            T_initRPiSSH[nRPi].start()
         for T in T_initRPiSSH:
             T.join()
 
     def initRPiSSH(self, n_rpi, nRPi):
-        connection = ssh(self.RPiSettings['RPiIP'][nRPi], self.RPiSettings['username'], self.RPiSettings['password'])
+        connection = ssh(self.RPiSettings['RPiInfo'][str(n_rpi)]['IP'], self.RPiSettings['username'], self.RPiSettings['password'])
         connection.sendCommand('pkill python') # Ensure any past processes have closed
         with self.RPiSSH_Lock:
-            self.RPiSSH[n_rpi] = connection
+            self.RPiSSH[nRPi] = connection
 
     def start(self):
         for connection in self.RPiSSH:
@@ -45,7 +45,7 @@ class TrackingControl(object):
         StopPort = self.RPiSettings['stop_port']
         RPiIPs = []
         for n_rpi in self.RPiSettings['use_RPi_nrs']:
-            RPiIPs.append(self.RPiSettings['RPiIP'][n_rpi])
+            RPiIPs.append(self.RPiSettings['RPiInfo'][str(n_rpi)]['IP'])
         # Set Stop message Publishing ZeroMQ
         contextPUB = zmq.Context()
         sockPUB = contextPUB.socket(zmq.PUB)
@@ -119,7 +119,7 @@ class onlineTrackingData(object):
         self.sockSUB.setsockopt(zmq.SUBSCRIBE, '')
         self.sockSUB.RCVTIMEO = 150 # maximum duration to wait for data (in milliseconds)
         for n_rpi in self.RPiSettings['use_RPi_nrs']:
-            tmp = 'tcp://' + self.RPiSettings['RPiIP'][n_rpi] + ':' + self.RPiSettings['pos_port']
+            tmp = 'tcp://' + self.RPiSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + self.RPiSettings['pos_port']
             self.sockSUB.connect(tmp)
 
     def generatePosData(self, n_rpi):
@@ -173,8 +173,7 @@ class onlineTrackingData(object):
                     posData = json.loads(message) # Convert from string to original format
                     # Identify the sender of this message as RPi position in list
                     n_rpi = posData[0]
-                    nRPi = [i for i,x in enumerate(self.RPiSettings['use_RPi_nrs']) if x == n_rpi]
-                    nRPi = nRPi[0]
+                    nRPi = [i for i,x in enumerate(self.RPiSettings['use_RPi_nrs']) if x == n_rpi][0]
                     # Update posData for the correct position in the list
                     with self.posDatasLock:
                         self.posDatas[nRPi] = posData
@@ -235,9 +234,9 @@ class onlineTrackingData(object):
             # Continue once data is received from each RPi
             RPi_data_available = np.zeros(len(self.RPiSettings['use_RPi_nrs']), dtype=bool)
             while not np.all(RPi_data_available):
-                for n_rpi in range(len(self.RPiSettings['use_RPi_nrs'])):
-                    if self.posDatas[n_rpi]:
-                        RPi_data_available[n_rpi] = True
+                for nRPi in range(len(self.posDatas)):
+                    if not (self.posDatas[nRPi] is None):
+                        RPi_data_available[nRPi] = True
             print('All RPi data available')
         else:
             # Start generating movement data if synthetic data requested

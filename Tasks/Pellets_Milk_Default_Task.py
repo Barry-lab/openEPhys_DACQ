@@ -21,8 +21,8 @@ def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
                            'Present': True, 
                            'Active': True, 
                            'IP': '192.168.0.40', 
-                           'Position': '100,50', 
-                           'SignalHz': '2800'}
+                           'Position': np.array([100,50]), 
+                           'SignalHz': np.array(2800)}
     # Create interface for interacting with this FEEDER
     FEEDER = {'Type': FEEDER_type}
     vbox = QtGui.QVBoxLayout()
@@ -43,11 +43,11 @@ def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
     vbox.addLayout(hbox)
     hbox = QtGui.QHBoxLayout()
     hbox.addWidget(QtGui.QLabel('Position:'))
-    FEEDER['Position'] = QtGui.QLineEdit(FEEDER_settings['Position'])
+    FEEDER['Position'] = QtGui.QLineEdit(','.join(map(str,FEEDER_settings['Position'])))
     FEEDER['Position'].setMinimumWidth(70)
     hbox.addWidget(FEEDER['Position'])
     hbox.addWidget(QtGui.QLabel('Signal (Hz):'))
-    FEEDER['SignalHz'] = QtGui.QLineEdit(FEEDER_settings['SignalHz'])
+    FEEDER['SignalHz'] = QtGui.QLineEdit(str(FEEDER_settings['SignalHz']))
     hbox.addWidget(FEEDER['SignalHz'])
     testButton = QtGui.QPushButton('Test')
     testButton.setMaximumWidth(40)
@@ -68,7 +68,7 @@ def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
         self.pellet_feeder_settings_layout.addWidget(frame)
     elif FEEDER_type == 'milk':
         self.milk_feeder_settings_layout.addWidget(frame)
-    self.settings['FEEDERs'].append(FEEDER)
+    self.settings['FEEDERs'][FEEDER_type].append(FEEDER)
 
 def setDoubleHBoxStretch(hbox):
     hbox.setStretch(0,2)
@@ -76,61 +76,62 @@ def setDoubleHBoxStretch(hbox):
 
     return hbox
 
-def exportSettings(self):
-    TaskSettings = {'LastTravelTime': float(str(self.settings['LastTravelTime'].text())), 
-                    'LastTravelSmooth': int(float(str(self.settings['LastTravelSmooth'].text()))), 
-                    'LastTravelDist': int(float(str(self.settings['LastTravelDist'].text()))), 
-                    'PelletMilkRatio': float(str(self.settings['PelletMilkRatio'].text())), 
-                    'Chewing_TTLchan': int(float(str(self.settings['Chewing_TTLchan'].text()))), 
+def exportSettingsFromGUI(self):
+    TaskSettings = {'LastTravelTime': np.float64(str(self.settings['LastTravelTime'].text())), 
+                    'LastTravelSmooth': np.int64(float(str(self.settings['LastTravelSmooth'].text()))), 
+                    'LastTravelDist': np.int64(float(str(self.settings['LastTravelDist'].text()))), 
+                    'PelletMilkRatio': np.float64(str(self.settings['PelletMilkRatio'].text())), 
+                    'Chewing_TTLchan': np.int64(float(str(self.settings['Chewing_TTLchan'].text()))), 
                     'Username': str(self.settings['Username'].text()), 
                     'Password': str(self.settings['Password'].text()), 
-                    'pelletGameOn': self.settings['pelletGameOn'].isChecked(), 
-                    'InitPellets': int(float(str(self.settings['InitPellets'].text()))), 
-                    'PelletQuantity': int(float(str(self.settings['PelletQuantity'].text()))), 
-                    'PelletRewardMinSeparationMean': int(float(str(self.settings['PelletRewardMinSeparationMean'].text()))), 
-                    'PelletRewardMinSeparationVariance': float(str(self.settings['PelletRewardMinSeparationVariance'].text())), 
-                    'Chewing_Target': int(float(str(self.settings['Chewing_Target'].text()))), 
-                    'MaxInactivityDuration': int(float(str(self.settings['MaxInactivityDuration'].text()))), 
-                    'MilkTrialFailPenalty': int(float(str(self.settings['MilkTrialFailPenalty'].text()))), 
-                    'milkGameOn': self.settings['milkGameOn'].isChecked(), 
-                    'InitMilk': float(str(self.settings['InitMilk'].text())), 
-                    'MilkQuantity': float(str(self.settings['MilkQuantity'].text())), 
-                    'MilkTrialMinSeparationMean': int(float(str(self.settings['MilkTrialMinSeparationMean'].text()))), 
-                    'MilkTrialMinSeparationVariance': float(str(self.settings['MilkTrialMinSeparationVariance'].text())), 
-                    'MilkTaskMinStartDistance': int(float(str(self.settings['MilkTaskMinStartDistance'].text()))), 
-                    'MilkTaskMinGoalDistance': int(float(str(self.settings['MilkTaskMinGoalDistance'].text()))), 
-                    'MilkTrialMaxDuration': int(float(str(self.settings['MilkTrialMaxDuration'].text())))}
-    FEEDERs = []
-    for feeder in self.settings['FEEDERs']:
-        FEEDERs.append({'Type': feeder['Type'], 
-                        'ID': int(str(feeder['ID'].text())) - 1, 
-                        'Present': feeder['Present'].isChecked(), 
-                        'Active': feeder['Active'].isChecked(), 
-                        'IP': str(feeder['IP'].text()), 
-                        'Position': map(int, str(feeder['Position'].text()).split(',')), 
-                        'SignalHz': int(float(str(feeder['SignalHz'].text())))})
+                    'pelletGameOn': np.array(self.settings['pelletGameOn'].isChecked()), 
+                    'InitPellets': np.int64(float(str(self.settings['InitPellets'].text()))), 
+                    'PelletQuantity': np.int64(float(str(self.settings['PelletQuantity'].text()))), 
+                    'PelletRewardMinSeparationMean': np.int64(float(str(self.settings['PelletRewardMinSeparationMean'].text()))), 
+                    'PelletRewardMinSeparationVariance': np.float64(str(self.settings['PelletRewardMinSeparationVariance'].text())), 
+                    'Chewing_Target': np.int64(float(str(self.settings['Chewing_Target'].text()))), 
+                    'MaxInactivityDuration': np.int64(float(str(self.settings['MaxInactivityDuration'].text()))), 
+                    'MilkTrialFailPenalty': np.int64(float(str(self.settings['MilkTrialFailPenalty'].text()))), 
+                    'milkGameOn': np.array(self.settings['milkGameOn'].isChecked()), 
+                    'InitMilk': np.float64(str(self.settings['InitMilk'].text())), 
+                    'MilkQuantity': np.float64(str(self.settings['MilkQuantity'].text())), 
+                    'MilkTrialMinSeparationMean': np.int64(float(str(self.settings['MilkTrialMinSeparationMean'].text()))), 
+                    'MilkTrialMinSeparationVariance': np.float64(str(self.settings['MilkTrialMinSeparationVariance'].text())), 
+                    'MilkTaskMinStartDistance': np.int64(float(str(self.settings['MilkTaskMinStartDistance'].text()))), 
+                    'MilkTaskMinGoalDistance': np.int64(float(str(self.settings['MilkTaskMinGoalDistance'].text()))), 
+                    'MilkTrialMaxDuration': np.int64(float(str(self.settings['MilkTrialMaxDuration'].text())))}
+    FEEDERs = {}
+    for FEEDER_type in self.settings['FEEDERs'].keys():
+        FEEDERs[FEEDER_type] = {}
+        IDs = []
+        for feeder in self.settings['FEEDERs'][FEEDER_type]:
+            IDs.append(str(int(str(feeder['ID'].text()))))
+            FEEDERs[FEEDER_type][IDs[-1]] = {'ID': IDs[-1], 
+                                             'Present': np.array(feeder['Present'].isChecked()), 
+                                             'Active': np.array(feeder['Active'].isChecked()), 
+                                             'IP': str(feeder['IP'].text()), 
+                                             'Position': np.array(map(int, str(feeder['Position'].text()).split(','))), 
+                                             'SignalHz': np.int64(float(str(feeder['SignalHz'].text())))}
+        # Check if there are duplicates of FEEDER IDs
+        if any(IDs.count(ID) > 1 for ID in IDs):
+            raise ValueError('Duplicates of IDs in ' + FEEDER_type + ' feeders!')
     TaskSettings['FEEDERs'] = FEEDERs
 
     return TaskSettings
 
-def importSettings(self, TaskSettings):
+def importSettingsToGUI(self, TaskSettings):
     # First remove all FEEDERs
     self.clearLayout(self.pellet_feeder_settings_layout, keep=1)
     self.clearLayout(self.milk_feeder_settings_layout, keep=1)
+    # Load all settings
     for key in TaskSettings.keys():
         if isinstance(TaskSettings[key], bool):
             self.settings[key].setChecked(TaskSettings[key])
         elif key == 'FEEDERs':
-            self.settings['FEEDERs'] = []
-            for feeder in TaskSettings[key]:
-                FEEDER_type = feeder['Type']
-                FEEDER_settings = {'ID': str(feeder['ID'] + 1), 
-                                   'Present': feeder['Present'], 
-                                   'Active': feeder['Active'], 
-                                   'IP': feeder['IP'], 
-                                   'Position': ','.join(map(str,feeder['Position'])), 
-                                   'SignalHz': str(feeder['SignalHz'])}
-                addFeedersToList(self, FEEDER_type, FEEDER_settings)
+            for FEEDER_type in TaskSettings['FEEDERs'].keys():
+                for ID in sorted(TaskSettings['FEEDERs'][FEEDER_type].keys(), key=str):
+                    FEEDER_settings = TaskSettings['FEEDERs'][FEEDER_type][ID]
+                    addFeedersToList(self, FEEDER_type, FEEDER_settings)
         else:
             self.settings[key].setText(str(TaskSettings[key]))
 
@@ -151,7 +152,7 @@ def createSineWaveSound(frequency):
 
 def SettingsGUI(self):
     self.settings = {}
-    self.settings['FEEDERs'] = []
+    self.settings['FEEDERs'] = {'pellet': [], 'milk': []}
     # Create General settings menu
     hbox = QtGui.QHBoxLayout()
     hbox.addWidget(QtGui.QLabel('Last travel time (s)'))
@@ -305,8 +306,8 @@ def SettingsGUI(self):
     frame.setFrameStyle(3)
     self.task_specific_settings_layout.addWidget(frame)
     # Add necessary functions to TaskSettingsGUI
-    self.exportSettings = exportSettings
-    self.importSettings = importSettings
+    self.exportSettingsFromGUI = exportSettingsFromGUI
+    self.importSettingsToGUI = importSettingsToGUI
 
     return self
 
@@ -352,37 +353,37 @@ class Core(object):
         self.pelletGameOn = self.TaskSettings['pelletGameOn']
         if self.pelletGameOn:
             self.activePfeeders = []
-            for n_feeder, feeder in enumerate(self.TaskSettings['FEEDERs']):
-                if feeder['Type'] == 'pellet' and feeder['Active']:
-                    self.activePfeeders.append(n_feeder)
+            for ID in sorted(self.TaskSettings['FEEDERs']['pellet'].keys(), key=str):
+                if self.TaskSettings['FEEDERs']['pellet'][ID]['Active']:
+                    self.activePfeeders.append(ID)
             self.lastPelletReward = time.time()
             self.updatePelletMinSepratation()
         # Set up Milk Rewards
         self.milkGameOn = self.TaskSettings['milkGameOn']
         if self.milkGameOn:
             self.activeMfeeders = []
-            for n_feeder, feeder in enumerate(self.TaskSettings['FEEDERs']):
-                if feeder['Type'] == 'milk' and feeder['Active']:
-                    self.activeMfeeders.append(n_feeder)
+            for ID in sorted(self.TaskSettings['FEEDERs']['milk'].keys(), key=str):
+                if self.TaskSettings['FEEDERs']['milk'][ID]['Active']:
+                    self.activeMfeeders.append(ID)
             self.lastMilkTrial = time.time()
             self.updateMilkTrialMinSepratation()
             self.milkTrialFailTime = time.time() - self.TaskSettings['MilkTrialFailPenalty']
-            self.n_feeder_milkTrial = self.chooseMilkTrialFeeder()
+            self.feederID_milkTrial = self.chooseMilkTrialFeeder()
         self.milkTrialOn = False
         # Initialize FEEDERs
         print('Initializing FEEDERs...')
         T_initFEEDER = []
-        self.FEEDER_Lock = threading.Lock()
-        for n_feeder, feeder in enumerate(self.TaskSettings['FEEDERs']):
-            if feeder['Active']:
-                if feeder['Type'] == 'pellet' and self.pelletGameOn:
-                    T = threading.Thread(target=self.initFEEDER, args=[n_feeder])
-                    T.start()
-                    T_initFEEDER.append(T)
-                elif feeder['Type'] == 'milk' and self.milkGameOn:
-                    T = threading.Thread(target=self.initFEEDER, args=[n_feeder])
-                    T.start()
-                    T_initFEEDER.append(T)
+        self.TaskSettings_Lock = threading.Lock()
+        if self.pelletGameOn:
+            for ID in self.activePfeeders:
+                T = threading.Thread(target=self.initFEEDER, args=['pellet', ID])
+                T.start()
+                T_initFEEDER.append(T)
+        if self.milkGameOn:
+            for ID in self.activeMfeeders:
+                T = threading.Thread(target=self.initFEEDER, args=['milk', ID])
+                T.start()
+                T_initFEEDER.append(T)
         for T in T_initFEEDER:
             T.join()
         print('Initializing FEEDERs Successful')
@@ -397,15 +398,14 @@ class Core(object):
         pygame.mixer.pre_init(44100, -16, 1)  # This is necessary for mono sound to work
         pygame.init()
 
-    def initFEEDER(self, n_feeder):
-        with self.FEEDER_Lock:
-            FEEDER_type = self.TaskSettings['FEEDERs'][n_feeder]['Type']
-            IP = self.TaskSettings['FEEDERs'][n_feeder]['IP']
+    def initFEEDER(self, FEEDER_type, ID):
+        with self.TaskSettings_Lock:
+            IP = self.TaskSettings['FEEDERs'][FEEDER_type][ID]['IP']
             username = self.TaskSettings['Username']
             password = self.TaskSettings['Password']
         actuator = RewardControl(FEEDER_type, IP, username, password)
-        with self.FEEDER_Lock:
-            self.TaskSettings['FEEDERs'][n_feeder]['actuator'] = actuator
+        with self.TaskSettings_Lock:
+            self.TaskSettings['FEEDERs'][FEEDER_type][ID]['actuator'] = actuator
 
     def renderText(self, text):
         renderedText = self.font.render(text, True, self.textColor)
@@ -441,16 +441,14 @@ class Core(object):
         new_val = int(mean_val + jitter)
         self.TaskSettings['MilkTrialMinSeparation'] = new_val
 
-    def releaseReward(self, n_feeder, action='undefined', quantity=1):
-        self.TaskSettings['FEEDERs'][n_feeder]['actuator'].release(quantity)
+    def releaseReward(self, FEEDER_type, ID, action='undefined', quantity=1):
+        self.TaskSettings['FEEDERs'][FEEDER_type][ID]['actuator'].release(quantity)
         # Send message to Open Ephys GUI
-        rewardType = self.TaskSettings['FEEDERs'][n_feeder]['Type']
-        feederID = self.TaskSettings['FEEDERs'][n_feeder]['ID']
-        OEmessage = 'Reward ' + rewardType + ' ' + str(feederID + 1) + ' ' + action + ' ' + str(quantity)
+        OEmessage = 'Reward ' + FEEDER_type + ' ' + str(int(ID) + 1) + ' ' + action + ' ' + str(quantity)
         self.TaskIO['MessageToOE'](OEmessage)
         # Reset last reward timer
         self.lastReward = time.time()
-        if 'pellet' == self.TaskSettings['FEEDERs'][n_feeder]['Type']:
+        if 'pellet' == FEEDER_type:
             self.lastPelletReward = time.time()
 
     def initRewards(self):
@@ -460,11 +458,11 @@ class Core(object):
             n_pellets_Feeders = minPellets * np.ones(len(self.activePfeeders), dtype=np.int16)
             n_pellets_Feeders[:extraPellets] = n_pellets_Feeders[:extraPellets] + 1
             for feeder_list_idx, n_pellets in enumerate(n_pellets_Feeders):
-                n_feeder = self.activePfeeders[feeder_list_idx]
-                self.releaseReward(n_feeder, 'game_init', n_pellets)
+                ID = self.activePfeeders[feeder_list_idx]
+                self.releaseReward('pellet', ID, 'game_init', n_pellets)
         if self.milkGameOn and 'InitMilk' in self.TaskSettings.keys() and self.TaskSettings['InitMilk'] > 0:
-            for n_feeder in self.activeMfeeders:
-                self.releaseReward(n_feeder, 'game_init', self.TaskSettings['InitMilk'])
+            for ID in self.activeMfeeders:
+                self.releaseReward('milk', ID, 'game_init', self.TaskSettings['InitMilk'])
 
     def buttonGameOnOff_callback(self):
         # Switch Game On and Off
@@ -472,12 +470,12 @@ class Core(object):
         OEmessage = 'Game On: ' + str(self.gameOn)
         self.TaskIO['MessageToOE'](OEmessage)
 
-    def buttonReleaseReward_callback(self, n_feeder):
+    def buttonReleaseReward_callback(self, FEEDER_type, ID):
         # Release reward from specified feeder and mark as User action
-        if 'pellet' == self.TaskSettings['FEEDERs'][n_feeder]['Type']:
-            self.releaseReward(n_feeder, 'user', self.TaskSettings['PelletQuantity'])
-        elif 'milk' == self.TaskSettings['FEEDERs'][n_feeder]['Type']:
-            self.releaseReward(n_feeder, 'user', self.TaskSettings['MilkQuantity'])
+        if 'pellet' == FEEDER_type:
+            self.releaseReward(FEEDER_type, ID, 'user', self.TaskSettings['PelletQuantity'])
+        elif 'milk' == FEEDER_type:
+            self.releaseReward(FEEDER_type, ID, 'user', self.TaskSettings['MilkQuantity'])
 
     def buttonManualPellet_callback(self):
         # Update last reward time
@@ -487,9 +485,9 @@ class Core(object):
         OEmessage = 'Reward pelletManual'
         self.TaskIO['MessageToOE'](OEmessage)
 
-    def buttonMilkTrial_callback(self, n_feeder):
+    def buttonMilkTrial_callback(self, ID):
         # Starts the trial with specific feeder as goal
-        self.n_feeder_milkTrial = n_feeder
+        self.feederID_milkTrial = ID
         self.start_milkTrial(action='user')
 
     def defineButtons(self):
@@ -511,29 +509,29 @@ class Core(object):
             # Button to release pellet
             buttonReleasePellet = []
             buttonReleasePellet.append({'text': 'Release Pellet'})
-            for n_feeder in self.activePfeeders:
+            for ID in self.activePfeeders:
                 nFeederButton = {'callback': self.buttonReleaseReward_callback, 
-                                 'callargs': [n_feeder], 
-                                 'text': str(self.TaskSettings['FEEDERs'][n_feeder]['ID'] + 1)}
+                                 'callargs': ['pellet', ID], 
+                                 'text': str(int(ID) + 1)}
                 buttonReleasePellet.append(nFeederButton)
             buttons.append(buttonReleasePellet)
         if self.milkGameOn: # The buttons are only active if milk FEEDERs available
             # Button to start milkTrial
             buttonReleasePellet = []
             buttonReleasePellet.append({'text': 'Milk Trial'})
-            for n_feeder in self.activeMfeeders:
+            for ID in self.activeMfeeders:
                 nFeederButton = {'callback': self.buttonMilkTrial_callback, 
-                                 'callargs': [n_feeder], 
-                                 'text': str(self.TaskSettings['FEEDERs'][n_feeder]['ID'] + 1)}
+                                 'callargs': [ID], 
+                                 'text': str(int(ID) + 1)}
                 buttonReleasePellet.append(nFeederButton)
             buttons.append(buttonReleasePellet)
             # Button to release milk
             buttonReleasePellet = []
             buttonReleasePellet.append({'text': 'Deposit Milk'})
-            for n_feeder in self.activeMfeeders:
+            for ID in self.activeMfeeders:
                 nFeederButton = {'callback': self.buttonReleaseReward_callback, 
-                                 'callargs': [n_feeder], 
-                                 'text': str(self.TaskSettings['FEEDERs'][n_feeder]['ID'] + 1)}
+                                 'callargs': ['milk', ID], 
+                                 'text': str(int(ID) + 1)}
                 buttonReleasePellet.append(nFeederButton)
             buttons.append(buttonReleasePellet)
 
@@ -673,24 +671,23 @@ class Core(object):
 
     def choose_pellet_feeder(self):
         n_feeder = random.randint(0, len(self.activePfeeders) - 1)
-        n_feeder = self.activePfeeders[n_feeder]
+        ID = self.activePfeeders[n_feeder]
 
-        return n_feeder
+        return ID
 
     def chooseMilkTrialFeeder(self):
         n_feeder = random.randint(0, len(self.activeMfeeders) - 1)
-        n_feeder = self.activeMfeeders[n_feeder]
+        ID = self.activeMfeeders[n_feeder]
 
-        return n_feeder
+        return ID
 
     def start_milkTrial(self, action='undefined'):
         # These settings put the game_logic into milkTrial mode
         self.milkTrialOn = True
-        self.milkTrialTone = createSineWaveSound(self.TaskSettings['FEEDERs'][self.n_feeder_milkTrial]['SignalHz'])
+        self.milkTrialTone = createSineWaveSound(self.TaskSettings['FEEDERs']['milk'][self.feederID_milkTrial]['SignalHz'])
         self.milkTrialTone.play(-1)
         self.lastMilkTrial = time.time()
-        feederID = self.TaskSettings['FEEDERs'][self.n_feeder_milkTrial]['ID']
-        OEmessage = 'milkTrialStart ' + action + ' ' + str(feederID + 1)
+        OEmessage = 'milkTrialStart ' + action + ' ' + str(int(self.feederID_milkTrial) + 1)
         self.TaskIO['MessageToOE'](OEmessage)
 
     def stop_milkTrial(self, successful):
@@ -699,11 +696,11 @@ class Core(object):
         OEmessage = 'milkTrialEnd Success:' + str(successful)
         self.TaskIO['MessageToOE'](OEmessage)
         if successful:
-            self.releaseReward(self.n_feeder_milkTrial, 'goal_milk', self.TaskSettings['MilkQuantity'])
+            self.releaseReward('milk', self.feederID_milkTrial, 'goal_milk', self.TaskSettings['MilkQuantity'])
         else:
             self.milkTrialFailTime = time.time()
         # Update n_feeder_milkTrial for next trial
-        self.n_feeder_milkTrial = self.chooseMilkTrialFeeder()
+        self.feederID_milkTrial = self.chooseMilkTrialFeeder()
         self.updateMilkTrialMinSepratation()
 
     def game_logic(self):
@@ -764,8 +761,8 @@ class Core(object):
                                       'percentage': timeSinceLastMilkTrial / float(self.TaskSettings['MilkTrialMinSeparation'])})
                 # Check if animal is far enough from milk rewards
                 distances = []
-                for n_feeder in self.activeMfeeders:
-                    distances.append(euclidean(np.array(posHistory[-1][:2]), np.array(self.TaskSettings['FEEDERs'][n_feeder]['Position'])))
+                for ID in self.activeMfeeders:
+                    distances.append(euclidean(np.array(posHistory[-1][:2]), self.TaskSettings['FEEDERs']['milk'][ID]['Position']))
                 minDistance = min(distances)
                 game_progress.append({'name': 'Milk Distance', 
                                   'goals': ['milkTrialStart'], 
@@ -775,7 +772,7 @@ class Core(object):
                                   'percentage': minDistance / float(self.TaskSettings['MilkTaskMinStartDistance'])})
                 if self.milkTrialOn:
                     # Check if animal is close enough to goal location
-                    distance = euclidean(np.array(posHistory[-1][:2]), np.array(self.TaskSettings['FEEDERs'][self.n_feeder_milkTrial]['Position']))
+                    distance = euclidean(np.array(posHistory[-1][:2]), self.TaskSettings['FEEDERs']['milk'][self.feederID_milkTrial]['Position'])
                     game_progress.append({'name': 'Goal Distance', 
                                           'goals': ['milkTrialSuccess'], 
                                           'target': self.TaskSettings['MilkTaskMinGoalDistance'], 
@@ -820,8 +817,8 @@ class Core(object):
                 if self.pelletGameOn and self.milkGameOn and all(pellet_status_complete) and all(milkTrialStart_complete):
                     # Conditions for both pellet release and milkTrial are met, choose one based on chance
                     if random.uniform(0, 1) < self.TaskSettings['PelletMilkRatio']:
-                        n_feeder = self.choose_pellet_feeder()
-                        self.releaseReward(n_feeder, 'goal_pellet', self.TaskSettings['PelletQuantity'])
+                        ID = self.choose_pellet_feeder()
+                        self.releaseReward('pellet', ID, 'goal_pellet', self.TaskSettings['PelletQuantity'])
                         self.updatePelletMinSepratation()
                     else:
                         self.start_milkTrial(action='goal_milkTrialStart')
@@ -830,13 +827,13 @@ class Core(object):
                     self.start_milkTrial(action='goal_milkTrialStart')
                 elif self.pelletGameOn and all(pellet_status_complete):
                     # If conditions met, release pellet reward
-                    n_feeder = self.choose_pellet_feeder()
-                    self.releaseReward(n_feeder, 'goal_pellet', self.TaskSettings['PelletQuantity'])
+                    ID = self.choose_pellet_feeder()
+                    self.releaseReward('pellet', ID, 'goal_pellet', self.TaskSettings['PelletQuantity'])
                     self.updatePelletMinSepratation()
                 elif self.pelletGameOn and all(inactivity_complete):
                     # If animal has been inactive and without pellet rewards, release pellet reward
-                    n_feeder = self.activePfeeders[random.randint(0,len(self.activePfeeders) - 1)]
-                    self.releaseReward(n_feeder, 'goal_inactivity', self.TaskSettings['PelletQuantity'])
+                    ID = self.choose_pellet_feeder()
+                    self.releaseReward('pellet', ID, 'goal_inactivity', self.TaskSettings['PelletQuantity'])
             elif self.milkTrialOn:
                 # If milk trial is currently ongoing
                 # Check if any outcome criteria is reached

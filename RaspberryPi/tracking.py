@@ -42,16 +42,15 @@ imageres = RPiSettings['resolution']
 CentralIP = RPiSettings['centralIP']
 PosPort = RPiSettings['pos_port']
 StopPort = RPiSettings['stop_port']
-RPiIP = RPiSettings['RPiIP'][RPi_number]
+RPiIP = RPiSettings['RPiInfo'][str(RPi_number)]['IP']
 LED_separation = RPiSettings['LED_separation']
 LED_max_distance = LED_separation * 1.25
 LED_radius = LED_separation / 2.0 # Later converted to pixel value
 # Load the Calibration Matrix
-with open('calibrationData.p', 'rb') as file:
-    calibrationData = pickle.load(file)
-    if calibrationData is None:
-        raise ValueError('Calibration data does is None.')
-    calibrationTmatrix = calibrationData['calibrationTmatrix']
+if str(RPi_number) in RPiSettings['calibrationData'].keys():
+    calibrationTmatrix = RPiSettings['calibrationData'][str(RPi_number)]['calibrationTmatrix']
+else:
+    raise ValueError('Calibration data does not exist for this RPi.')
 # Simple stupid code to figure out how many pixels provides required LED radius in centimeters
 tmp_loc1 = np.reshape(np.array([int(imageres[0] / 2), int(imageres[1] / 2)],dtype=np.float32),(1,1,2))
 tmp_loc2 = np.reshape(np.array([int(imageres[0] / 2), int(imageres[1] / 2) + 1],dtype=np.float32),(1,1,2))

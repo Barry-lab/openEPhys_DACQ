@@ -35,7 +35,7 @@ def findPosLogs(rootfolder):
     return RPi_nrs, filenames
 
 
-def getPosData(RPi_nr, filename, data_events, RPiSettings):
+def getPosData(RPi_nr, filename, data_events):
     # This function processes PosLog*.csv files.
     # Offset between actual frame time and TTL pulses are corrected.
     # If PosLog*.csv has more datapoints than TTL pulses recorded, the PosLog datapoints from the end are dropped.
@@ -91,8 +91,9 @@ def combineCamerasData(cameraPos, lastCombPos=None, RPiSettings=None):
     N_RPis = len(cameraPos)
     cameraPos = np.array(cameraPos, dtype=np.float32)
     camera_relative_locs = []
-    for n_rpi in range(N_RPis):
-        camera_relative_locs.append(np.fromstring(RPiSettings['RPi_location'][n_rpi],dtype=float,sep=','))
+    for nRPi in range(N_RPis):
+        n_rpi = RPiSettings['use_RPi_nrs'][nRPi]
+        camera_relative_locs.append(RPiSettings['RPiInfo'][str(n_rpi)]['location'])
     camera_relative_locs = np.array(camera_relative_locs, dtype=np.float32)
 
     # Only work with camera data from inside the enviornment
@@ -114,8 +115,8 @@ def combineCamerasData(cameraPos, lastCombPos=None, RPiSettings=None):
         if np.any(lastCombPos):
             # Check which cameras provide data close enough to lastCombPos
             RPi_correct = []
-            for n_rpi in range(N_RPis):
-                lastCombPos_distance = euclidean(cameraPos[n_rpi, :2], lastCombPos[:2])
+            for nRPi in range(N_RPis):
+                lastCombPos_distance = euclidean(cameraPos[nRPi, :2], lastCombPos[:2])
                 RPi_correct.append(lastCombPos_distance < RPiSettings['camera_transfer_radius'])
             RPi_correct = np.array(RPi_correct, dtype=bool)
             # If none were found to be withing search radius, set output to None
@@ -131,8 +132,8 @@ def combineCamerasData(cameraPos, lastCombPos=None, RPiSettings=None):
                     meanPos = np.mean(cameraPos[:, :2], axis=0)
                     # Find mean position distance from all cameras
                     cam_distances = []
-                    for n_rpi in range(N_RPis):
-                        camera_loc = camera_relative_locs[n_rpi, :] * np.array(RPiSettings['arena_size'])
+                    for nRPi in range(N_RPis):
+                        camera_loc = camera_relative_locs[nRPi, :] * np.array(RPiSettings['arena_size'])
                         cam_distances.append(euclidean(camera_loc, meanPos))
                     # Find closest distance camera and output its location coordinates
                     closest_camera = np.argmin(np.array(cam_distances))
@@ -182,8 +183,8 @@ def combdata(filename):
     data_events = NWBio.load_events(filename)
     # Process position data from all PosLog*.csv's from all cameras
     posdatas = []
-    for n_rpi in range(len(RPi_nrs)):
-        posdata = getPosData(RPi_nrs[n_rpi], filenames[n_rpi], data_events, RPiSettings)
+    for n_rpi in RPiSettings['use_RPi_nrs']:
+        posdata = getPosData(n_rpi, filenames[RPi_nrs.index(n_rpi)], data_events)
         posdatas.append(posdata)
     if len(posdatas) > 1:
         PosDataFramesPerSecond = 20.0
@@ -201,12 +202,12 @@ def combdata(filename):
         for npoint in range(len(timepoints)):
             # Find closest matchin timepoint from all RPis
             idx_tp = np.zeros(4, dtype=np.int32)
-            for n_rpi in range(len(posdatas)):
-                idx_tp[n_rpi] = np.argmin(np.abs(timepoints[npoint] - posdatas[n_rpi][:,0]))
+            for nRPi in range(len(posdatas)):
+                idx_tp[nRPi] = np.argmin(np.abs(timepoints[npoint] - posdatas[nRPi][:,0]))
             # Convert posdatas for use in combineCamerasData function
             cameraPos = []
-            for n_rpi in range(len(posdatas)):
-                cameraPos.append(posdatas[n_rpi][idx_tp[n_rpi], 1:5])
+            for nRPi in range(len(posdatas)):
+                cameraPos.append(posdatas[nRPi][idx_tp[nRPi], 1:5])
             tmp_comb_data = combineCamerasData(cameraPos, combPosData[-1], RPiSettings)
             combPosData.append(tmp_comb_data)
             if tmp_comb_data is None:
