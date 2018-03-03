@@ -27,28 +27,28 @@ sys.stderr = open('errorLog','w')
 RPi_number = int(open('RPiNumber','r').read().splitlines()[0]) # The number to identify logs and messages from this RPi
 
 # Get OpenEphys configuration details for this RPi
-with open('RPiSettings.p','rb') as file:
-    RPiSettings = pickle.load(file)
-if RPiSettings['LEDmode'] == 'double':
+with open('TrackingSettings.p','rb') as file:
+    TrackingSettings = pickle.load(file)
+if TrackingSettings['LEDmode'] == 'double':
     doubleLED = True
-elif RPiSettings['LEDmode'] == 'single':
+elif TrackingSettings['LEDmode'] == 'single':
     doubleLED = False
-save_frames = RPiSettings['save_frames']
-camera_iso = RPiSettings['camera_iso']
-shutter_speed = RPiSettings['shutter_speed']
-exposure_setting = RPiSettings['exposure_setting']
-smoothradius = RPiSettings['smoothing_radius']
-imageres = RPiSettings['resolution']
-CentralIP = RPiSettings['centralIP']
-PosPort = RPiSettings['pos_port']
-StopPort = RPiSettings['stop_port']
-RPiIP = RPiSettings['RPiInfo'][str(RPi_number)]['IP']
-LED_separation = RPiSettings['LED_separation']
+save_frames = TrackingSettings['save_frames']
+camera_iso = TrackingSettings['camera_iso']
+shutter_speed = TrackingSettings['shutter_speed']
+exposure_setting = TrackingSettings['exposure_setting']
+smoothradius = TrackingSettings['smoothing_radius']
+imageres = TrackingSettings['resolution']
+CentralIP = TrackingSettings['centralIP']
+PosPort = TrackingSettings['pos_port']
+StopPort = TrackingSettings['stop_port']
+RPiIP = TrackingSettings['RPiInfo'][str(RPi_number)]['IP']
+LED_separation = TrackingSettings['LED_separation']
 LED_max_distance = LED_separation * 1.25
 LED_radius = LED_separation / 2.0 # Later converted to pixel value
 # Load the Calibration Matrix
-if str(RPi_number) in RPiSettings['calibrationData'].keys():
-    calibrationTmatrix = RPiSettings['calibrationData'][str(RPi_number)]['calibrationTmatrix']
+if str(RPi_number) in TrackingSettings['calibrationData'].keys():
+    calibrationTmatrix = TrackingSettings['calibrationData'][str(RPi_number)]['calibrationTmatrix']
 else:
     raise ValueError('Calibration data does not exist for this RPi.')
 # Simple stupid code to figure out how many pixels provides required LED radius in centimeters
@@ -82,12 +82,11 @@ GPIO.setup(ttlPin, GPIO.OUT, initial=GPIO.LOW)
 GPIO.output(ttlPin, False)
 
 # Prepare log file first line. X1 and Y1 are for the dimmer LED on the animal's head, if two are used.
-linedata = ['RPinumber', 'TTLtime', 'Frametime', 'X1', 'Y1', 'X2', 'Y2', 'Luminance_1', 'Luminance_2'] # Set header for the file
+# ColumnLabels = ['RPinumber', 'TTLtime', 'Frametime', 'X1', 'Y1', 'X2', 'Y2', 'Luminance_1', 'Luminance_2']
 if os.path.isfile('./logfile.csv'):
     os.remove('./logfile.csv')
 csvfile = open('logfile.csv', 'a')
 logwriter = csv.writer(csvfile)
-logwriter.writerow(linedata)
 csvfile.close()
 
 def piStim():

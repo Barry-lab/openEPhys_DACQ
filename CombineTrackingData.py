@@ -74,17 +74,17 @@ def savedata(posdata, rootfolder):
     print('Position data saved as ' + CombFileName)
 
 
-def combineCamerasData(cameraPos, lastCombPos=None, RPiSettings=None):
+def combineCamerasData(cameraPos, lastCombPos=None, TrackingSettings=None):
     # This outputs position data based on which camera is closest to tracking target.
 
     # cameraPos - list of numpy vecors with 4 elements (x1,y1,x2,y2) for each camera
     # lastCombPos - Last known output from this function
-    # RPiSettings - settings file saved by CameraSettingsGUI.py
+    # TrackingSettings - settings file saved by CameraSettingsGUI.py
 
     # Output - numpy vector (x1,y1,x2,y2) with data from closest camera
 
     # If lastCombPos is not provided, the function will attempt to locate the animal
-    # simultaneously from at least 2 cameras with smaller separation than half of RPiSettings['camera_transfer_radius']
+    # simultaneously from at least 2 cameras with smaller separation than half of TrackingSettings['camera_transfer_radius']
     #   If successful, closest mean coordinate is set as output
     #   If unsuccessful, output is None
 
@@ -92,14 +92,14 @@ def combineCamerasData(cameraPos, lastCombPos=None, RPiSettings=None):
     cameraPos = np.array(cameraPos, dtype=np.float32)
     camera_relative_locs = []
     for nRPi in range(N_RPis):
-        n_rpi = RPiSettings['use_RPi_nrs'][nRPi]
-        camera_relative_locs.append(RPiSettings['RPiInfo'][str(n_rpi)]['location'])
+        n_rpi = TrackingSettings['use_RPi_nrs'][nRPi]
+        camera_relative_locs.append(TrackingSettings['RPiInfo'][str(n_rpi)]['location'])
     camera_relative_locs = np.array(camera_relative_locs, dtype=np.float32)
 
     # Only work with camera data from inside the enviornment
     # Find bad pos data lines
     idxBad = np.zeros(cameraPos.shape[0], dtype=bool)
-    arena_size = RPiSettings['arena_size'] # Points beyond arena size
+    arena_size = TrackingSettings['arena_size'] # Points beyond arena size
     x_too_big = cameraPos[:,0] > arena_size[0] + 20
     y_too_big = cameraPos[:,1] > arena_size[1] + 20
     idxBad = np.logical_or(idxBad, np.logical_or(x_too_big, y_too_big))
@@ -117,7 +117,7 @@ def combineCamerasData(cameraPos, lastCombPos=None, RPiSettings=None):
             RPi_correct = []
             for nRPi in range(N_RPis):
                 lastCombPos_distance = euclidean(cameraPos[nRPi, :2], lastCombPos[:2])
-                RPi_correct.append(lastCombPos_distance < RPiSettings['camera_transfer_radius'])
+                RPi_correct.append(lastCombPos_distance < TrackingSettings['camera_transfer_radius'])
             RPi_correct = np.array(RPi_correct, dtype=bool)
             # If none were found to be withing search radius, set output to None
             if not np.any(RPi_correct):
@@ -133,7 +133,7 @@ def combineCamerasData(cameraPos, lastCombPos=None, RPiSettings=None):
                     # Find mean position distance from all cameras
                     cam_distances = []
                     for nRPi in range(N_RPis):
-                        camera_loc = camera_relative_locs[nRPi, :] * np.array(RPiSettings['arena_size'])
+                        camera_loc = camera_relative_locs[nRPi, :] * np.array(TrackingSettings['arena_size'])
                         cam_distances.append(euclidean(camera_loc, meanPos))
                     # Find closest distance camera and output its location coordinates
                     closest_camera = np.argmin(np.array(cam_distances))
@@ -151,7 +151,7 @@ def combineCamerasData(cameraPos, lastCombPos=None, RPiSettings=None):
                 pairDistances.append(euclidean(cameraPos[c[0], :2], cameraPos[c[1], :2]))
                 cameraPairs.append(np.array(c))
             cameraPairs = np.array(cameraPairs)
-            cameraPairs_Match = np.array(pairDistances) < (RPiSettings['camera_transfer_radius'] / 2)
+            cameraPairs_Match = np.array(pairDistances) < (TrackingSettings['camera_transfer_radius'] / 2)
             # If position can not be verified from multiple cameras, set output to none
             if not np.any(cameraPairs_Match):
                 combPos = None
@@ -174,16 +174,16 @@ def combdata(filename):
     rootfolder = filename[:filename.rfind('/')]
     # This main function utilizes all the other functions in this script
     RPi_nrs, filenames = findPosLogs(rootfolder) # Get PosLog*.csv file names
-    # Get RPiSettings
+    # Get TrackingSettings
     SettingsFile = os.path.join(rootfolder, 'RecordingSettings.p')
     with open(SettingsFile,'rb') as file:
         settings = pickle.load(file)
-        RPiSettings = settings['RPiSettings']
+        TrackingSettings = settings['TrackingSettings']
     # Get OpenEphysGUI events data (TTL pulse times in reference to electrophysiological signal)
     data_events = NWBio.load_events(filename)
     # Process position data from all PosLog*.csv's from all cameras
     posdatas = []
-    for n_rpi in RPiSettings['use_RPi_nrs']:
+    for n_rpi in TrackingSettings['use_RPi_nrs']:
         posdata = getPosData(n_rpi, filenames[RPi_nrs.index(n_rpi)], data_events)
         posdatas.append(posdata)
     if len(posdatas) > 1:
@@ -208,7 +208,7 @@ def combdata(filename):
             cameraPos = []
             for nRPi in range(len(posdatas)):
                 cameraPos.append(posdatas[nRPi][idx_tp[nRPi], 1:5])
-            tmp_comb_data = combineCamerasData(cameraPos, combPosData[-1], RPiSettings)
+            tmp_comb_data = combineCamerasData(cameraPos, combPosData[-1], TrackingSettings)
             combPosData.append(tmp_comb_data)
             if tmp_comb_data is None:
                 listNaNs.append(npoint)
@@ -233,7 +233,7 @@ def combdata(filename):
         posdata = posdatas[0]
         # Find bad pos data lines
         idxBad = np.zeros(posdata.shape[0], dtype=bool)
-        arena_size = RPiSettings['arena_size'] # Points beyond arena size
+        arena_size = TrackingSettings['arena_size'] # Points beyond arena size
         x_too_big = np.logical_or(posdata[:,1] > arena_size[0] + 20, posdata[:,3] > arena_size[0] + 20)
         y_too_big = np.logical_or(posdata[:,2] > arena_size[1] + 20, posdata[:,4] > arena_size[1] + 20)
         idxBad = np.logical_or(idxBad, np.logical_or(x_too_big, y_too_big))

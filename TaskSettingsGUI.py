@@ -2,7 +2,7 @@
 from PyQt4 import QtGui
 import HelperFunctions as hfunct
 import os
-import pickle
+import NWBio
 from copy import deepcopy
 
 class TaskSettingsGUI(object):
@@ -82,10 +82,8 @@ class TaskSettingsGUI(object):
 
     def loadSettings(self, TaskSettings=None):
         if not TaskSettings:
-            selected_file = hfunct.openSingleFileDialog('load', suffix='p', caption='Choose file to load')
-            with open(selected_file, 'rb') as file:
-                settings = pickle.load(file)
-            TaskSettings = settings['TaskSettings']
+            filename = hfunct.openSingleFileDialog('load', suffix='nwb', caption='Select file to load')
+            TaskSettings = NWBio.load_settings(filename, path='/TaskSettings/')
         self.loadTaskGUI(TaskSettings['name'])
         TaskSettings.pop('name')
         self.importSettingsToGUI(self, TaskSettings)
@@ -95,9 +93,8 @@ class TaskSettingsGUI(object):
         # Save TaskSettings to disk using dialog box
         TaskSettings = self.exportSettingsFromGUI(self)
         TaskSettings['name'] = str(self.taskSelectionList.currentItem().text())
-        selected_file = hfunct.openSingleFileDialog('save', suffix='p', caption='Save file name and location')
-        with open(selected_file, 'wb') as file:
-            pickle.dump({'TaskSettings': TaskSettings}, file)
+        filename = hfunct.openSingleFileDialog('save', suffix='nwb', caption='Save file name and location')
+        NWBio.save_settings(filename, TaskSettings, path='/TaskSettings/')
         print('Settings saved.')
 
     def applySettings(self):

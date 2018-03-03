@@ -338,13 +338,12 @@ def compute_distance_travelled(posHistory, smoothing):
 class Core(object):
     def __init__(self, TaskSettings, TaskIO):
         self.TaskIO = TaskIO
-        self.arena_size = self.TaskIO['RPIPos'].RPiSettings['arena_size']
         # Set Task Settings. This should be moved to Task Settings GUI
         self.TaskSettings = TaskSettings
         # Pre-compute variables
         self.one_second_steps = int(np.round(1 / self.TaskIO['RPIPos'].combPos_update_interval))
         self.distance_steps = int(np.round(self.TaskSettings['LastTravelTime'])) * self.one_second_steps
-        self.max_distance_in_arena = int(round(np.hypot(self.arena_size[0], self.arena_size[1])))
+        self.max_distance_in_arena = int(round(np.hypot(self.TaskSettings['arena_size'][0], self.TaskSettings['arena_size'][1])))
         # Prepare TTL pulse time list
         self.ttlTimes = []
         self.ttlTimesLock = threading.Lock()

@@ -14,38 +14,38 @@ import CombineTrackingData
 
 class TrackingControl(object):
 
-    def __init__(self, RPiSettings):
+    def __init__(self, TrackingSettings):
         # Load infromation on all RPis
-        self.RPiSettings = RPiSettings
+        self.TrackingSettings = TrackingSettings
         # Initialize SSH connection with all RPis
-        self.RPiSSH = [None] * len(self.RPiSettings['use_RPi_nrs'])
+        self.RPiSSH = [None] * len(self.TrackingSettings['use_RPi_nrs'])
         self.RPiSSH_Lock = threading.Lock()
         T_initRPiSSH = []
-        for nRPi, n_rpi in enumerate(self.RPiSettings['use_RPi_nrs']):
+        for nRPi, n_rpi in enumerate(self.TrackingSettings['use_RPi_nrs']):
             T_initRPiSSH.append(threading.Thread(target=self.initRPiSSH, args=[n_rpi, nRPi]))
             T_initRPiSSH[nRPi].start()
         for T in T_initRPiSSH:
             T.join()
 
     def initRPiSSH(self, n_rpi, nRPi):
-        connection = ssh(self.RPiSettings['RPiInfo'][str(n_rpi)]['IP'], self.RPiSettings['username'], self.RPiSettings['password'])
+        connection = ssh(self.TrackingSettings['RPiInfo'][str(n_rpi)]['IP'], self.TrackingSettings['username'], self.TrackingSettings['password'])
         connection.sendCommand('pkill python') # Ensure any past processes have closed
         with self.RPiSSH_Lock:
             self.RPiSSH[nRPi] = connection
 
     def start(self):
         for connection in self.RPiSSH:
-            command = 'cd ' + self.RPiSettings['tracking_folder'] + ' && nohup python tracking.py &'
+            command = 'cd ' + self.TrackingSettings['tracking_folder'] + ' && nohup python tracking.py &'
             connection.sendCommand(command)
 
     def stop(self):
         # Sends 'stop' message until no more position data is received from RPis
-        LocalIP = self.RPiSettings['centralIP']
-        PosPort = self.RPiSettings['pos_port']
-        StopPort = self.RPiSettings['stop_port']
+        LocalIP = self.TrackingSettings['centralIP']
+        PosPort = self.TrackingSettings['pos_port']
+        StopPort = self.TrackingSettings['stop_port']
         RPiIPs = []
-        for n_rpi in self.RPiSettings['use_RPi_nrs']:
-            RPiIPs.append(self.RPiSettings['RPiInfo'][str(n_rpi)]['IP'])
+        for n_rpi in self.TrackingSettings['use_RPi_nrs']:
+            RPiIPs.append(self.TrackingSettings['RPiInfo'][str(n_rpi)]['IP'])
         # Set Stop message Publishing ZeroMQ
         contextPUB = zmq.Context()
         sockPUB = contextPUB.socket(zmq.PUB)
@@ -81,7 +81,7 @@ class TrackingControl(object):
 
 class onlineTrackingData(object):
     # Constantly updates position data for all RPis currently in use.
-    # Initialize this class as RPIpos = onlineTrackingData(RPiSettings)
+    # Initialize this class as RPIpos = onlineTrackingData(TrackingSettings)
     # Check for latest position with combPos = RPIpos.combPosHistory[-1]
 
     # Make sure to use Locks to avoid errors, for example:
@@ -91,8 +91,8 @@ class onlineTrackingData(object):
     # Optional arguments during initialization:
     #   HistogramParameters is a list: [margins, binSize, histogram_speed_limit]
     #   SynthData set to True for debugging using synthetically generated position data
-    def __init__(self, RPiSettings, HistogramParameters=None, SynthData=False):
-        # Initialise the class with input RPiSettings
+    def __init__(self, TrackingSettings, HistogramParameters=None, SynthData=False):
+        # Initialise the class with input TrackingSettings
         self.combPos_update_interval = 0.05 # in seconds
         self.SynthData = SynthData
         if HistogramParameters is None:
@@ -101,8 +101,8 @@ class onlineTrackingData(object):
                                    'speedLimit': 10}# centimeters of distance in last second to be included
         self.HistogramParameters = HistogramParameters
         self.KeepGettingData = True # Set True for endless while loop of updating latest data
-        self.RPiSettings = RPiSettings
-        self.posDatas = [None] * len(self.RPiSettings['use_RPi_nrs'])
+        self.TrackingSettings = TrackingSettings
+        self.posDatas = [None] * len(self.TrackingSettings['use_RPi_nrs'])
         self.combPosHistory = []
         self.setupSocket() # Set up listening of position data
         # Initialize Locks to avoid errors
@@ -118,14 +118,14 @@ class onlineTrackingData(object):
         self.sockSUB = context.socket(zmq.SUB)
         self.sockSUB.setsockopt(zmq.SUBSCRIBE, '')
         self.sockSUB.RCVTIMEO = 150 # maximum duration to wait for data (in milliseconds)
-        for n_rpi in self.RPiSettings['use_RPi_nrs']:
-            tmp = 'tcp://' + self.RPiSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + self.RPiSettings['pos_port']
+        for n_rpi in self.TrackingSettings['use_RPi_nrs']:
+            tmp = 'tcp://' + self.TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + self.TrackingSettings['pos_port']
             self.sockSUB.connect(tmp)
 
     def generatePosData(self, n_rpi):
         # Generates continuous position data and updates self.posDatas for a single RPi
         data_rate = 0.01 # Seconds per datapoint
-        nRPi = [i for i,x in enumerate(self.RPiSettings['use_RPi_nrs']) if x == n_rpi][0]
+        nRPi = [i for i,x in enumerate(self.TrackingSettings['use_RPi_nrs']) if x == n_rpi][0]
         oldPos = [0.0, 0.0]
         currPos = [1.0, 1.0]
         time_of_last_datapoint = time.time()
@@ -135,7 +135,7 @@ class onlineTrackingData(object):
                 newPos = [-1, -1]
                 p0 = np.array(currPos) - np.array(oldPos)
                 lastDirection = np.arctan2(p0[0], p0[1])
-                while newPos[0] < 0 or newPos[0] > self.RPiSettings['arena_size'][0] or newPos[1] < 0 or newPos[1] > self.RPiSettings['arena_size'][1]:
+                while newPos[0] < 0 or newPos[0] > self.TrackingSettings['arena_size'][0] or newPos[1] < 0 or newPos[1] > self.TrackingSettings['arena_size'][1]:
                     time_since_last_datapoint = time.time() - time_of_last_datapoint
                     newDirection = np.random.normal(loc=lastDirection, scale=np.pi / 32)
                     # Allow circular continuity
@@ -173,7 +173,7 @@ class onlineTrackingData(object):
                     posData = json.loads(message) # Convert from string to original format
                     # Identify the sender of this message as RPi position in list
                     n_rpi = posData[0]
-                    nRPi = [i for i,x in enumerate(self.RPiSettings['use_RPi_nrs']) if x == n_rpi][0]
+                    nRPi = [i for i,x in enumerate(self.TrackingSettings['use_RPi_nrs']) if x == n_rpi][0]
                     # Update posData for the correct position in the list
                     with self.posDatasLock:
                         self.posDatas[nRPi] = posData
@@ -191,7 +191,7 @@ class onlineTrackingData(object):
             for posData in posDatas:
                 cameraPos.append(np.array(posData[3:7], dtype=np.float32))
             # Combine data from cameras
-            lastCombPos = CombineTrackingData.combineCamerasData(cameraPos, previousCombPos, self.RPiSettings)
+            lastCombPos = CombineTrackingData.combineCamerasData(cameraPos, previousCombPos, self.TrackingSettings)
         else:
             # If only a single camera is used, extract position data from posData into numpy array
             lastCombPos = np.array(posDatas[0][3:7], dtype=np.float32)
@@ -202,10 +202,10 @@ class onlineTrackingData(object):
         # Initialise histogram edgesrameters
         margins = HistogramParameters['margins']
         binSize = HistogramParameters['binSize']
-        xHistogram_edges = np.append(np.arange(-margins, self.RPiSettings['arena_size'][0] + margins, binSize), 
-                                     self.RPiSettings['arena_size'][0] + margins)
-        yHistogram_edges = np.append(np.arange(-margins, self.RPiSettings['arena_size'][1] + margins, binSize), 
-                                     self.RPiSettings['arena_size'][1] + margins)
+        xHistogram_edges = np.append(np.arange(-margins, self.TrackingSettings['arena_size'][0] + margins, binSize), 
+                                     self.TrackingSettings['arena_size'][0] + margins)
+        yHistogram_edges = np.append(np.arange(-margins, self.TrackingSettings['arena_size'][1] + margins, binSize), 
+                                     self.TrackingSettings['arena_size'][1] + margins)
         # If update requested with new parameters, recompute histogram
         if update:
             with self.combPosHistoryLock:
@@ -232,7 +232,7 @@ class onlineTrackingData(object):
             # Initialize RPi position data listening, unless synthetic data requested
             threading.Thread(target=self.updatePosDatas).start()
             # Continue once data is received from each RPi
-            RPi_data_available = np.zeros(len(self.RPiSettings['use_RPi_nrs']), dtype=bool)
+            RPi_data_available = np.zeros(len(self.TrackingSettings['use_RPi_nrs']), dtype=bool)
             while not np.all(RPi_data_available):
                 for nRPi in range(len(self.posDatas)):
                     if not (self.posDatas[nRPi] is None):
@@ -240,7 +240,7 @@ class onlineTrackingData(object):
             print('All RPi data available')
         else:
             # Start generating movement data if synthetic data requested
-            threading.Thread(target=self.generatePosData, args=[self.RPiSettings['use_RPi_nrs'][0]]).start()
+            threading.Thread(target=self.generatePosData, args=[self.TrackingSettings['use_RPi_nrs'][0]]).start()
             time.sleep(0.5)
         # Set up speed tracking
         one_second_steps = int(np.round(1 / self.combPos_update_interval))

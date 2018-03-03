@@ -27,17 +27,17 @@ import sys
 RPi_number = int(open('RPiNumber','r').read().splitlines()[0]) # The number to identify logs and messages from this RPi
 
 # Get OpenEphys configuration details for this RPi
-with open('RPiSettings.p','rb') as file:
-    RPiSettings = pickle.load(file)
-ndots_x = RPiSettings['calibration_n_dots'][0]
-ndots_y = RPiSettings['calibration_n_dots'][1]
-spacing = RPiSettings['calibration_spacing']
-corner_offset = [RPiSettings['corner_offset'][0], RPiSettings['corner_offset'][1]]
-camera_iso = RPiSettings['camera_iso']
-shutter_speed = RPiSettings['shutter_speed']
-exposure_setting = RPiSettings['exposure_setting']
-smoothradius = RPiSettings['smoothing_radius']
-imageres = RPiSettings['resolution']
+with open('TrackingSettings.p','rb') as file:
+    TrackingSettings = pickle.load(file)
+ndots_x = TrackingSettings['calibration_n_dots'][0]
+ndots_y = TrackingSettings['calibration_n_dots'][1]
+spacing = TrackingSettings['calibration_spacing']
+corner_offset = [TrackingSettings['corner_offset'][0], TrackingSettings['corner_offset'][1]]
+camera_iso = TrackingSettings['camera_iso']
+shutter_speed = TrackingSettings['shutter_speed']
+exposure_setting = TrackingSettings['exposure_setting']
+smoothradius = TrackingSettings['smoothing_radius']
+imageres = TrackingSettings['resolution']
 
 class Tracking(picamera.array.PiRGBAnalysis):
     # This class is the target output of frames captures with the camera
@@ -81,8 +81,8 @@ def processFrames(frames, ndots_x, ndots_y, spacing, overlay=False):
     image = np.uint8(np.mean(image, axis=3))
     # Draw image with corners
     if overlay: # Use pre-existing corners, if overlay requested
-        if str(RPi_number) in RPiSettings['calibrationData'].keys():
-            pattern_mean = RPiSettings['calibrationData'][str(RPi_number)]['pattern']
+        if str(RPi_number) in TrackingSettings['calibrationData'].keys():
+            pattern_mean = TrackingSettings['calibrationData'][str(RPi_number)]['pattern']
         else:
             pattern_mean = None
     if not (pattern_mean is None):

@@ -22,12 +22,12 @@ import sys
 RPi_number = int(open('RPiNumber','r').read().splitlines()[0]) # The number to identify logs and messages from this RPi
 
 # Get OpenEphys configuration details for this RPi
-with open('RPiSettings.p','rb') as file:
-    RPiSettings = pickle.load(file)
-camera_iso = RPiSettings['camera_iso']
-shutter_speed = RPiSettings['shutter_speed']
-exposure_setting = RPiSettings['exposure_setting']
-imageres = RPiSettings['resolution']
+with open('TrackingSettings.p','rb') as file:
+    TrackingSettings = pickle.load(file)
+camera_iso = TrackingSettings['camera_iso']
+shutter_speed = TrackingSettings['shutter_speed']
+exposure_setting = TrackingSettings['exposure_setting']
+imageres = TrackingSettings['resolution']
 
 class Tracking(picamera.array.PiRGBAnalysis):
     # This class is the target output of frames captures with the camera

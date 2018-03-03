@@ -61,8 +61,8 @@ def load_events(filename):
     f = h5py.File(filename, 'r')
     recordingKey = f['acquisition']['timeseries'].keys()[0]
     # Load timestamps and TLL signal info
-    timestamps = f['acquisition']['timeseries'][recordingKey]['events']['ttl1']['timestamps']
-    eventID = f['acquisition']['timeseries'][recordingKey]['events']['ttl1']['data']
+    timestamps = f['acquisition']['timeseries'][recordingKey]['events']['ttl1']['timestamps'].value
+    eventID = f['acquisition']['timeseries'][recordingKey]['events']['ttl1']['data'].value
     data = {'eventID': eventID, 'timestamps': timestamps}
 
     return data
@@ -116,3 +116,94 @@ def check_if_binary_pos(filename):
     binaryPosData = 'binary1' in event_data_keys
 
     return binaryPosData
+
+def recursively_save_dict_contents_to_group(h5file, path, dic):
+    """
+    Only works with: numpy arrays, numpy int64 or float64, strings, bytes, lists of strings and dictionaries.
+    """
+    for key, item in dic.items():
+        if isinstance(item, (np.ndarray, np.int64, np.float64, str, bytes)):
+            h5file[path + key] = item
+        elif isinstance(item, dict):
+            recursively_save_dict_contents_to_group(h5file, path + key + '/', item)
+        elif isinstance(item, list):
+            if all(isinstance(i, str) for i in item):
+                asciiList = [n.encode("ascii", "ignore") for n in item]
+                h5file[path + key] = h5file.create_dataset(None, (len(asciiList),),'S100', asciiList)
+            else:
+                raise ValueError('Cannot save %s type'%type(item) + ' from ' + path + key)
+        else:
+            raise ValueError('Cannot save %s type'%type(item) + ' from ' + path + key)
+
+def recursively_load_dict_contents_from_group(h5file, path):
+    """
+    Returns value at path if it has no further items
+    """
+    if hasattr(h5file[path], 'items'):
+        ans = {}
+        for key, item in h5file[path].items():
+            if isinstance(item, h5py._hl.dataset.Dataset):
+                if 'S100' == item.dtype:
+                    tmp = list(item.value)
+                    ans[str(key)] = [str(i) for i in tmp]
+                else:
+                    ans[str(key)] = item.value
+            elif isinstance(item, h5py._hl.group.Group):
+                ans[str(key)] = recursively_load_dict_contents_from_group(h5file, path + key + '/')
+    else:
+        ans = h5file[path].value
+    return ans
+
+def save_settings(filename, Settings, path='/'):
+    '''
+    Writes into an existing file if path is not yet used.
+    Creates a new file if filename does not exist.
+    Only works with: numpy arrays, numpy int64 or float64, strings, bytes, lists of strings and dictionaries.
+    To save specific subsetting, e.g. TaskSettings, use:
+        Settings=TaskSetttings, path='/TaskSettings/'
+    '''
+    full_path = '/general/data_collection/Settings' + path
+    if os.path.isfile(filename):
+        write_method = 'r+'
+    else:
+        write_method = 'w'
+    with h5py.File(filename, write_method) as h5file:
+        recursively_save_dict_contents_to_group(h5file, full_path, Settings)
+
+def load_settings(filename, path='/'):
+    '''
+    By default loads all settings from path
+        '/general/data_collection/Settings/'
+    To load specific settings, e.g. RPiSettings, use:
+        path='/RPiSettings/'
+    or to load animal ID, use:
+        path='/General/animal/'
+    '''
+    full_path = '/general/data_collection/Settings' + path
+    with h5py.File(filename, 'r') as h5file:
+        data = recursively_load_dict_contents_from_group(h5file, full_path)
+
+    return data
+
+def save_position_data(filename, PosData, ProcessedPos=False, ReProcess=False):
+    '''
+    PosData is expected as dictionary with keys for each source ID
+    If saving processed data, PosData is expected to be numpy array
+        Use ProcessedPos=True to store processed data
+        Use ReProcess=True to force overwriting existing processed data
+    '''
+    if os.path.isfile(filename):
+        write_method = 'r+'
+    else:
+        write_method = 'w'
+    with h5py.File(filename, write_method) as h5file:
+        recordingKey = h5file['acquisition']['timeseries'].keys()[0]
+        full_path = '/acquisition/timeseries/' + recordingKey + '/tracking/'
+        if not ProcessedPos:
+            recursively_save_dict_contents_to_group(h5file, full_path, PosData)
+        elif ProcessedPos:
+            # If ReProcess is true, path is first cleared
+            processed_pos_path = full_path + 'ProcessedPos/'
+            if ReProcess and 'ProcessedPos' in h5file[full_path].keys():
+                del h5file[processed_pos_path]
+            h5file[processed_pos_path] = PosData

@@ -31,7 +31,7 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>512</width>
+         <width>537</width>
          <height>543</height>
         </rect>
        </property>
@@ -52,17 +52,14 @@
           </property>
           <layout class="QHBoxLayout" name="horizontalLayout_17">
            <item>
-            <widget class="QPlainTextEdit" name="plainTextEdit_30">
-             <property name="maximumSize">
+            <widget class="QLabel" name="label_2">
+             <property name="minimumSize">
               <size>
-               <width>16777215</width>
-               <height>29</height>
+               <width>180</width>
+               <height>0</height>
               </size>
              </property>
-             <property name="readOnly">
-              <bool>true</bool>
-             </property>
-             <property name="plainText">
+             <property name="text">
               <string>Experimenter Name</string>
              </property>
             </widget>
@@ -130,17 +127,14 @@
           </property>
           <layout class="QHBoxLayout" name="horizontalLayout_21">
            <item>
-            <widget class="QPlainTextEdit" name="plainTextEdit_38">
-             <property name="maximumSize">
+            <widget class="QLabel" name="label_3">
+             <property name="minimumSize">
               <size>
-               <width>16777215</width>
-               <height>29</height>
+               <width>180</width>
+               <height>0</height>
               </size>
              </property>
-             <property name="readOnly">
-              <bool>true</bool>
-             </property>
-             <property name="plainText">
+             <property name="text">
               <string>Root Folder</string>
              </property>
             </widget>
@@ -202,17 +196,14 @@
           </property>
           <layout class="QHBoxLayout" name="horizontalLayout_9">
            <item>
-            <widget class="QPlainTextEdit" name="plainTextEdit_14">
-             <property name="maximumSize">
+            <widget class="QLabel" name="label_4">
+             <property name="minimumSize">
               <size>
-               <width>16777215</width>
-               <height>29</height>
+               <width>180</width>
+               <height>0</height>
               </size>
              </property>
-             <property name="readOnly">
-              <bool>true</bool>
-             </property>
-             <property name="plainText">
+             <property name="text">
               <string>Animal ID</string>
              </property>
             </widget>
@@ -277,17 +268,14 @@
           </property>
           <layout class="QHBoxLayout" name="horizontalLayout_19">
            <item>
-            <widget class="QPlainTextEdit" name="plainTextEdit_34">
-             <property name="maximumSize">
+            <widget class="QLabel" name="label_5">
+             <property name="minimumSize">
               <size>
-               <width>16777215</width>
-               <height>29</height>
+               <width>180</width>
+               <height>0</height>
               </size>
              </property>
-             <property name="readOnly">
-              <bool>true</bool>
-             </property>
-             <property name="plainText">
+             <property name="text">
               <string>Experiment ID</string>
              </property>
             </widget>
@@ -337,6 +325,110 @@
          </widget>
         </item>
         <item>
+         <widget class="QFrame" name="f_badChan_3">
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>49</height>
+           </size>
+          </property>
+          <property name="frameShape">
+           <enum>QFrame::StyledPanel</enum>
+          </property>
+          <property name="frameShadow">
+           <enum>QFrame::Raised</enum>
+          </property>
+          <layout class="QHBoxLayout" name="horizontalLayout_24" stretch="0,3">
+           <item>
+            <widget class="QLabel" name="label_10">
+             <property name="minimumSize">
+              <size>
+               <width>180</width>
+               <height>0</height>
+              </size>
+             </property>
+             <property name="text">
+              <string>Arena size(cm)</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QFrame" name="frame_7">
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>31</height>
+              </size>
+             </property>
+             <property name="frameShape">
+              <enum>QFrame::StyledPanel</enum>
+             </property>
+             <property name="frameShadow">
+              <enum>QFrame::Raised</enum>
+             </property>
+             <layout class="QHBoxLayout" name="horizontalLayout_8">
+              <property name="spacing">
+               <number>10</number>
+              </property>
+              <property name="leftMargin">
+               <number>10</number>
+              </property>
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <property name="rightMargin">
+               <number>10</number>
+              </property>
+              <property name="bottomMargin">
+               <number>0</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="label_11">
+                <property name="text">
+                 <string>X (width):</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPlainTextEdit" name="pt_arena_size_x">
+                <property name="minimumSize">
+                 <size>
+                  <width>40</width>
+                  <height>29</height>
+                 </size>
+                </property>
+                <property name="plainText">
+                 <string>175</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_12">
+                <property name="text">
+                 <string>Y (height):</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPlainTextEdit" name="pt_arena_size_y">
+                <property name="minimumSize">
+                 <size>
+                  <width>40</width>
+                  <height>29</height>
+                 </size>
+                </property>
+                <property name="plainText">
+                 <string>175</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item>
          <widget class="QFrame" name="f_badChan_2">
           <property name="maximumSize">
            <size>
@@ -350,25 +442,28 @@
           <property name="frameShadow">
            <enum>QFrame::Raised</enum>
           </property>
-          <layout class="QHBoxLayout" name="horizontalLayout_23" stretch="2,3">
+          <layout class="QHBoxLayout" name="horizontalLayout_23" stretch="0,3">
            <item>
-            <widget class="QPlainTextEdit" name="plainTextEdit_32">
-             <property name="maximumSize">
+            <widget class="QLabel" name="label_6">
+             <property name="minimumSize">
               <size>
-               <width>16777215</width>
-               <height>29</height>
+               <width>180</width>
+               <height>0</height>
               </size>
              </property>
-             <property name="readOnly">
-              <bool>true</bool>
-             </property>
-             <property name="plainText">
+             <property name="text">
               <string>Channel mapping</string>
              </property>
             </widget>
            </item>
            <item>
             <widget class="QFrame" name="frame_4">
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>31</height>
+              </size>
+             </property>
              <property name="frameShape">
               <enum>QFrame::StyledPanel</enum>
              </property>
@@ -454,19 +549,16 @@
           <property name="frameShadow">
            <enum>QFrame::Raised</enum>
           </property>
-          <layout class="QHBoxLayout" name="horizontalLayout_22" stretch="1,1">
+          <layout class="QHBoxLayout" name="horizontalLayout_22" stretch="0,1">
            <item>
-            <widget class="QPlainTextEdit" name="plainTextEdit_31">
-             <property name="maximumSize">
+            <widget class="QLabel" name="label_7">
+             <property name="minimumSize">
               <size>
-               <width>16777215</width>
-               <height>29</height>
+               <width>180</width>
+               <height>0</height>
               </size>
              </property>
-             <property name="readOnly">
-              <bool>true</bool>
-             </property>
-             <property name="plainText">
+             <property name="text">
               <string>Bad Channels</string>
              </property>
             </widget>
@@ -566,23 +658,20 @@
            <number>0</number>
           </property>
           <item>
-           <widget class="QPlainTextEdit" name="plainTextEdit">
+           <widget class="QLabel" name="label">
             <property name="maximumSize">
              <size>
               <width>16777215</width>
-              <height>29</height>
+              <height>27</height>
              </size>
             </property>
-            <property name="readOnly">
-             <bool>true</bool>
-            </property>
-            <property name="plainText">
-             <string>Current Recording Folder:</string>
+            <property name="text">
+             <string>Current Recording File:</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QPlainTextEdit" name="pt_rec_folder">
+           <widget class="QPlainTextEdit" name="pt_rec_file">
             <property name="minimumSize">
              <size>
               <width>250</width>
@@ -626,7 +715,7 @@
          <property name="frameShadow">
           <enum>QFrame::Raised</enum>
          </property>
-         <layout class="QHBoxLayout" name="horizontalLayout_3" stretch="1,1">
+         <layout class="QHBoxLayout" name="horizontalLayout_3" stretch="0,1">
           <property name="spacing">
            <number>3</number>
           </property>
@@ -634,18 +723,15 @@
            <number>3</number>
           </property>
           <item>
-           <widget class="QPlainTextEdit" name="plainTextEdit_2">
-            <property name="maximumSize">
+           <widget class="QLabel" name="label_8">
+            <property name="minimumSize">
              <size>
-              <width>16777215</width>
-              <height>29</height>
+              <width>100</width>
+              <height>0</height>
              </size>
             </property>
-            <property name="readOnly">
-             <bool>true</bool>
-            </property>
-            <property name="plainText">
-             <string>Position Plot:</string>
+            <property name="text">
+             <string>Tracking:</string>
             </property>
            </widget>
           </item>
@@ -665,7 +751,7 @@
               <number>0</number>
              </property>
              <item>
-              <widget class="QRadioButton" name="rb_posPlot_yes">
+              <widget class="QRadioButton" name="rb_tracking_yes">
                <property name="text">
                 <string>Yes</string>
                </property>
@@ -678,7 +764,7 @@
               </widget>
              </item>
              <item>
-              <widget class="QRadioButton" name="rb_posPlot_no">
+              <widget class="QRadioButton" name="rb_tracking_no">
                <property name="text">
                 <string>No</string>
                </property>
@@ -707,7 +793,7 @@
          <property name="frameShadow">
           <enum>QFrame::Raised</enum>
          </property>
-         <layout class="QHBoxLayout" name="horizontalLayout_6" stretch="1,1">
+         <layout class="QHBoxLayout" name="horizontalLayout_6" stretch="0,1">
           <property name="spacing">
            <number>3</number>
           </property>
@@ -715,17 +801,14 @@
            <number>3</number>
           </property>
           <item>
-           <widget class="QPlainTextEdit" name="plainTextEdit_3">
-            <property name="maximumSize">
+           <widget class="QLabel" name="label_9">
+            <property name="minimumSize">
              <size>
-              <width>16777215</width>
-              <height>29</height>
+              <width>100</width>
+              <height>0</height>
              </size>
             </property>
-            <property name="readOnly">
-             <bool>true</bool>
-            </property>
-            <property name="plainText">
+            <property name="text">
              <string>Task Active:</string>
             </property>
            </widget>
