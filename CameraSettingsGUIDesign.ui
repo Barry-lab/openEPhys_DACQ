@@ -169,7 +169,7 @@
              <property name="geometry">
               <rect>
                <x>0</x>
-               <y>0</y>
+               <y>-154</y>
                <width>528</width>
                <height>655</height>
               </rect>
@@ -908,7 +908,7 @@
                     <bool>false</bool>
                    </property>
                    <property name="plainText">
-                    <string>20</string>
+                    <string>40</string>
                    </property>
                   </widget>
                  </item>

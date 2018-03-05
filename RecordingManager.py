@@ -171,8 +171,6 @@ def store_tracking_data_to_recording_file(TrackingSettings, rec_file_path):
     for T in T_retrievePosLogsRPi:
         T.join()
     rmtree(RPiTempFolder)
-    with open('tmp.p','wb') as file:
-        pickle.dump(PosData, file)
     # Save position data from all sources to recording file
     NWBio.save_position_data(rec_file_path, PosData)
 
@@ -391,9 +389,10 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.Settings['General']['rec_file_path'] = recording_file
         print('Starting Open Ephys GUI Recording Successful')
         # Start the tracking scripts on all RPis
-        print('Starting tracking RPis...')
-        self.trackingControl.start()
-        print('Starting tracking RPis Successful')
+        if self.Settings['General']['Tracking']:
+            print('Starting tracking RPis...')
+            self.trackingControl.start()
+            print('Starting tracking RPis Successful')
         # Change Start button style
         self.pb_start_rec.setStyleSheet('background-color: red') # Change button to red
         # Disable and Enable Start and Stop buttons, respectively
@@ -432,10 +431,10 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             print('Stopping tracking RPis...')
             self.trackingControl.stop()
             print('Stopping tracking RPis Successful')
-            # Stop reading Open Ephys messages
-            print('Closing Open Ephys GUI ZMQ connection...')
-            self.OEmessages.disconnect()
-            print('Closing Open Ephys GUI ZMQ connection Successful')
+        # Stop reading Open Ephys messages
+        print('Closing Open Ephys GUI ZMQ connection...')
+        self.OEmessages.disconnect()
+        print('Closing Open Ephys GUI ZMQ connection Successful')
         # Stop Open Ephys Recording
         while check_if_nwb_recording(self.Settings['General']['rec_file_path']):
             print('Stopping Open Ephys GUI Recording...')
