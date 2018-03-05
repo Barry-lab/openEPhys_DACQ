@@ -33,16 +33,24 @@ def butter_lowpass_filter(signal_in, lowpass_frequency=125.0, sampling_rate=3000
     return signal_out
 
 
-def listBadChannels(fpath):
-    # Find file BadChan in the directory and extract numbers from each row
-    badChanFile = os.path.join(fpath,'BadChan')
-    if os.path.exists(badChanFile):
-        with open(badChanFile) as file:
-            content = file.readlines()
-        content = [x.strip() for x in content]
-        badChan = list(np.array(map(int, content)) - 1)
+def listBadChannels(badChanString):
+    # Separate input string into a list using ',' as deliminaters
+    if badChanString.find(',') > -1: # If more than one channel specified
+        # Find all values tetrode and channel values listed
+        badChanStringList = badChanString.split(',')
     else:
-        badChan = []
+        badChanStringList = [badChanString]
+    # Identify any ranges specified with '-' and append these channels to the list
+    for chanString in badChanStringList:
+        if chanString.find('-') > -1:
+            chan_from = chanString[:chanString.find('-')]
+            chan_to = chanString[chanString.find('-') + 1:]
+            for nchan in range(int(chan_to) - int(chan_from) + 1):
+                badChanStringList.append(str(nchan + int(chan_from)))
+            badChanStringList.remove(chanString) # Remove the '-' containing list element
+    # Reorder list of bad channels
+    badChanStringList.sort(key=int)
+    badChan = list(np.array(map(int, badChanStringList)) - 1)
 
     return badChan
 

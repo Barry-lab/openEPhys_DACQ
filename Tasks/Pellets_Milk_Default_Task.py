@@ -115,6 +115,10 @@ def exportSettingsFromGUI(self):
         # Check if there are duplicates of FEEDER IDs
         if any(IDs.count(ID) > 1 for ID in IDs):
             raise ValueError('Duplicates of IDs in ' + FEEDER_type + ' feeders!')
+        # Give notification in case game was not set on but feeders were entered
+        if len(FEEDERs[FEEDER_type].keys()) > 0 and not TaskSettings[FEEDER_type + 'GameOn']:
+            from RecordingManager import show_message
+            show_message(FEEDER_type + ' FEEDER(s) selected but game is NOT ON')
     TaskSettings['FEEDERs'] = FEEDERs
 
     return TaskSettings
@@ -125,14 +129,14 @@ def importSettingsToGUI(self, TaskSettings):
     self.clearLayout(self.milk_feeder_settings_layout, keep=1)
     # Load all settings
     for key in TaskSettings.keys():
-        if isinstance(TaskSettings[key], bool):
+        if isinstance(TaskSettings[key], np.ndarray) and TaskSettings[key].dtype == 'bool':
             self.settings[key].setChecked(TaskSettings[key])
         elif key == 'FEEDERs':
             for FEEDER_type in TaskSettings['FEEDERs'].keys():
                 for ID in sorted(TaskSettings['FEEDERs'][FEEDER_type].keys(), key=str):
                     FEEDER_settings = TaskSettings['FEEDERs'][FEEDER_type][ID]
                     addFeedersToList(self, FEEDER_type, FEEDER_settings)
-        else:
+        elif key in self.settings.keys():
             self.settings[key].setText(str(TaskSettings[key]))
 
 def createSineWaveSound(frequency):
@@ -413,7 +417,7 @@ class Core(object):
 
     def append_ttl_pulses(self, message):
         parts = message.split()
-        if parts[2] == str(self.TaskSettings['Chewing_TTLchan']):
+        if parts[2] == str(self.TaskSettings['Chewing_TTLchan']) and parts[3] == str(1):
             with self.ttlTimesLock:
                 self.ttlTimes.append(time.time())
 
@@ -623,6 +627,8 @@ class Core(object):
 
     def create_progress_bars(self):
         game_progress = self.game_logic()
+        while len(game_progress) == 0:
+            game_progress = self.game_logic()
         # Initialise random color generation
         random.seed(123)
         rcolor = lambda: random.randint(0,255)

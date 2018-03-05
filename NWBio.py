@@ -4,12 +4,20 @@ import h5py
 import numpy as np
 import os
 
+def get_recordingKey(filename):
+    with h5py.File(filename, 'r') as h5file:
+        return h5file['acquisition']['timeseries'].keys()[0]
+
+def get_processorKey(filename):
+    with h5py.File(filename, 'r') as h5file:
+        return h5file['acquisition']['timeseries'][get_recordingKey()]['continuous'].keys()[0]
+
 def load_continuous(filename):
     # Load data file
     f = h5py.File(filename, 'r')
     # Load timestamps and continuous data
-    recordingKey = f['acquisition']['timeseries'].keys()[0]
-    processorKey = f['acquisition']['timeseries'][recordingKey]['continuous'].keys()[0]
+    recordingKey = get_recordingKey(filename)
+    processorKey = get_processorKey(filename)
     continuous = f['acquisition']['timeseries'][recordingKey]['continuous'][processorKey]['data'] # not converted to microvolts!!!! need to multiply by 0.195
     timestamps = f['acquisition']['timeseries'][recordingKey]['continuous'][processorKey]['timestamps'] # not converted to microvolts!!!! need to multiply by 0.195
     data = {'continuous': continuous, 'timestamps': timestamps} 
@@ -25,7 +33,7 @@ def load_spikes(filename, tetrode_nrs=None):
 
     # Load data file
     f = h5py.File(filename, 'r')
-    recordingKey = f['acquisition']['timeseries'].keys()[0]
+    recordingKey = get_recordingKey(filename)
     # Get data file spikes folder keys and sort them into ascending order by tetrode number
     tetrode_keys = f['acquisition']['timeseries'][recordingKey]['spikes'].keys()
     if len(tetrode_keys) > 0:
@@ -59,7 +67,7 @@ def load_events(filename):
 
     # Load data file
     f = h5py.File(filename, 'r')
-    recordingKey = f['acquisition']['timeseries'].keys()[0]
+    recordingKey = get_recordingKey(filename)
     # Load timestamps and TLL signal info
     timestamps = f['acquisition']['timeseries'][recordingKey]['events']['ttl1']['timestamps'].value
     eventID = f['acquisition']['timeseries'][recordingKey]['events']['ttl1']['data'].value
@@ -67,55 +75,9 @@ def load_events(filename):
 
     return data
 
-def load_pos(filename, savecsv=False, postprocess=False):
-    # Loads position data from NWB file
-    # Optionally saves data into a csv file.
-
-    # Load data file
-    f = h5py.File(filename, 'r')
-    recordingKey = f['acquisition']['timeseries'].keys()[0]
-    # Load timestamps and position data
-    timestamps = np.array(f['acquisition']['timeseries'][recordingKey]['events']['binary1']['timestamps'])
-    xy = np.array(f['acquisition']['timeseries'][recordingKey]['events']['binary1']['data'][:,:2])
-    data = {'xy': xy, 'timestamps': timestamps}
-    # Postprocess the data if requested
-    if postprocess:
-        maxjump = 25
-        keepPos = []
-        lastPos = data['xy'][0,:]
-        for npos in range(data['xy'].shape[0]):
-            currpos = data['xy'][npos,:]
-            if np.max(np.abs(lastPos - currpos)) < maxjump:
-                keepPos.append(npos)
-                lastPos = currpos
-        keepPos = np.array(keepPos)
-        print(str(data['xy'].shape[0] - keepPos.size) + ' of ' + 
-              str(data['xy'].shape[0]) + ' removed in postprocessing')
-        data['xy'] = data['xy'][keepPos,:]
-        data['timestamps'] = data['timestamps'][keepPos]
-    # Save the data as csv file in the same folder as NWB file
-    if savecsv:
-        posdata = np.append(timestamps[:,None], xy.astype(np.float32), axis=1)
-        nanarray = np.zeros(xy.shape, dtype=np.float32)
-        nanarray[:] = np.nan
-        posdata = np.append(posdata, nanarray, axis=1)
-        rootfolder = os.path.dirname(filename)
-        CombFileName = os.path.join(rootfolder,'PosLogComb.csv')
-        with open(CombFileName, 'wb') as f:
-            np.savetxt(f, posdata, delimiter=',')
-
-    return data
-
-def check_if_binary_pos(filename):
-    # Checks if binary position data exists in NWB file
-    # Load data file
-    f = h5py.File(filename, 'r')
-    recordingKey = f['acquisition']['timeseries'].keys()[0]
-    # Check if 'binary1' is among event keys
-    event_data_keys = f['acquisition']['timeseries'][recordingKey]['events'].keys()
-    binaryPosData = 'binary1' in event_data_keys
-
-    return binaryPosData
+def check_if_path_exists(filename, path):
+    with h5py.File(filename,'r') as h5file:
+        return path in h5file
 
 def recursively_save_dict_contents_to_group(h5file, path, dic):
     """
@@ -146,6 +108,8 @@ def recursively_load_dict_contents_from_group(h5file, path):
                 if 'S100' == item.dtype:
                     tmp = list(item.value)
                     ans[str(key)] = [str(i) for i in tmp]
+                elif item.dtype == 'bool':
+                    ans[str(key)] = np.array(bool(item.value))
                 else:
                     ans[str(key)] = item.value
             elif isinstance(item, h5py._hl.group.Group):
@@ -185,6 +149,15 @@ def load_settings(filename, path='/'):
 
     return data
 
+def check_if_settings_available(filename, path='/'):
+    '''
+    Returns whether settings information exists in NWB file
+    Specify path='/General/badChan/' to check for specific settings
+    '''
+    full_path = '/general/data_collection/Settings' + path
+    with h5py.File(filename,'r') as h5file:
+        return full_path in h5file
+
 def save_position_data(filename, PosData, ProcessedPos=False, ReProcess=False):
     '''
     PosData is expected as dictionary with keys for each source ID
@@ -196,8 +169,8 @@ def save_position_data(filename, PosData, ProcessedPos=False, ReProcess=False):
         write_method = 'r+'
     else:
         write_method = 'w'
+    recordingKey = get_recordingKey(filename)
     with h5py.File(filename, write_method) as h5file:
-        recordingKey = h5file['acquisition']['timeseries'].keys()[0]
         full_path = '/acquisition/timeseries/' + recordingKey + '/tracking/'
         if not ProcessedPos:
             recursively_save_dict_contents_to_group(h5file, full_path, PosData)
@@ -207,3 +180,51 @@ def save_position_data(filename, PosData, ProcessedPos=False, ReProcess=False):
             if ReProcess and 'ProcessedPos' in h5file[full_path].keys():
                 del h5file[processed_pos_path]
             h5file[processed_pos_path] = PosData
+
+def check_if_tracking_data_available(filename):
+    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'
+    return check_if_path_exists(filename, path)
+
+def check_if_processed_position_data_available(filename):
+    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/ProcessedPos/'
+    return check_if_path_exists(filename, path)
+
+def check_if_binary_pos(filename):
+    # Checks if binary position data exists in NWB file
+    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/events/binary1/'
+    return check_if_path_exists(filename, path)
+
+def use_binary_pos(filename, postprocess=False):
+    '''
+    Copies binary position data into tracking data
+    Apply postprocessing with postprocess=True
+    '''
+    recordingKey = get_recordingKey(filename)
+    # Load timestamps and position data
+    with h5py.File(filename, write_method) as h5file:
+        timestamps = np.array(h5file['acquisition']['timeseries'][recordingKey]['events']['binary1']['timestamps'])
+        xy = np.array(h5file['acquisition']['timeseries'][recordingKey]['events']['binary1']['data'][:,:2])
+    data = {'xy': xy, 'timestamps': timestamps}
+    # Postprocess the data if requested
+    if postprocess:
+        maxjump = 25
+        keepPos = []
+        lastPos = data['xy'][0,:]
+        for npos in range(data['xy'].shape[0]):
+            currpos = data['xy'][npos,:]
+            if np.max(np.abs(lastPos - currpos)) < maxjump:
+                keepPos.append(npos)
+                lastPos = currpos
+        keepPos = np.array(keepPos)
+        print(str(data['xy'].shape[0] - keepPos.size) + ' of ' + 
+              str(data['xy'].shape[0]) + ' removed in postprocessing')
+        data['xy'] = data['xy'][keepPos,:]
+        data['timestamps'] = data['timestamps'][keepPos]
+    # Save data to ProcessedPos position with correct format
+    PosData = np.append(data['timestamps'][:,None], data['xy'].astype(np.float64), axis=1)
+    if PosData.shape[1] < 5:
+        # Add NaNs for second LED if missing
+        nanarray = np.zeros(data['xy'].shape, dtype=np.float64)
+        nanarray[:] = np.nan
+        PosData = np.append(PosData, nanarray, axis=1)
+    save_position_data(filename, PosData, ProcessedPos=True, ReProcess=False)
