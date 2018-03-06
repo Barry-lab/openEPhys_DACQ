@@ -18,6 +18,7 @@ from scipy.spatial.distance import euclidean
 import subprocess
 import NWBio
 import HelperFunctions as hfunct
+from datetime import datetime
    
     
 def interpolate_waveforms(waves, nr_targetbins=50):
@@ -91,20 +92,18 @@ def create_DACQ_waveform_data(waveform_data, pos_edges):
     return waveform_data_dacq
     
     
-def create_DACQ_pos_data(posfile):
+def create_DACQ_pos_data(OpenEphysDataPath):
+    posdata = NWBio.load_tracking_data(OpenEphysDataPath, subset='ProcessedPos')
+    xy_pos = posdata[:,1:5].astype(np.float32)
+    timestamps = posdata[:,0].astype(np.float32)
+    # Realign position data start to 0
+    timestamps = timestamps - timestamps[0]
     # Create DACQ data pos format
     dacq_pos_samplingRate = 50 # Sampling rate in Hz
     dacq_pos_dtype = [('ts', '>i'), ('pos', '>8h')]
     # dacq_pos_timestamp_dtype = '>i4'
     dacq_pos_xypos_dtype = '>i2'
     dacq_pos_timestamp_dtype = '>i'
-    # dacq_pos_xypos_dtype = '>8h'
-    # Get data from CSV file
-    pos_csv = np.genfromtxt(posfile, delimiter=',')
-    timestamps = np.array(pos_csv[:,0], dtype=np.float32)
-    xy_pos = pos_csv[:,1:5]
-    # Realign position data start to 0
-    timestamps = timestamps - timestamps[0]
     # Interpolate position data to 50Hz
     countstamps = np.arange(np.floor(timestamps[-1] * dacq_pos_samplingRate))
     dacq_timestamps = countstamps / dacq_pos_samplingRate
@@ -135,21 +134,21 @@ def create_DACQ_pos_data(posfile):
     return pos_data_dacq
 
 
-def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges, eegChan):
+def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges, eegChan, bitVolts=0.195):
     # Load EEG data of second channel
-    data = np.array(NWBio.load_continuous(os.path.join(fpath,'experiment_1.nwb'))['continuous'][:,eegChan])
-    timestamps = np.array(NWBio.load_continuous(os.path.join(fpath,'experiment_1.nwb'))['timestamps'])
+    data = np.array(NWBio.load_continuous(fpath)['continuous'][:,eegChan], dtype=np.float64)
+    data = data * bitVolts
+    timestamps = np.array(NWBio.load_continuous(fpath)['timestamps'])
     # Crop data outside position data
     idx_outside_pos_data = timestamps < pos_edges[0]
     idx_outside_pos_data = np.logical_or(idx_outside_pos_data, timestamps > pos_edges[1])
     idx_outside_pos_data = np.where(idx_outside_pos_data)[0]
     data = np.delete(data, idx_outside_pos_data, 0)
     # Lowpass filter data
-    data = data.astype(np.float64)
     data = hfunct.butter_lowpass_filter(data, sampling_rate=30000.0, lowpass_frequency=125.0, filt_order=4)
     # Adjust EEG data format and range
     data = data - np.mean(data)
-    data = data / 4000 # Set data range to between 2000 microvolts
+    data = data / 4000 # Set data range to between 4000 microvolts
     data = data * 127
     data[data > 127] = 127
     data[data < -127] = -127
@@ -245,15 +244,14 @@ def header_templates(htype):
     
     
 def getExperimentInfo(fpath):
-    # This function gets some information on the currently selected recording
-    rootfolder_name = os.path.split(fpath)[1]
-    trial_time = rootfolder_name[rootfolder_name.find('_') + 1:]
-    datefolder = os.path.split(os.path.split(fpath)[0])[1]
-    animalfolder = os.path.split(os.path.split(os.path.split(fpath)[0])[0])[1]
-    
-    experiment_info = {'trial_date': datefolder, 
-                       'trial_time': trial_time, 
-                       'animal': animalfolder}
+    animal = NWBio.load_settings(fpath,'/General/animal/')
+    full_timestring = NWBio.load_settings(fpath,'/Time/')
+    timeobject = datetime.strptime(full_timestring, '%Y-%m-%d_%H-%M-%S')
+    datestring = timeobject.strftime('%d-%m-%y')
+    timestring = timeobject.strftime('%H-%M-%S')
+    experiment_info = {'trial_date': datestring, 
+                       'trial_time': timestring, 
+                       'animal': animal}
     
     return experiment_info
 
@@ -285,14 +283,17 @@ def get_speed_data(posfile):
     return pos_timestamps, speed
 
 
-def createAxonaData(OpenEphysDataPath, waveform_data, subfolder='AxonaData', eegChan=1):
+def createAxonaData(OpenEphysDataPath, waveform_data=None, subfolder='AxonaData', eegChan=1):
+    if waveform_data is None:
+        print('Loading waveform data from file')
+        waveform_data = NWBio.load_spikes(OpenEphysDataPath, use_idx_keep=True, use_badChan=True)
     print('Converting data')
     # Get position data start and end times
-    pos_edges = hfunct.get_position_data_edges(OpenEphysDataPath)
+    pos_edges = NWBio.get_processed_tracking_data_timestamp_edges(OpenEphysDataPath)
     # Convert data to DACQ format
     waveform_data_dacq = create_DACQ_waveform_data(waveform_data, pos_edges)
     print('Converting position data')
-    pos_data_dacq = create_DACQ_pos_data(os.path.join(OpenEphysDataPath,'PosLogComb.csv'))
+    pos_data_dacq = create_DACQ_pos_data(OpenEphysDataPath)
     OpenEphys_SamplingRate = 30000
     dacq_eeg_samplingRate = 250 # Sampling rate in Hz
     print('Converting LFP to EEG data')
@@ -332,7 +333,7 @@ def createAxonaData(OpenEphysDataPath, waveform_data, subfolder='AxonaData', eeg
     DATA_START_TOKEN = 'data_start'
     DATA_END_TOKEN = '\r\ndata_end\r\n'
     # Create subdirectory or rewrite existing
-    AxonaDataPath = os.path.join(OpenEphysDataPath, subfolder)
+    AxonaDataPath = os.path.join(os.path.dirname(OpenEphysDataPath), subfolder)
     if not os.path.exists(AxonaDataPath):
         os.mkdir(AxonaDataPath)
     # Write WAVEFORM data for each tetrode into DACQ format
@@ -427,10 +428,6 @@ def createAxonaData(OpenEphysDataPath, waveform_data, subfolder='AxonaData', eeg
     lines[4] = lines[4][:9] + trial_duration + lines[4][9 + len(trial_duration):]
     with open(fname, 'wb') as file:
         file.writelines(lines)
-    # Copy over CombPosLog.csv to AxonaData folder
-    sourcefile = os.path.join(OpenEphysDataPath,'PosLogComb.csv')
-    fname = os.path.join(AxonaDataPath, 'PosLogComb.csv')
-    shutil.copy(sourcefile, fname)
     # Opens recording folder with Ubuntu file browser
     subprocess.Popen(['xdg-open', AxonaDataPath])
         

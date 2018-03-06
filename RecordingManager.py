@@ -118,52 +118,52 @@ def update_tracking_camera_files(TrackingSettings):
 
 def process_single_tracking_data(n_rpi, filename, data_events):
     '''
-    This function processes PosLog*.csv files.
+    This function processes TrackingLog*.csv files.
     Offset between actual frame time and TTL pulses are corrected.
-    If PosLog*.csv has more datapoints than TTL pulses recorded, the PosLog datapoints from the end are dropped.
+    If TrackingLog*.csv has more datapoints than TTL pulses recorded, the TrackingLog datapoints from the end are dropped.
     '''
     RPiTime2Sec = 10 ** 6 # This values is used to convert RPi times to seconds
     # Read position data for this camera
-    pos_csv = np.genfromtxt(filename, delimiter=',')
-    pos_csv[0,2] = 0 # Set first frametime to 0
+    trackingData = np.genfromtxt(filename, delimiter=',')
+    trackingData[0,2] = 0 # Set first frametime to 0
     # Read OpenEphys frame times for this camera in seconds
     OEtimes = data_events['timestamps'][np.array(data_events['eventID']) == n_rpi + 1] # Use the timestamps where RPi sent pulse to OE board
-    if OEtimes.size != pos_csv.shape[0]: # If PosLog*.csv has more datapoints than TTL pulses recorded 
-        # Realign frame times between OpenEphys and RPi by dropping the extra datapoints in PosLog data
-        offset = pos_csv.shape[0] - OEtimes.size
-        pos_csv = pos_csv[:OEtimes.size,:]
+    if OEtimes.size != trackingData.shape[0]: # If TrackingLog*.csv has more datapoints than TTL pulses recorded 
+        # Realign frame times between OpenEphys and RPi by dropping the extra datapoints in TrackingLog data
+        offset = trackingData.shape[0] - OEtimes.size
+        trackingData = trackingData[:OEtimes.size,:]
         print('WARNING! Camera ' + str(n_rpi) + ' Pos data longer than TTL pulses recorded by ' + str(offset) + '\n' + \
               'Assuming that OpenEphysGUI was stopped before cameras stopped.' + '\n' + \
               str(offset) + ' datapoints deleted from the end of position data.')
-    # Get pos_csv frametimes and TTL times in seconds
-    pos_frametimes = np.float64(pos_csv[:,2]) / RPiTime2Sec
-    pos_TTLtimes = np.float64(pos_csv[:,1]) / RPiTime2Sec
-    # Use pos_frametimes and pos_TTLtimes differences to correct OEtimes
-    RPiClockOffset = np.mean(pos_TTLtimes - pos_frametimes)
-    times = OEtimes - (pos_TTLtimes - pos_frametimes - RPiClockOffset)
+    # Get trackingData frametimes and TTL times in seconds
+    camera_frametimes = np.float64(trackingData[:,2]) / RPiTime2Sec
+    camera_TTLtimes = np.float64(trackingData[:,1]) / RPiTime2Sec
+    # Use pos_frametimes and camera_TTLtimes differences to correct OEtimes
+    RPiClockOffset = np.mean(camera_TTLtimes - camera_frametimes)
+    times = OEtimes - (camera_TTLtimes - camera_frametimes - RPiClockOffset)
     # Combine corrected timestamps with position data
-    posdata = np.concatenate((np.expand_dims(times, axis=1), pos_csv[:,3:]), axis=1).astype(np.float64)
+    TrackingData = np.concatenate((np.expand_dims(times, axis=1), trackingData[:,3:]), axis=1).astype(np.float64)
 
-    return posdata
+    return TrackingData
 
-def retrieve_specific_camera_tracking_data(n_rpi, TrackingSettings, RPiTempFolder, data_events, PosData, PosDataLock):
+def retrieve_specific_camera_tracking_data(n_rpi, TrackingSettings, RPiTempFolder, data_events, TrackingData, TrackingDataLock):
     src_file = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
                TrackingSettings['tracking_folder'] + '/logfile.csv'
-    dst_file = os.path.join(RPiTempFolder, 'PosLog' + str(n_rpi) + '.csv')
+    dst_file = os.path.join(RPiTempFolder, 'TrackingLog' + str(n_rpi) + '.csv')
     callstr = 'scp -q ' + src_file + ' ' + dst_file
     _ = os.system(callstr)
-    tmp_posdata = process_single_tracking_data(n_rpi, dst_file, data_events)
-    with PosDataLock:
-        PosData[str(n_rpi)] = tmp_posdata
+    tmp_data = process_single_tracking_data(n_rpi, dst_file, data_events)
+    with TrackingDataLock:
+        TrackingData[str(n_rpi)] = tmp_data
 
 def store_tracking_data_to_recording_file(TrackingSettings, rec_file_path):
     data_events = NWBio.load_events(rec_file_path)
     # Copy all tracking data from active RPis and load to memory
-    PosData = {'ColumnLabels': ['X1', 'Y1', 'X2', 'Y2', 'Luminance_1', 'Luminance_2']}
+    TrackingData = {'ColumnLabels': ['X1', 'Y1', 'X2', 'Y2', 'Luminance_1', 'Luminance_2']}
     RPiTempFolder = mkdtemp('RPiTempFolder')
     T_retrievePosLogsRPi = []
-    PosDataLock = threading.Lock()
-    T_args = [TrackingSettings, RPiTempFolder, data_events, PosData, PosDataLock]
+    TrackingDataLock = threading.Lock()
+    T_args = [TrackingSettings, RPiTempFolder, data_events, TrackingData, TrackingDataLock]
     for n_rpi in TrackingSettings['use_RPi_nrs']:
         T = threading.Thread(target=retrieve_specific_camera_tracking_data, args=[n_rpi] + T_args)
         T.start()
@@ -172,7 +172,7 @@ def store_tracking_data_to_recording_file(TrackingSettings, rec_file_path):
         T.join()
     rmtree(RPiTempFolder)
     # Save position data from all sources to recording file
-    NWBio.save_position_data(rec_file_path, PosData)
+    NWBio.save_tracking_data(rec_file_path, TrackingData)
 
 
 class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):

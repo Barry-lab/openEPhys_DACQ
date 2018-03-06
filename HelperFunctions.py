@@ -33,28 +33,6 @@ def butter_lowpass_filter(signal_in, lowpass_frequency=125.0, sampling_rate=3000
     return signal_out
 
 
-def listBadChannels(badChanString):
-    # Separate input string into a list using ',' as deliminaters
-    if badChanString.find(',') > -1: # If more than one channel specified
-        # Find all values tetrode and channel values listed
-        badChanStringList = badChanString.split(',')
-    else:
-        badChanStringList = [badChanString]
-    # Identify any ranges specified with '-' and append these channels to the list
-    for chanString in badChanStringList:
-        if chanString.find('-') > -1:
-            chan_from = chanString[:chanString.find('-')]
-            chan_to = chanString[chanString.find('-') + 1:]
-            for nchan in range(int(chan_to) - int(chan_from) + 1):
-                badChanStringList.append(str(nchan + int(chan_from)))
-            badChanStringList.remove(chanString) # Remove the '-' containing list element
-    # Reorder list of bad channels
-    badChanStringList.sort(key=int)
-    badChan = list(np.array(map(int, badChanStringList)) - 1)
-
-    return badChan
-
-
 # Print iterations progress
 def print_progress(iteration, total, prefix='', suffix='', decimals=1, bar_length=40, initiation=False):
     """

@@ -3,6 +3,7 @@
 import h5py
 import numpy as np
 import os
+from HelperFunctions import tetrode_channels
 
 def get_recordingKey(filename):
     with h5py.File(filename, 'r') as h5file:
@@ -10,7 +11,7 @@ def get_recordingKey(filename):
 
 def get_processorKey(filename):
     with h5py.File(filename, 'r') as h5file:
-        return h5file['acquisition']['timeseries'][get_recordingKey()]['continuous'].keys()[0]
+        return h5file['acquisition']['timeseries'][get_recordingKey(filename)]['continuous'].keys()[0]
 
 def load_continuous(filename):
     # Load data file
@@ -24,41 +25,98 @@ def load_continuous(filename):
 
     return data
 
-def load_spikes(filename, tetrode_nrs=None):
-    # Outputs a list of dictionaries for each tetrode in correct order where:
-    # 'waveforms' is a list of tetrode waveforms in the order of channels
-    # Waveforms are passed as HDF5 file objects (handles to memory maps).
-    # 'timestamps' is a list of spike detection timestamps corresponding to 'waveforms'
-    # Timestampsare passed as HDF5 file objects (handles to memory maps).
+def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=False):
+    '''
+    Inputs:
+        filename - pointer to NWB file to load
+        tetrode_nrs [list] - can be a list of tetrodes to load (from 0)
+        use_idx_keep [bool] - if True, only outputs spikes according to idx_keep of tetrode, if available
+        use_badChan [bool] - if True, sets all spikes on badChannels to 0
+    Output:
+        List of dictionaries for each tetrode in correct order where:
+        List is empty, if no spike data detected
+        'waveforms' is a list of tetrode waveforms in the order of channels
+        'timestamps' is a list of spike detection timestamps corresponding to 'waveforms'
+        If available, two more variables will be in the dictionary
+        'idx_keep' is boolan index for 'waveforms' and 'timestamps' indicating the spikes
+            that are to be used for further processing (based on filtering for artifacts etc)
+        'clusterIDs' is the cluster identities of spikes in 'waveforms'['idx_keep',:,:]
+    '''
 
-    # Load data file
-    f = h5py.File(filename, 'r')
     recordingKey = get_recordingKey(filename)
-    # Get data file spikes folder keys and sort them into ascending order by tetrode number
-    tetrode_keys = f['acquisition']['timeseries'][recordingKey]['spikes'].keys()
-    if len(tetrode_keys) > 0:
-        tetrode_keys_int = []
-        for tetrode_key in tetrode_keys:
-            tetrode_keys_int.append(int(tetrode_key[9:]))
-        keyorder = list(np.argsort(np.array(tetrode_keys_int)))
-        # Put waveforms and timestamps into a list of dictionaries in correct order
-        data = []
-        for ntet in keyorder:
-            if not tetrode_nrs or ntet in tetrode_nrs:
-                waveforms = f['acquisition']['timeseries'][recordingKey]['spikes'][tetrode_keys[ntet]]['data']
-                timestamps = f['acquisition']['timeseries'][recordingKey]['spikes'][tetrode_keys[ntet]]['timestamps']
-                data.append({'waveforms': waveforms, 'timestamps': timestamps})
-        # Check if any tetrodes had spikes. If not, set data to be empty.
-        tetrodes_with_spikes = 0
-        for ntet in range(len(data)):
-            if len(data[ntet]['timestamps']) > 0:
-                tetrodes_with_spikes += 1
-        if tetrodes_with_spikes == 0:
+    with h5py.File(filename, 'r') as h5file:
+        # Get data file spikes folder keys and sort them into ascending order by tetrode number
+        tetrode_keys = h5file['acquisition']['timeseries'][recordingKey]['spikes'].keys()
+        if len(tetrode_keys) > 0:
+            # Sort tetrode keys into ascending order
+            tetrode_keys_int = []
+            for tetrode_key in tetrode_keys:
+                tetrode_keys_int.append(int(tetrode_key[9:]) - 1)
+            keyorder = list(np.argsort(np.array(tetrode_keys_int)))
+            tetrode_keys = [tetrode_keys[i] for i in keyorder]
+            tetrode_keys_int = [tetrode_keys_int[i] for i in keyorder]
+            # Put waveforms and timestamps into a list of dictionaries in correct order
             data = []
-    else:
-        data = []
+            for ntet in range(len(tetrode_keys)):
+                if tetrode_nrs is None or tetrode_keys_int[ntet] in tetrode_nrs:
+                    waveforms = h5file['/acquisition/timeseries/' + recordingKey + '/spikes/' + tetrode_keys[ntet] + '/data/'].value
+                    timestamps = h5file['/acquisition/timeseries/' + recordingKey + '/spikes/' + tetrode_keys[ntet] + '/timestamps/'].value
+                    tet_data = {'waveforms': waveforms, 
+                                'timestamps': timestamps, 
+                                'nr_tetrode': tetrode_keys_int[ntet]}
+                    # Include idx_keep if available
+                    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
+                           'electrode' + str(ntet + 1) + '/idx_keep'
+                    if check_if_path_exists(filename, path):
+                        tet_data['idx_keep'] = h5file[path]
+                        if use_idx_keep:
+                            if np.sum(tet_data['idx_keep']) == 0:
+                                tet_data['waveforms'] = np.zeros((1,40,4), dtype=np.int16)
+                                tet_data['timestamps'] = np.array([pos_edges[0] + 1], dtype=np.float64)
+                            else:
+                                tet_data['waveforms'] = tet_data['waveforms'][tet_data['idx_keep'],:,:]
+                                tet_data['timestamps'] = tet_data['timestamps'][tet_data['idx_keep']]
+                    # Include clusterIDs if available
+                    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
+                           'electrode' + str(ntet + 1) + '/clusterIDs'
+                    if check_if_path_exists(filename, path):
+                        tet_data['clusterIDs'] = h5file[path]
+                    # Set spikes to zeros for channels in badChan list
+                    if use_badChan:
+                        badChan = listBadChannels(filename)
+                        if len(badChan) > 0:
+                            for nchan in tetrode_channels(tetrode_keys_int[ntet]):
+                                if nchan in badChan:
+                                    tet_data['waveforms'][:,:,np.mod(nchan,4)] = 0
+                    data.append(tet_data)
+            # Check if any tetrodes had spikes. If not, set data to be empty.
+            tetrodes_with_spikes = 0
+            for ntet in range(len(data)):
+                if len(data[ntet]['timestamps']) > 0:
+                    tetrodes_with_spikes += 1
+            if tetrodes_with_spikes == 0:
+                data = []
+        else:
+            data = []
+        
+        return data
 
-    return data
+def save_spikes(filename, ntet, data, timestamps):
+    '''
+    Stores spike data in NWB file in the same format as with OpenEphysGUI.
+    ntet=0 for first tetrode.
+    '''
+    if data.dtype != np.int16:
+        raise ValueError('Waveforms are not int16.')
+    if timestamps.dtype != np.float64:
+        raise ValueError('Timestamps are not float64.')
+    recordingKey = get_recordingKey(filename)
+    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
+           'electrode' + str(ntet + 1) + '/'
+    if not check_if_path_exists(filename, path):
+        with h5py.File(filename, 'r+') as h5file:
+            h5file[path + 'data'] = data
+            h5file[path + 'timestamps'] = timestamps
 
 def load_events(filename):
     # Outputs a dictionary timestamps and eventIDs for TTL signals received
@@ -158,10 +216,35 @@ def check_if_settings_available(filename, path='/'):
     with h5py.File(filename,'r') as h5file:
         return full_path in h5file
 
-def save_position_data(filename, PosData, ProcessedPos=False, ReProcess=False):
+def listBadChannels(filename):
+    if check_if_settings_available(filename,'/General/badChan/'):
+        badChanString = load_settings(filename,'/General/badChan/')
+        # Separate input string into a list using ',' as deliminaters
+        if badChanString.find(',') > -1: # If more than one channel specified
+            # Find all values tetrode and channel values listed
+            badChanStringList = badChanString.split(',')
+        else:
+            badChanStringList = [badChanString]
+        # Identify any ranges specified with '-' and append these channels to the list
+        for chanString in badChanStringList:
+            if chanString.find('-') > -1:
+                chan_from = chanString[:chanString.find('-')]
+                chan_to = chanString[chanString.find('-') + 1:]
+                for nchan in range(int(chan_to) - int(chan_from) + 1):
+                    badChanStringList.append(str(nchan + int(chan_from)))
+                badChanStringList.remove(chanString) # Remove the '-' containing list element
+        # Reorder list of bad channels
+        badChanStringList.sort(key=int)
+        badChan = list(np.array(map(int, badChanStringList)) - 1)
+    else:
+        badChan = []
+
+    return badChan
+
+def save_tracking_data(filename, TrackingData, ProcessedPos=False, ReProcess=False):
     '''
-    PosData is expected as dictionary with keys for each source ID
-    If saving processed data, PosData is expected to be numpy array
+    TrackingData is expected as dictionary with keys for each source ID
+    If saving processed data, TrackingData is expected to be numpy array
         Use ProcessedPos=True to store processed data
         Use ReProcess=True to force overwriting existing processed data
     '''
@@ -173,13 +256,24 @@ def save_position_data(filename, PosData, ProcessedPos=False, ReProcess=False):
     with h5py.File(filename, write_method) as h5file:
         full_path = '/acquisition/timeseries/' + recordingKey + '/tracking/'
         if not ProcessedPos:
-            recursively_save_dict_contents_to_group(h5file, full_path, PosData)
+            recursively_save_dict_contents_to_group(h5file, full_path, TrackingData)
         elif ProcessedPos:
             # If ReProcess is true, path is first cleared
             processed_pos_path = full_path + 'ProcessedPos/'
             if ReProcess and 'ProcessedPos' in h5file[full_path].keys():
                 del h5file[processed_pos_path]
-            h5file[processed_pos_path] = PosData
+            h5file[processed_pos_path] = TrackingData
+
+def load_tracking_data(filename, subset='ProcessedPos'):
+    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'
+    path = path + subset
+    with h5py.File(filename, 'r') as h5file:
+        return np.array(h5file[path].value)
+
+def get_processed_tracking_data_timestamp_edges(filename):
+    data = load_tracking_data(filename, subset='ProcessedPos')
+    edges = [data[0, 0], data[-1, 0]]
+    return edges
 
 def check_if_tracking_data_available(filename):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'
@@ -228,3 +322,25 @@ def use_binary_pos(filename, postprocess=False):
         nanarray[:] = np.nan
         PosData = np.append(PosData, nanarray, axis=1)
     save_position_data(filename, PosData, ProcessedPos=True, ReProcess=False)
+
+def save_tetrode_idx_keep(filename, ntet, idx_keep, overwrite=False):
+    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
+           'electrode' + str(ntet + 1) + '/idx_keep'
+    with h5py.File(filename, 'r+') as h5file:
+        if path in h5file:
+            if overwrite:
+                del h5file[path]
+            else:
+                raise ValueError('Tetrode ' + str(ntet + 1) + ' idx_keep already exists in ' + filename)
+        h5file[path] = idx_keep
+
+def save_tetrode_clusterIDs(filename, ntet, clusterIDs, overwrite=False):
+    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
+           'electrode' + str(ntet + 1) + '/clusterIDs'
+    with h5py.File(filename, 'r+') as h5file:
+        if path in h5file:
+            if overwrite:
+                del h5file[path]
+            else:
+                raise ValueError('Tetrode ' + str(ntet + 1) + ' clusterIDs already exists in ' + filename)
+        h5file[path] = clusterIDs

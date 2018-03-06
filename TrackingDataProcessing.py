@@ -15,65 +15,6 @@ import NWBio
 from itertools import combinations
 from scipy.spatial.distance import euclidean
 
-
-def findPosLogs(rootfolder):
-    # Finds the PosLog*.csv files in the recording folder
-    RPi_nrs = []
-    filenames = []
-    # Work thorugh all files in folder
-    for fname in os.listdir(rootfolder):
-        if fname.startswith('PosLog') and fname.endswith('.csv') and 'Comb' not in fname:
-            # Get the RPi number if PosLog file
-            numstart = 6
-            numend = fname.find('.csv')
-            if numstart == -1 or numend == -1:
-                print('Error: Unexpected file name')
-            else:
-                filenames.append(rootfolder + '/' + fname)
-                RPi_nrs.append(int(fname[numstart:numend]))
-
-    return RPi_nrs, filenames
-
-
-def getPosData(RPi_nr, filename, data_events):
-    # This function processes PosLog*.csv files.
-    # Offset between actual frame time and TTL pulses are corrected.
-    # If PosLog*.csv has more datapoints than TTL pulses recorded, the PosLog datapoints from the end are dropped.
-    # Bad position data lines are dropped (if LED luminance drops too much or position is outside designated arena)
-    RPiTime2Sec = 10 ** 6 # This values is used to convert RPi times to seconds
-    # Read position data for this camera
-    pos_csv = np.genfromtxt(filename, delimiter=',')
-    pos_csv = np.delete(pos_csv, (0), axis=0) # Cut out the header row
-    pos_csv[0,2] = 0 # Set first frametime to 0
-    # Read OpenEphys frame times for this camera in seconds
-    OEtimes = data_events['timestamps'][np.array(data_events['eventID']) == RPi_nr + 1] # Use the timestamps where RPi sent pulse to OE board
-    if OEtimes.size != pos_csv.shape[0]: # If PosLog*.csv has more datapoints than TTL pulses recorded 
-        # Realign frame times between OpenEphys and RPi by dropping the extra datapoints in PosLog data
-        offset = pos_csv.shape[0] - OEtimes.size
-        pos_csv = pos_csv[:OEtimes.size,:]
-        print('WARNING! Camera ' + str(RPi_nr) + ' Pos data longer than TTL pulses recorded by ' + str(offset))
-        print('Assuming that OpenEphysGUI was stopped before cameras stopped.')
-        print(str(offset) + ' datapoints deleted from the end of position data.')
-    # Get pos_csv frametimes and TTL times in seconds
-    pos_frametimes = np.float64(pos_csv[:,2]) / RPiTime2Sec
-    pos_TTLtimes = np.float64(pos_csv[:,1]) / RPiTime2Sec
-    # Use pos_frametimes and pos_TTLtimes differences to correct OEtimes
-    RPiClockOffset = np.mean(pos_TTLtimes - pos_frametimes)
-    times = OEtimes - (pos_TTLtimes - pos_frametimes - RPiClockOffset)
-    # Combine corrected timestamps with position data
-    posdata = np.concatenate((np.expand_dims(times, axis=1), pos_csv[:,3:7]), axis=1).astype(np.float32)
-
-    return posdata
-
-
-def savedata(posdata, rootfolder):
-    # Save as posdata as .csv file
-    CombFileName = rootfolder + '/PosLogComb.csv'
-    with open(CombFileName, 'wb') as f:
-        np.savetxt(f, posdata, delimiter=',')
-    print('Position data saved as ' + CombFileName)
-
-
 def combineCamerasData(cameraPos, lastCombPos=None, TrackingSettings=None):
     # This outputs position data based on which camera is closest to tracking target.
 
@@ -167,26 +108,29 @@ def combineCamerasData(cameraPos, lastCombPos=None, TrackingSettings=None):
 
     return combPos
 
+def remove_tracking_data_outside_boundaries(posdata, arena_size, max_error=20):
+    NotNaN = np.where(np.logical_not(np.isnan(posdata[:,1])))[0]
+    idxBad = np.zeros(NotNaN.size, dtype=bool)
+    x_too_big = posdata[NotNaN,1] > arena_size[0] + max_error
+    y_too_big = posdata[NotNaN,2] > arena_size[1] + max_error
+    idxBad = np.logical_or(idxBad, np.logical_or(x_too_big, y_too_big))
+    x_too_small = posdata[NotNaN,1] < -max_error
+    y_too_small = posdata[NotNaN,2] < -max_error
+    idxBad = np.logical_or(idxBad, np.logical_or(x_too_small, y_too_small))
+    # Combine good position data lines
+    posdata = np.delete(posdata, NotNaN[idxBad], axis=0)
 
-def combdata(filename):
-    # filename - the full path to the raw data file
-    # Get data root folder
-    rootfolder = filename[:filename.rfind('/')]
-    # This main function utilizes all the other functions in this script
-    RPi_nrs, filenames = findPosLogs(rootfolder) # Get PosLog*.csv file names
+    return posdata
+
+def process_tracking_data(filename, save_to_file=False):
     # Get TrackingSettings
-    SettingsFile = os.path.join(rootfolder, 'RecordingSettings.p')
-    with open(SettingsFile,'rb') as file:
-        settings = pickle.load(file)
-        TrackingSettings = settings['TrackingSettings']
-    # Get OpenEphysGUI events data (TTL pulse times in reference to electrophysiological signal)
-    data_events = NWBio.load_events(filename)
-    # Process position data from all PosLog*.csv's from all cameras
+    TrackingSettings = NWBio.load_settings(filename,'/TrackingSettings/')
+    # Load position data for all cameras
     posdatas = []
     for n_rpi in TrackingSettings['use_RPi_nrs']:
-        posdata = getPosData(n_rpi, filenames[RPi_nrs.index(n_rpi)], data_events)
-        posdatas.append(posdata)
+        posdatas.append(NWBio.load_tracking_data(filename, subset=str(n_rpi)))
     if len(posdatas) > 1:
+        # If data from multiple cameras available, combine it
         PosDataFramesPerSecond = 20.0
         # Find first and last timepoint for position data
         first_timepoints = []
@@ -218,9 +162,8 @@ def combdata(filename):
         for nanElement in listNaNs[::-1]:
             del combPosData[nanElement]
         timepoints = np.delete(timepoints, listNaNs)
-        # Save timepoints and combined position data
+        # Combine timepoints and position data
         posdata = np.concatenate((np.expand_dims(np.array(timepoints), axis=1), np.array(combPosData)), axis=1)
-        savedata(posdata, rootfolder)
         # Print info about None elements
         if len(listNaNs) > 0:
             print('Total of ' + str(len(listNaNs) * (1.0 / PosDataFramesPerSecond)) + ' seconds of position data was lost')
@@ -229,18 +172,12 @@ def combdata(filename):
             else:
                 print('This was not in the beginning, but in ' + str(np.sum(np.diff(np.array(listNaNs)) > 1) + 1) + ' other epochs.')
     else:
-        # In case of single camera being used, simply delete data outside enivornmental boundaries
+        # In case of single camera being used, just use data from that camera
         posdata = posdatas[0]
-        # Find bad pos data lines
-        idxBad = np.zeros(posdata.shape[0], dtype=bool)
-        arena_size = TrackingSettings['arena_size'] # Points beyond arena size
-        x_too_big = np.logical_or(posdata[:,1] > arena_size[0] + 20, posdata[:,3] > arena_size[0] + 20)
-        y_too_big = np.logical_or(posdata[:,2] > arena_size[1] + 20, posdata[:,4] > arena_size[1] + 20)
-        idxBad = np.logical_or(idxBad, np.logical_or(x_too_big, y_too_big))
-        x_too_small = np.logical_or(posdata[:,1] < -20, posdata[:,3] < -20)
-        y_too_small = np.logical_or(posdata[:,2] < -20, posdata[:,4] < -20)
-        idxBad = np.logical_or(idxBad, np.logical_or(x_too_small, y_too_small))
-        # Combine good position data lines
-        posdata = posdata[np.logical_not(idxBad),:]
-        # Save corrected data
-        savedata(posdata[:,:5], rootfolder)
+    posdata = remove_tracking_data_outside_boundaries(posdata, TrackingSettings['arena_size'], max_error=20)
+    posdata = posdata.astype(np.float64)
+    if save_to_file:
+        # Save corrected data to file
+        NWBio.save_tracking_data(filename, posdata, ProcessedPos=True, ReProcess=False)
+
+    return posdata

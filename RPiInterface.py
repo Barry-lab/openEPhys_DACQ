@@ -10,7 +10,7 @@ import threading
 import numpy as np
 from scipy.spatial.distance import euclidean
 from itertools import combinations
-import CombineTrackingData
+from TrackingDataProcessing import combineCamerasData
 
 class TrackingControl(object):
 
@@ -191,7 +191,7 @@ class onlineTrackingData(object):
             for posData in posDatas:
                 cameraPos.append(np.array(posData[3:7], dtype=np.float32))
             # Combine data from cameras
-            lastCombPos = CombineTrackingData.combineCamerasData(cameraPos, previousCombPos, self.TrackingSettings)
+            lastCombPos = combineCamerasData(cameraPos, previousCombPos, self.TrackingSettings)
         else:
             # If only a single camera is used, extract position data from posData into numpy array
             lastCombPos = np.array(posDatas[0][3:7], dtype=np.float32)
