@@ -174,6 +174,37 @@ def store_tracking_data_to_recording_file(TrackingSettings, rec_file_path):
     # Save position data from all sources to recording file
     NWBio.save_tracking_data(rec_file_path, TrackingData)
 
+def find_latest_settings_file(path, animal_id='', experiment_id=''):
+    '''
+    Sorts NWB files by filename and finds latest that matches criteria
+    Setting animal_id='' or experiment_id='' will skip that criteria
+    '''
+    dir_items = os.listdir(path)
+    filetimes = []
+    filenames = []
+    include_animal = True
+    include_experiment_id = True
+    for item in dir_items:
+        filename = os.path.join(path, item)
+        if len(animal_id) > 0:
+            include_animal = False
+            if animal_id == NWBio.load_settings(filename, path='/General/animal/'):
+                include_animal = True
+        if len(experiment_id) > 0:
+            include_experiment_id = False
+            if experiment_id == NWBio.load_settings(filename, path='/General/experiment_id/'):
+                include_experiment_id = True
+        if include_animal and include_experiment_id:
+            filetimes.append(datetime.strptime(item[:19],'%Y-%m-%d_%H-%M-%S'))
+            filenames.append(filename)
+    if len(filenames) > 0:
+        max_idx = filetimes.index(max(filetimes))
+        filename = filenames[max_idx]
+        full_path = os.path.join(path, filename)
+    else:
+        full_path = None
+
+    return full_path
 
 class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
 
@@ -295,19 +326,18 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         NWBio.save_settings(filename, self.Settings)
 
     def load_last_settings(self):
-        print('This needs fixing!')
-        # # Check if specific Animal ID has been entered
-        # animal_id = str(self.pt_animal.toPlainText())
-        # if len(animal_id) > 0:
-        #     # Find the latest saved Recording Manager Settings
-        #     dir_animal = str(self.pt_root_folder.toPlainText()) + '/' + animal_id
-        #     latest_date_folder = findLatestDateFolder(dir_animal)
-        #     latest_folder = findLatestTimeFolder(dir_animal + '/' + latest_date_folder)
-        # else:
-        #     # Find the latest saved Recording Manager Settings
-        #     latest_folder = findLatestTimeFolder(self.RecGUI_dataFolder)
-        # # Load the settings in the latest_folder
-        # self.load_settings(folder_name=latest_folder)
+        RecGUI_Settings = self.get_RecordingGUI_settings()
+        # Check if specific Animal ID has been entered
+        RecordingManagerSettingsPath = os.path.join(RecGUI_Settings['root_folder'], 
+                                                    self.RecordingManagerSettingsFolder)
+        filename = find_latest_settings_file(RecordingManagerSettingsPath, 
+                                             RecGUI_Settings['animal'], 
+                                             RecGUI_Settings['experiment_id'])
+        if filename is None:
+            criteria = RecGUI_Settings['animal'] + '\n' + RecGUI_Settings['experiment_id']
+            show_message('No settings found for criteria:', message_more=criteria)
+        else:
+            self.load_settings(filename=filename)
 
     def root_folder_browse(self):
         # Pops up a new window to select a folder and then inserts the path to the text box
