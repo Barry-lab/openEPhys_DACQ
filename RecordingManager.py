@@ -159,7 +159,7 @@ def retrieve_specific_camera_tracking_data(n_rpi, TrackingSettings, RPiTempFolde
 def store_tracking_data_to_recording_file(TrackingSettings, rec_file_path):
     data_events = NWBio.load_events(rec_file_path)
     # Copy all tracking data from active RPis and load to memory
-    TrackingData = {'ColumnLabels': ['X1', 'Y1', 'X2', 'Y2', 'Luminance_1', 'Luminance_2']}
+    TrackingData = {'ColumnLabels': ['timestamps', 'X1', 'Y1', 'X2', 'Y2', 'Luminance_1', 'Luminance_2']}
     RPiTempFolder = mkdtemp('RPiTempFolder')
     T_retrievePosLogsRPi = []
     TrackingDataLock = threading.Lock()
