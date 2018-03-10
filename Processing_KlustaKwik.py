@@ -67,6 +67,7 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, threshold=50):
             spiketimes = np.delete(spiketimes, np.where(tooclose_idx)[0])
         if len(spiketimes) > 0:
             # Using spiketimes create an array of indices (windows) to extract waveforms from LFP trace
+            # The following values are chosen to match OpenEphysGUI default window
             winsize_before = 6
             winsize_after = 34
             spiketimes = np.expand_dims(spiketimes, 1)
@@ -84,10 +85,9 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, threshold=50):
             # windows and windows_channels shape must be  nspikes x nchan x windowsize
             windows = np.repeat(windows[:,:,np.newaxis], 4, axis=2)
             windows = np.swapaxes(windows,1,2)
-            windows_channels = np.tile(np.arange(windows.shape[0]) + hfunct.tetrode_channels(ntet)[0], 
-                                       (windows.shape[1],1))
-            windows_channels = np.transpose(windows_channels)
-            windows_channels = np.repeat(windows_channels[:,:,np.newaxis], windows.shape[2], axis=2)
+            windows_channels = np.array(hfunct.tetrode_channels(ntet))
+            windows_channels = np.tile(windows_channels[np.newaxis,:,np.newaxis], 
+                                       (windows.shape[0], 1, windows.shape[2]))
             waveforms = continuous[windows_channels,windows]
             # Append data as dictionary to spike_data list
             spike_data.append({'waveforms': waveforms, 
