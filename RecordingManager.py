@@ -347,7 +347,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Opens up a new window for Camera Settings
         from CameraSettingsGUI import CameraSettings
         self.CamSet = CameraSettings(parent=self)
-        self.CamSet.show()
         # Check if TrackingSettings available, if so Load them.
         if 'TrackingSettings' in self.Settings.keys():
             self.CamSet.load(deepcopy(self.Settings['TrackingSettings']))
@@ -355,6 +354,9 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
     def task_settings(self):
         from TaskSettingsGUI import TaskSettingsGUI
         self.TaskSet = TaskSettingsGUI(parent=self)
+        # If TaskSettings available, load them
+        if 'TaskSettings' in self.Settings.keys():
+            self.TaskSet.loadSettings(deepcopy(self.Settings['TaskSettings']))
 
     def start_rec(self):
         # Load settings

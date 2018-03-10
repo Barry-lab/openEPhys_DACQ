@@ -67,12 +67,11 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, threshold=50):
             spiketimes = np.delete(spiketimes, np.where(tooclose_idx)[0])
         if len(spiketimes) > 0:
             # Using spiketimes create an array of indices (windows) to extract waveforms from LFP trace
-            winsize_before = 10
-            winsize_after = 20
-            wintotal = winsize_before + winsize_after + 1 # This should be 31 for all downstream functions to work
+            winsize_before = 6
+            winsize_after = 34
             spiketimes = np.expand_dims(spiketimes, 1)
             # Create windows for indexing all samples for a waveform
-            windows = np.arange(winsize_before + winsize_after + 1, dtype=np.int32) - winsize_before
+            windows = np.arange(winsize_before + winsize_after, dtype=np.int32) - winsize_before
             windows = np.tile(windows, (spiketimes.size,1))
             windows = windows + np.tile(spiketimes, (1,windows.shape[1]))
             # Skip windows that are too close to edge of signal
@@ -82,15 +81,14 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, threshold=50):
             windows = np.delete(windows, np.where(idx_delete)[0], axis=0)
             spiketimes = np.delete(spiketimes, np.where(idx_delete)[0], axis=0)
             # Create indexing for channels and spikes
-            # windows and windows_channels shape is nchan x windowsize x nspikes
+            # windows and windows_channels shape must be  nspikes x nchan x windowsize
             windows = np.repeat(windows[:,:,np.newaxis], 4, axis=2)
-            windows = np.swapaxes(windows,0,2)
+            windows = np.swapaxes(windows,1,2)
             windows_channels = np.tile(np.arange(windows.shape[0]) + hfunct.tetrode_channels(ntet)[0], 
                                        (windows.shape[1],1))
             windows_channels = np.transpose(windows_channels)
             windows_channels = np.repeat(windows_channels[:,:,np.newaxis], windows.shape[2], axis=2)
             waveforms = continuous[windows_channels,windows]
-            waveforms = np.swapaxes(waveforms,0,2)
             # Append data as dictionary to spike_data list
             spike_data.append({'waveforms': waveforms, 
                                'timestamps': timestamps[spiketimes.squeeze()],

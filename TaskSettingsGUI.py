@@ -54,9 +54,6 @@ class TaskSettingsGUI(object):
         self.mainWindow.setLayout(top_vbox)
         # Show MainWindow
         self.mainWindow.show()
-        # If TaskSettings available, load them
-        if 'TaskSettings' in self.parent.Settings.keys():
-            self.loadSettings(self.parent.Settings['TaskSettings'])
 
     def clearLayout(self, layout, keep=0):
         # This function clears the layout so that it could be regenerated

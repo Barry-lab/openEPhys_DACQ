@@ -447,7 +447,7 @@ class Core(object):
     def releaseReward(self, FEEDER_type, ID, action='undefined', quantity=1):
         self.TaskSettings['FEEDERs'][FEEDER_type][ID]['actuator'].release(quantity)
         # Send message to Open Ephys GUI
-        OEmessage = 'Reward ' + FEEDER_type + ' ' + str(int(ID) + 1) + ' ' + action + ' ' + str(quantity)
+        OEmessage = 'Reward ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
         self.TaskIO['MessageToOE'](OEmessage)
         # Reset last reward timer
         self.lastReward = time.time()
@@ -515,7 +515,7 @@ class Core(object):
             for ID in self.activePfeeders:
                 nFeederButton = {'callback': self.buttonReleaseReward_callback, 
                                  'callargs': ['pellet', ID], 
-                                 'text': str(int(ID) + 1)}
+                                 'text': ID}
                 buttonReleasePellet.append(nFeederButton)
             buttons.append(buttonReleasePellet)
         if self.milkGameOn: # The buttons are only active if milk FEEDERs available
@@ -525,7 +525,7 @@ class Core(object):
             for ID in self.activeMfeeders:
                 nFeederButton = {'callback': self.buttonMilkTrial_callback, 
                                  'callargs': [ID], 
-                                 'text': str(int(ID) + 1)}
+                                 'text': ID}
                 buttonReleasePellet.append(nFeederButton)
             buttons.append(buttonReleasePellet)
             # Button to release milk
@@ -534,7 +534,7 @@ class Core(object):
             for ID in self.activeMfeeders:
                 nFeederButton = {'callback': self.buttonReleaseReward_callback, 
                                  'callargs': ['milk', ID], 
-                                 'text': str(int(ID) + 1)}
+                                 'text': ID}
                 buttonReleasePellet.append(nFeederButton)
             buttons.append(buttonReleasePellet)
 

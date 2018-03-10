@@ -111,6 +111,8 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
                        'snow', 'beach', 'verylong', 'fixedfps', 'antishake', 'fireworks']
         self.lw_exposure_settings.addItems(itemstrings)
         self.lw_exposure_settings.setCurrentRow(1)
+        # Show MainWindow
+        self.show()
 
     def get_TrackingSettings(self):
         # Check which LED option is checked
