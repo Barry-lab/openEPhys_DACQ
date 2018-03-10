@@ -25,6 +25,15 @@ def load_continuous(filename):
 
     return data
 
+def empty_spike_data():
+    '''
+    Creates a fake waveforms of 0 values and at timepoint 0
+    '''
+    waveforms = np.zeros((1,40,4), dtype=np.int16)
+    timestamps = np.array([0], dtype=np.float64)
+
+    return {'waveforms': waveforms, 'timestamps': timestamps}
+
 def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=False):
     '''
     Inputs:
@@ -59,8 +68,14 @@ def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=Fals
             data = []
             for ntet in range(len(tetrode_keys)):
                 if tetrode_nrs is None or tetrode_keys_int[ntet] in tetrode_nrs:
-                    waveforms = h5file['/acquisition/timeseries/' + recordingKey + '/spikes/' + tetrode_keys[ntet] + '/data/'].value
-                    timestamps = h5file['/acquisition/timeseries/' + recordingKey + '/spikes/' + tetrode_keys[ntet] + '/timestamps/'].value
+                    waveforms = h5file['/acquisition/timeseries/' + recordingKey + '/spikes/' + \
+                                       tetrode_keys[ntet] + '/data/'].value
+                    timestamps = h5file['/acquisition/timeseries/' + recordingKey + '/spikes/' + \
+                                        tetrode_keys[ntet] + '/timestamps/'].value
+                    if waveforms.shape[0] == 0:
+                        # If no waveforms are available, enter one waveform of zeros at timepoint zero
+                        waveforms = empty_spike_data()['waveforms']
+                        timestamps = empty_spike_data()['timestamps']
                     tet_data = {'waveforms': waveforms, 
                                 'timestamps': timestamps, 
                                 'nr_tetrode': tetrode_keys_int[ntet]}
@@ -71,8 +86,8 @@ def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=Fals
                         tet_data['idx_keep'] = h5file[path]
                         if use_idx_keep:
                             if np.sum(tet_data['idx_keep']) == 0:
-                                tet_data['waveforms'] = np.zeros((1,40,4), dtype=np.int16)
-                                tet_data['timestamps'] = np.array([pos_edges[0] + 1], dtype=np.float64)
+                                tet_data['waveforms'] = empty_spike_data()['waveforms']
+                                tet_data['timestamps'] = empty_spike_data()['timestamps']
                             else:
                                 tet_data['waveforms'] = tet_data['waveforms'][tet_data['idx_keep'],:,:]
                                 tet_data['timestamps'] = tet_data['timestamps'][tet_data['idx_keep']]
@@ -89,13 +104,6 @@ def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=Fals
                                 if nchan in badChan:
                                     tet_data['waveforms'][:,:,np.mod(nchan,4)] = 0
                     data.append(tet_data)
-            # Check if any tetrodes had spikes. If not, set data to be empty.
-            tetrodes_with_spikes = 0
-            for ntet in range(len(data)):
-                if len(data[ntet]['timestamps']) > 0:
-                    tetrodes_with_spikes += 1
-            if tetrodes_with_spikes == 0:
-                data = []
         else:
             data = []
         

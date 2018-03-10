@@ -50,6 +50,8 @@ def create_DACQ_waveform_data(waveform_data, pos_edges):
         tet_waveform_data['spiketimes'] = tet_waveform_data['spiketimes'] - pos_edges[0]
         # Get waveforms
         waves = np.array(tet_waveform_data['waveforms'], dtype=np.float32)
+        waves = -waves
+        waves = np.swapaxes(waves,1,2)
         nspikes = waves.shape[0]
         # Set waveforms values on this tetrode to range -127 to 127
         if nspikes > 1:
@@ -135,9 +137,13 @@ def create_DACQ_pos_data(OpenEphysDataPath):
 
 
 def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges, eegChan, bitVolts=0.195):
+    '''
+    EEG is downsampled to dacq_eeg_samplingrate and inverted to same polarity as spikes in AxonaFormat.
+    EEG is also rescaled to microvolt values.
+    '''
     # Load EEG data of second channel
     data = np.array(NWBio.load_continuous(fpath)['continuous'][:,eegChan], dtype=np.float64)
-    data = data * bitVolts
+    data = -data * bitVolts
     timestamps = np.array(NWBio.load_continuous(fpath)['timestamps'])
     # Crop data outside position data
     idx_outside_pos_data = timestamps < pos_edges[0]

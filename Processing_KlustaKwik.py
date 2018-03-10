@@ -11,6 +11,16 @@ import shutil
 import copy
 
 def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, threshold=50):
+    '''
+    This function mimicks the OpenEphysGUI spike extraction
+    Common Average Referencing -> Bandpass Filter -> Thresholding
+    Output:
+        Dictonary with 'waveforms' - nspike x nchan x windowsize
+                                     with same polarity as from OpenEphysGUI
+                       'timestamps' - for each spike
+                       'nr_tetrode' - the number of extracted tetrode from whole dataset
+                                      this corrects for UseChans
+    '''
     # Load data
     print('Loading NWB data for extracting spikes')
     data = NWBio.load_continuous(NWBfilePath)
@@ -19,7 +29,7 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, threshold=50):
         continuous = np.array(data['continuous'][:, UseChans[0]:UseChans[1]])
     else:
         continuous = np.array(data['continuous'])
-    continuous = -np.transpose(continuous)
+    continuous = np.transpose(continuous)
     # Create and edit good channels list according to bad channels list
     goodChan = np.arange(continuous.shape[0])
     badChan = get_badChan(NWBfilePath, UseChans=UseChans)
@@ -55,7 +65,7 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, threshold=50):
         # Find threshold crossings for each channel
         spiketimes = np.array([], dtype=np.int64)
         for nchan in hfunct.tetrode_channels(ntet):
-            tmp = continuous[nchan,:] > threshold_int16
+            tmp = continuous[nchan,:] < -threshold_int16
             spiketimes = np.append(spiketimes, np.where(tmp)[0])
         if len(spiketimes) > 0: 
             spiketimes = np.sort(spiketimes)
@@ -107,7 +117,7 @@ def applyKlustaKwik(waveform_data):
             # Create temporary processing folder
             KlustaKwikProcessingFolder = tempfile.mkdtemp('KlustaKwikProcessing')
             # Prepare input to KlustaKwik
-            waves = np.swapaxes(waveform_data[ntet]['waveforms'],1,2)
+            waves = waveform_data[ntet]['waveforms']
             features2use = ['PC1', 'PC2', 'PC3', 'Amp', 'Vt']
             d = {0: features2use}
             klustakwik(waves, d, os.path.join(KlustaKwikProcessingFolder, 'KlustaKwikTemp'))
@@ -150,7 +160,7 @@ def filter_spike_data(spike_data, pos_edges, threshold, noise_cut_off):
     # Include spikes above threshold
     threshold_int16 = np.int16(np.round(threshold / 0.195))
     for ntet in range(len(spike_data)):
-        idx = np.any(np.any(np.abs(spike_data[ntet]['waveforms']) > threshold_int16, axis=2), axis=1)
+        idx = np.any(np.any(spike_data[ntet]['waveforms'] < -threshold_int16, axis=2), axis=1)
         idx_keep[ntet] = np.logical_and(idx_keep[ntet], idx)
         if np.sum(idx) < idx.size:
             percentage_above_threshold = np.sum(idx) / float(idx.size) * 100
@@ -182,17 +192,6 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, UseRaw=False, noise_cu
             lastTet = hfunct.channels_tetrode(UseChans[1] - 1)
             spike_data = spike_data[firstTet:lastTet + 1]
             useTet = np.arange(lastTet - firstTet, dtype=np.int16) + int(firstTet)
-        # Fully load into memory
-        for ntet in range(len(spike_data)):
-            if spike_data[ntet]['waveforms'].shape[0] > 0:
-                spike_data[ntet]['waveforms'] = np.swapaxes(np.array(spike_data[ntet]['waveforms']),1,2)
-            else:
-                # If no spikes detected, create one flat spike waveform at timempoint 1
-                spike_data[ntet]['waveforms'] = np.zeros((3, 40, 4), dtype=np.int16)
-                spike_data[ntet]['timestamps'] = np.array([0],dtype=np.float64)
-        # Invert waveforms
-        for ntet in range(len(spike_data)):
-            spike_data[ntet]['waveforms'] = -spike_data[ntet]['waveforms']
     else:
         print('Extracting spikes from raw data.')
         spike_data = extract_spikes_from_raw_data(OpenEphysDataPath, UseChans, threshold)
@@ -204,13 +203,17 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, UseRaw=False, noise_cu
     # Find eligible spikes on all tetrodes
     pos_edges = NWBio.get_processed_tracking_data_timestamp_edges(OpenEphysDataPath)
     idx_keep = filter_spike_data(spike_data, pos_edges, threshold, noise_cut_off)
+    # Overwrite idx_keep in recording files
+    for ntet in range(len(spike_data)):
+        NWBio.save_tetrode_idx_keep(OpenEphysDataPath, spike_data[ntet]['nr_tetrode'], 
+                                    idx_keep[ntet], overwrite=True)
     # Arrange data into a list of dictionaries for each tetrode
     waveform_data = []
     for ntet in range(len(spike_data)):
         if np.sum(idx_keep[ntet]) == 0:
             # If there are no spikes on a tetrode, create one zero spike 1 second after first position sample
-            waveforms = np.zeros((1,40,4), dtype=np.int16)
-            spiketimes = np.array([pos_edges[0] + 1], dtype=np.float64)
+            waveforms = NWBio.empty_spike_data()['waveforms']
+            spiketimes = NWBio.empty_spike_data()['timestamps']
         else:
             waveforms = spike_data[ntet]['waveforms'][idx_keep[ntet],:40,:]
             spiketimes = spike_data[ntet]['timestamps'][idx_keep[ntet]]
@@ -286,11 +289,6 @@ def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=500, th
                                            noise_cut_off=noise_cut_off, threshold=threshold)
         # Add this dictonary to list of all dictionaries
         waveform_datas.append(waveform_data)
-    # Overwrite idx_keep in recording files
-    for OpenEphysDataPath, waveform_data in zip(OpenEphysDataPaths, waveform_datas):
-        for ntet in range(len(waveform_data)):
-            NWBio.save_tetrode_idx_keep(OpenEphysDataPath, waveform_data[ntet]['nr_tetrode'], 
-                                        waveform_data[ntet]['idx_keep'], overwrite=True)
     # Apply Klustakwik on each tetrode
     if len(waveform_datas) == 1:
         waveform_datas[0] = applyKlustaKwik(waveform_datas[0])
@@ -320,6 +318,7 @@ def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=500, th
         for ntet in range(len(waveform_data)):
             NWBio.save_tetrode_clusterIDs(OpenEphysDataPath, waveform_data[ntet]['nr_tetrode'], 
                                           waveform_data[ntet]['clusterIDs'], overwrite=True)
+    # Save data in Axona Format
     for OpenEphysDataPath, waveform_data in zip(OpenEphysDataPaths, waveform_datas):
         # Define Axona data subfolder name based on specific channels if requested
         if UseChans:
