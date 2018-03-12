@@ -22,7 +22,8 @@ def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
                            'Active': True, 
                            'IP': '192.168.0.40', 
                            'Position': np.array([100,50]), 
-                           'SignalHz': np.array(2800)}
+                           'SignalHz': np.array(2800), 
+                           'ModulHz': np.array(0)}
     # Create interface for interacting with this FEEDER
     FEEDER = {'Type': FEEDER_type}
     vbox = QtGui.QVBoxLayout()
@@ -31,39 +32,54 @@ def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
     FEEDER['ID'] = QtGui.QLineEdit(FEEDER_settings['ID'])
     FEEDER['ID'].setMaximumWidth(40)
     hbox.addWidget(FEEDER['ID'])
+    hbox.addWidget(QtGui.QLabel('IP:'))
+    FEEDER['IP'] = QtGui.QLineEdit(FEEDER_settings['IP'])
+    FEEDER['IP'].setMinimumWidth(105)
+    hbox.addWidget(FEEDER['IP'])
+    hbox.addWidget(QtGui.QLabel('Position:'))
+    FEEDER['Position'] = QtGui.QLineEdit(','.join(map(str,FEEDER_settings['Position'])))
+    FEEDER['Position'].setMinimumWidth(70)
+    FEEDER['Position'].setMaximumWidth(70)
+    hbox.addWidget(FEEDER['Position'])
+    vbox.addLayout(hbox)
+    hbox = QtGui.QHBoxLayout()
     FEEDER['Present'] = QtGui.QCheckBox('Present')
     FEEDER['Present'].setChecked(FEEDER_settings['Present'])
     hbox.addWidget(FEEDER['Present'])
     FEEDER['Active'] = QtGui.QCheckBox('Active')
     FEEDER['Active'].setChecked(FEEDER_settings['Active'])
     hbox.addWidget(FEEDER['Active'])
-    hbox.addWidget(QtGui.QLabel('IP:'))
-    FEEDER['IP'] = QtGui.QLineEdit(FEEDER_settings['IP'])
-    hbox.addWidget(FEEDER['IP'])
+    activateButton = QtGui.QPushButton('Activate')
+    activateButton.setMaximumWidth(60)
+    FEEDER['ReleaseQuantity'] = QtGui.QLineEdit('1')
+    FEEDER['ReleaseQuantity'].setMaximumWidth(40)
+    activateButton.clicked.connect(lambda: activateFEEDER(FEEDER_type, FEEDER['IP'], 
+                                                          self.settings['Username'], 
+                                                          self.settings['Password'], 
+                                                          FEEDER['ReleaseQuantity']))
+    hbox.addWidget(activateButton)
+    hbox.addWidget(FEEDER['ReleaseQuantity'])
     vbox.addLayout(hbox)
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Position:'))
-    FEEDER['Position'] = QtGui.QLineEdit(','.join(map(str,FEEDER_settings['Position'])))
-    FEEDER['Position'].setMinimumWidth(70)
-    hbox.addWidget(FEEDER['Position'])
-    hbox.addWidget(QtGui.QLabel('Signal (Hz):'))
-    FEEDER['SignalHz'] = QtGui.QLineEdit(str(FEEDER_settings['SignalHz']))
-    hbox.addWidget(FEEDER['SignalHz'])
-    testButton = QtGui.QPushButton('Test')
-    testButton.setMaximumWidth(40)
-    FEEDER['TestQuantity'] = QtGui.QLineEdit('1')
-    FEEDER['TestQuantity'].setMaximumWidth(40)
-    testButton.clicked.connect(lambda: activateFEEDER(FEEDER_type, FEEDER['IP'], 
-                                                      self.settings['Username'], 
-                                                      self.settings['Password'], 
-                                                      FEEDER['TestQuantity']))
-    hbox.addWidget(testButton)
-    hbox.addWidget(FEEDER['TestQuantity'])
-    vbox.addLayout(hbox)
+    if FEEDER_type == 'milk':
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Signal (Hz):'))
+        FEEDER['SignalHz'] = QtGui.QLineEdit(str(FEEDER_settings['SignalHz']))
+        hbox.addWidget(FEEDER['SignalHz'])
+        FEEDER['ModulHz'] = QtGui.QLineEdit(str(FEEDER_settings['ModulHz']))
+        hbox.addWidget(FEEDER['ModulHz'])
+        playSignalButton = QtGui.QPushButton('Play')
+        playSignalButton.setMaximumWidth(40)
+        playSignalButton.clicked.connect(lambda: playSineWaveSound(FEEDER['SignalHz'], 
+                                                                   FEEDER['ModulHz']))
+        hbox.addWidget(playSignalButton)
+        vbox.addLayout(hbox)
     frame = QtGui.QFrame()
     frame.setLayout(vbox)
     frame.setFrameStyle(3)
-    frame.setMaximumHeight(90)
+    if FEEDER_type == 'milk':
+        frame.setMaximumHeight(120)
+    else:
+        frame.setMaximumHeight(90)
     if FEEDER_type == 'pellet':
         self.pellet_feeder_settings_layout.addWidget(frame)
     elif FEEDER_type == 'milk':
@@ -110,8 +126,10 @@ def exportSettingsFromGUI(self):
                                              'Present': np.array(feeder['Present'].isChecked()), 
                                              'Active': np.array(feeder['Active'].isChecked()), 
                                              'IP': str(feeder['IP'].text()), 
-                                             'Position': np.array(map(int, str(feeder['Position'].text()).split(','))), 
-                                             'SignalHz': np.int64(float(str(feeder['SignalHz'].text())))}
+                                             'Position': np.array(map(int, str(feeder['Position'].text()).split(',')))}
+            if FEEDER_type == 'milk':
+                FEEDERs[FEEDER_type][IDs[-1]]['SignalHz'] = np.int64(float(str(feeder['SignalHz'].text())))
+                FEEDERs[FEEDER_type][IDs[-1]]['ModulHz'] = np.int64(float(str(feeder['ModulHz'].text())))
         # Check if there are duplicates of FEEDER IDs
         if any(IDs.count(ID) > 1 for ID in IDs):
             raise ValueError('Duplicates of IDs in ' + FEEDER_type + ' feeders!')
@@ -139,7 +157,7 @@ def importSettingsToGUI(self, TaskSettings):
         elif key in self.settings.keys():
             self.settings[key].setText(str(TaskSettings[key]))
 
-def createSineWaveSound(frequency):
+def createSineWaveSound(frequency, modulation_frequency=0):
     # Calling this function must be preceded by calling the following lines
     # for pygame to recognise the mono sound
     # pygame.mixer.pre_init(44100, -16, 1) # here 44100 needs to match the sampleRate in this function
@@ -147,12 +165,32 @@ def createSineWaveSound(frequency):
     sampleRate = 44100 # Must be the same as in the line 
     peak = 4096 # 4096 : the peak ; volume ; loudness
     arr = np.array([peak * np.sin(2.0 * np.pi * frequency * x / sampleRate) for x in range(0, sampleRate)]).astype(np.int16)
+    if modulation_frequency > 0:
+        # Modulate pure tone at specified frequency
+        modulation_frequency = int(modulation_frequency)
+        marr = np.array([np.sin(2.0 * np.pi * modulation_frequency * x / sampleRate) for x in range(0, sampleRate)]).astype(np.float64)
+        marr = marr - min(marr)
+        marr = marr / max(marr)
+        arr = np.int16(arr.astype(np.float64) * marr)
     sound = pygame.sndarray.make_sound(arr)
 
     # Use sound.play(-1) to start sound. (-1) means it is in infinite loop
     # Use sound.stop() to stop the sound
 
     return sound
+
+def playSineWaveSound(frequency, modulation_frequency=0):
+    if type(frequency) == QtGui.QLineEdit:
+        frequency = np.int64(float(str(frequency.text())))
+    if type(modulation_frequency) == QtGui.QLineEdit:
+        modulation_frequency = np.int64(float(str(modulation_frequency.text())))
+    # Initialize pygame for playing sound
+    pygame.mixer.pre_init(44100, -16, 1)
+    pygame.init()
+    # Get sound
+    sound = createSineWaveSound(frequency, modulation_frequency)
+    # Play 2 seconds of the sound
+    sound.play(2)
 
 def SettingsGUI(self):
     self.settings = {}
@@ -689,7 +727,8 @@ class Core(object):
     def start_milkTrial(self, action='undefined'):
         # These settings put the game_logic into milkTrial mode
         self.milkTrialOn = True
-        self.milkTrialTone = createSineWaveSound(self.TaskSettings['FEEDERs']['milk'][self.feederID_milkTrial]['SignalHz'])
+        self.milkTrialTone = createSineWaveSound(self.TaskSettings['FEEDERs']['milk'][self.feederID_milkTrial]['SignalHz'], 
+                                                 self.TaskSettings['FEEDERs']['milk'][self.feederID_milkTrial]['ModulHz'])
         self.milkTrialTone.play(-1)
         self.lastMilkTrial = time.time()
         OEmessage = 'milkTrialStart ' + action + ' ' + str(int(self.feederID_milkTrial) + 1)

@@ -10,7 +10,7 @@ class TaskSettingsGUI(object):
         self.parent = parent
         # Initialize GUI window
         self.mainWindow = QtGui.QWidget()
-        self.mainWindow.resize(950, 800)
+        self.mainWindow.resize(870, 800)
         self.mainWindow.setWindowTitle('Task Settings')
         # Create top menu items
         self.taskSelectionList = QtGui.QListWidget()
