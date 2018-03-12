@@ -50,7 +50,8 @@ def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
     FEEDER['Active'].setChecked(FEEDER_settings['Active'])
     hbox.addWidget(FEEDER['Active'])
     activateButton = QtGui.QPushButton('Activate')
-    activateButton.setMaximumWidth(60)
+    activateButton.setMinimumWidth(70)
+    activateButton.setMaximumWidth(70)
     FEEDER['ReleaseQuantity'] = QtGui.QLineEdit('1')
     FEEDER['ReleaseQuantity'].setMaximumWidth(40)
     activateButton.clicked.connect(lambda: activateFEEDER(FEEDER_type, FEEDER['IP'], 
@@ -731,7 +732,7 @@ class Core(object):
                                                  self.TaskSettings['FEEDERs']['milk'][self.feederID_milkTrial]['ModulHz'])
         self.milkTrialTone.play(-1)
         self.lastMilkTrial = time.time()
-        OEmessage = 'milkTrialStart ' + action + ' ' + str(int(self.feederID_milkTrial) + 1)
+        OEmessage = 'milkTrialStart ' + action + ' ' + self.feederID_milkTrial
         self.TaskIO['MessageToOE'](OEmessage)
 
     def stop_milkTrial(self, successful):
