@@ -35,6 +35,35 @@ def show_message(message, message_more=None):
     msg.setStandardButtons(QtGui.QMessageBox.Ok)
     msg.exec_()
 
+def list_window(items):
+    '''
+    Creates a new window with a list of string items to select from.
+    Double clicking returns the string on the item selected
+
+    Input:  list of strings
+    Output: selected list element
+    '''
+    listWindow = QtGui.QDialog()
+    listWindow.setWindowTitle('Choose option:')
+    listWindow.resize(200, 200)
+    itemsList = QtGui.QListWidget()
+    itemsList.addItems(items)
+    itemsList.itemDoubleClicked.connect(listWindow.accept)
+    scroll = QtGui.QScrollArea()
+    scroll.setWidget(itemsList)
+    scroll.setWidgetResizable(True)
+    vbox = QtGui.QVBoxLayout()
+    vbox.addWidget(scroll)
+    listWindow.setLayout(vbox)
+    listWindow.show()
+    if listWindow.exec_():
+        selected_item = items[itemsList.currentRow()]
+    else:
+        selected_item = None
+
+    return selected_item
+
+
 def findLatestTimeFolder(path):
     # Get subdirectory names and find folder with latest date time as folder name
     dir_items = os.listdir(path)
@@ -174,37 +203,71 @@ def store_tracking_data_to_recording_file(TrackingSettings, rec_file_path):
     # Save position data from all sources to recording file
     NWBio.save_tracking_data(rec_file_path, TrackingData)
 
-def find_latest_settings_file(path, animal_id='', experiment_id=''):
+def list_general_settings_history(path):
     '''
-    Sorts NWB files by filename and finds latest that matches criteria
-    Setting animal_id='' or experiment_id='' will skip that criteria
+    Assumes all files on the path are NWB files with General settings stored
+
+    Returns:
+        dictionary - just as General settings, but each key contains
+                     a list of values for that key in files on the path.
+        list       - full paths to all settings files
+        
+        All lists are sorted starting from the most recent timestamp in filename.
+        None is entered if key is missing in settings file.
     '''
     dir_items = os.listdir(path)
     filetimes = []
     filenames = []
-    include_animal = True
-    include_experiment_id = True
     for item in dir_items:
         filename = os.path.join(path, item)
-        if len(animal_id) > 0:
-            include_animal = False
-            if animal_id == NWBio.load_settings(filename, path='/General/animal/'):
-                include_animal = True
-        if len(experiment_id) > 0:
-            include_experiment_id = False
-            if experiment_id == NWBio.load_settings(filename, path='/General/experiment_id/'):
-                include_experiment_id = True
-        if include_animal and include_experiment_id:
-            filetimes.append(datetime.strptime(item[:19],'%Y-%m-%d_%H-%M-%S'))
-            filenames.append(filename)
-    if len(filenames) > 0:
-        max_idx = filetimes.index(max(filetimes))
-        filename = filenames[max_idx]
-        full_path = os.path.join(path, filename)
-    else:
-        full_path = None
+        filenames.append(filename)
+        filetimes.append(datetime.strptime(item[:19],'%Y-%m-%d_%H-%M-%S'))
+    # Sort filenames based on filetimes
+    filenames = [x for _,x in sorted(zip(filetimes, filenames))][::-1]
+    # Load all general settings to memory and build a list of keys
+    settings_keys = []
+    settings_list = []
+    for filename in filenames:
+        settings = NWBio.load_settings(filename, path='/General/')
+        for key in settings.keys():
+            if not (key in settings_keys):
+                settings_keys.append(key)
+        settings_list.append(settings)
+    # Create lists for all keys
+    general_settings_history = {}
+    for key in settings_keys:
+        general_settings_history[key] = []
+    for settings in settings_list:
+        for key in settings_keys:
+            if key in settings.keys():
+                general_settings_history[key].append(settings[key])
+            else:
+                general_settings_history[key].append(None)
 
-    return full_path
+    return general_settings_history, filenames
+
+def find_latest_matching_settings_filepath(path, settings=None):
+    general_settings_history, filenames = list_general_settings_history(path)
+    if settings is None or len(settings.keys()) == 0:
+        # If no specific settings were requested, return the path to latest settings file
+        filepath = filenames[0]
+    else:
+        filepaths = []
+        # Loop through all settings files
+        for nfile in range(len(filenames)):
+            # Check if all specified settings match to the one in the file
+            settings_correct = []
+            for key in settings.keys():
+                settings_correct.append(general_settings_history[key][nfile] == settings[key])
+            if all(settings_correct):
+                filepaths.append(filenames[nfile])
+        if len(filepaths) > 0: # Use the most recent settings file path
+            filepath = filepaths[0]
+        else: # If no settings matched, return None
+            filepath = None
+
+    return filepath
+
 
 class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
 
@@ -212,12 +275,15 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         super(RecordingManager, self).__init__(parent=parent)
         self.setupUi(self)
         # Set GUI environment
-        self.pt_root_folder.setPlainText(os.path.expanduser('~') + '/RecordingData')
+        RecordingDataPath = os.path.expanduser('~') + '/RecordingData'
+        self.pt_root_folder.setPlainText(RecordingDataPath)
         self.RecordingManagerSettingsFolder = 'RecordingManagerSettings'
-        self.file_server_path = '/media/QNAP/sanderT/room418'
         # Create empty settings dictonary
         self.Settings = {}
         # Set GUI interaction connections
+        self.pb_experimenter.clicked.connect(lambda:self.show_options('experimenter', self.pt_experimenter))
+        self.pb_animal.clicked.connect(lambda:self.show_options('animal', self.pt_animal))
+        self.pb_experiment_id.clicked.connect(lambda:self.show_options('experiment_id', self.pt_experiment_id))
         self.pb_load_last.clicked.connect(lambda:self.load_last_settings())
         self.pb_load.clicked.connect(lambda:self.load_settings())
         self.pb_save.clicked.connect(lambda:self.save_settings())
@@ -279,6 +345,16 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
 
         return RecGUI_Settings
 
+    def show_options(self, setting_name, setting_textbox):
+        RecGUI_Settings = self.get_RecordingGUI_settings()
+        RecordingManagerSettingsPath = os.path.join(RecGUI_Settings['root_folder'], 
+                                                    self.RecordingManagerSettingsFolder)
+        general_settings_history, _ = list_general_settings_history(RecordingManagerSettingsPath)
+        items = sorted(list(set(general_settings_history[setting_name])))
+        selected_item = list_window(items)
+        if not (selected_item is None):
+            setting_textbox.setPlainText(selected_item)
+
     def load_settings(self, filename=None):
         if filename is None: # Get user to select settings to load if not given
             filename = hfunct.openSingleFileDialog('load', suffix='nwb', caption='Select file to load')
@@ -327,14 +403,21 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
 
     def load_last_settings(self):
         RecGUI_Settings = self.get_RecordingGUI_settings()
-        # Check if specific Animal ID has been entered
+        # Hard-code which settings to use for searching the latest settings
+        settings = {}
+        if len(RecGUI_Settings['animal']) > 0:
+            settings['animal'] = RecGUI_Settings['animal']
+        if len(RecGUI_Settings['experiment_id']) > 0:
+            settings['experiment_id'] = RecGUI_Settings['experiment_id']
+        # Find the latest settings file
         RecordingManagerSettingsPath = os.path.join(RecGUI_Settings['root_folder'], 
                                                     self.RecordingManagerSettingsFolder)
-        filename = find_latest_settings_file(RecordingManagerSettingsPath, 
-                                             RecGUI_Settings['animal'], 
-                                             RecGUI_Settings['experiment_id'])
+        filename = find_latest_matching_settings_filepath(RecordingManagerSettingsPath, settings)
         if filename is None:
-            criteria = RecGUI_Settings['animal'] + '\n' + RecGUI_Settings['experiment_id']
+            # If no matching file is found, show error message
+            criteria = ''
+            for key in sorted(settings.keys()):
+                criteria += str(key) + ': ' + str(settings[key]) + '\n'
             show_message('No settings found for criteria:', message_more=criteria)
         else:
             self.load_settings(filename=filename)

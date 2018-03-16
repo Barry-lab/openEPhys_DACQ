@@ -67,7 +67,7 @@
            <item>
             <widget class="QPushButton" name="pb_experimenter">
              <property name="enabled">
-              <bool>false</bool>
+              <bool>true</bool>
              </property>
              <property name="minimumSize">
               <size>
@@ -211,7 +211,7 @@
            <item>
             <widget class="QPushButton" name="pb_animal">
              <property name="enabled">
-              <bool>false</bool>
+              <bool>true</bool>
              </property>
              <property name="minimumSize">
               <size>
@@ -281,9 +281,9 @@
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="pb_experiment">
+            <widget class="QPushButton" name="pb_experiment_id">
              <property name="enabled">
-              <bool>false</bool>
+              <bool>true</bool>
              </property>
              <property name="minimumSize">
               <size>
