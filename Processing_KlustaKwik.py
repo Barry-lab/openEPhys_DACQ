@@ -63,34 +63,34 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, threshold=50):
         else:
             nr_tetrode = ntet
         # Find threshold crossings for each channel
-        spiketimes = np.array([], dtype=np.int64)
+        timestamps = np.array([], dtype=np.int64)
         for nchan in hfunct.tetrode_channels(ntet):
             tmp = continuous[nchan,:] < -threshold_int16
-            spiketimes = np.append(spiketimes, np.where(tmp)[0])
-        if len(spiketimes) > 0: 
-            spiketimes = np.sort(spiketimes)
+            timestamps = np.append(timestamps, np.where(tmp)[0])
+        if len(timestamps) > 0: 
+            timestamps = np.sort(timestamps)
         # Remove duplicates based on temporal proximity
-        if len(spiketimes) > 0:
+        if len(timestamps) > 0:
             tooclose = np.int64(np.round(30000 * 0.001))
-            spike_diff = np.concatenate((np.array([0]),np.diff(spiketimes)))
+            spike_diff = np.concatenate((np.array([0]),np.diff(timestamps)))
             tooclose_idx = spike_diff < tooclose
-            spiketimes = np.delete(spiketimes, np.where(tooclose_idx)[0])
-        if len(spiketimes) > 0:
-            # Using spiketimes create an array of indices (windows) to extract waveforms from LFP trace
+            timestamps = np.delete(timestamps, np.where(tooclose_idx)[0])
+        if len(timestamps) > 0:
+            # Using timestamps create an array of indices (windows) to extract waveforms from LFP trace
             # The following values are chosen to match OpenEphysGUI default window
             winsize_before = 6
             winsize_after = 34
-            spiketimes = np.expand_dims(spiketimes, 1)
+            timestamps = np.expand_dims(timestamps, 1)
             # Create windows for indexing all samples for a waveform
             windows = np.arange(winsize_before + winsize_after, dtype=np.int32) - winsize_before
-            windows = np.tile(windows, (spiketimes.size,1))
-            windows = windows + np.tile(spiketimes, (1,windows.shape[1]))
+            windows = np.tile(windows, (timestamps.size,1))
+            windows = windows + np.tile(timestamps, (1,windows.shape[1]))
             # Skip windows that are too close to edge of signal
             tooearly = windows < 0
             toolate = windows > (continuous.shape[1] - 1)
             idx_delete = np.any(np.logical_or(tooearly, toolate), axis=1)
             windows = np.delete(windows, np.where(idx_delete)[0], axis=0)
-            spiketimes = np.delete(spiketimes, np.where(idx_delete)[0], axis=0)
+            timestamps = np.delete(timestamps, np.where(idx_delete)[0], axis=0)
             # Create indexing for channels and spikes
             # windows and windows_channels shape must be  nspikes x nchan x windowsize
             windows = np.repeat(windows[:,:,np.newaxis], 4, axis=2)
@@ -101,7 +101,7 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, threshold=50):
             waveforms = continuous[windows_channels,windows]
             # Append data as dictionary to spike_data list
             spike_data.append({'waveforms': waveforms, 
-                               'timestamps': timestamps[spiketimes.squeeze()],
+                               'timestamps': timestamps[timestamps.squeeze()],
                                'nr_tetrode': nr_tetrode})
         else:
             spike_data.append({'waveforms': np.zeros((3, 40, 4), dtype=np.int16), 
@@ -113,7 +113,7 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, threshold=50):
 def applyKlustaKwik(waveform_data):
     hfunct.print_progress(0, len(waveform_data), prefix='Applying KlustaKwik:', suffix=' T: 0/' + str(len(waveform_data)), initiation=True)
     for ntet in range(len(waveform_data)):
-        if len(waveform_data[ntet]['spiketimes']) > 1:
+        if len(waveform_data[ntet]['timestamps']) > 1:
             # Create temporary processing folder
             KlustaKwikProcessingFolder = tempfile.mkdtemp('KlustaKwikProcessing')
             # Prepare input to KlustaKwik
@@ -134,7 +134,7 @@ def applyKlustaKwik(waveform_data):
             shutil.rmtree(KlustaKwikProcessingFolder)
         else:
             print('No spikes on tetrode ' + str(ntet + 1))
-            waveform_data[ntet]['clusterIDs'] = np.ones(waveform_data[ntet]['spiketimes'].shape, dtype=np.int16)
+            waveform_data[ntet]['clusterIDs'] = np.ones(waveform_data[ntet]['timestamps'].shape, dtype=np.int16)
         hfunct.print_progress(ntet + 1, len(waveform_data), prefix='Applying KlustaKwik:', suffix=' T: ' + str(ntet + 1) + '/' + str(len(waveform_data)))
 
     return waveform_data
@@ -213,14 +213,14 @@ def createWaveformDict(OpenEphysDataPath, UseChans=False, UseRaw=False, noise_cu
         if np.sum(idx_keep[ntet]) == 0:
             # If there are no spikes on a tetrode, create one zero spike 1 second after first position sample
             waveforms = NWBio.empty_spike_data()['waveforms']
-            spiketimes = NWBio.empty_spike_data()['timestamps']
+            timestamps = NWBio.empty_spike_data()['timestamps']
         else:
             waveforms = spike_data[ntet]['waveforms'][idx_keep[ntet],:40,:]
-            spiketimes = spike_data[ntet]['timestamps'][idx_keep[ntet]]
+            timestamps = spike_data[ntet]['timestamps'][idx_keep[ntet]]
         # Combine all information into dictionary
         waveform_data.append({'idx_keep': idx_keep[ntet], 
                               'waveforms': waveforms, 
-                              'spiketimes': spiketimes, 
+                              'timestamps': timestamps, 
                               'nr_tetrode': spike_data[ntet]['nr_tetrode']})
 
     return waveform_data
@@ -264,6 +264,14 @@ def get_badChan(OpenEphysDataPaths, UseChans=False):
 def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=500, threshold=50):
     if isinstance(OpenEphysDataPaths, basestring):
         OpenEphysDataPaths = [OpenEphysDataPaths]
+    # If directories entered as paths, attempt creating path to file by appending experiment_1.nwb
+    for ndata, OpenEphysDataPath in enumerate(OpenEphysDataPaths):
+        if not os.path.isfile(OpenEphysDataPath):
+            new_path = os.path.join(OpenEphysDataPath, 'experiment_1.nwb')
+            if os.path.isfile(new_path):
+                OpenEphysDataPaths[ndata] = new_path
+            else:
+                raise ValueError('The following path does not lead to a NWB data file:\n' + OpenEphysDataPath)
     # If use chans not specified, get channel list from Genera settgins Channel Map, if available
     if not UseChans and NWBio.check_if_settings_available(OpenEphysDataPaths[0],'/General/channel_map/'):
         if len(OpenEphysDataPaths) > 1:
@@ -300,15 +308,15 @@ def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=500, th
             for ntet in range(len(tmp_waveform_data)):
                 waveform_datas_comb[ntet]['waveforms'] = np.append(waveform_datas_comb[ntet]['waveforms'], 
                                                                    tmp_waveform_data[ntet]['waveforms'], axis=0)
-                waveform_datas_comb[ntet]['spiketimes'] = np.append(waveform_datas_comb[ntet]['spiketimes'], 
-                                                                    tmp_waveform_data[ntet]['spiketimes'], axis=0)   
+                waveform_datas_comb[ntet]['timestamps'] = np.append(waveform_datas_comb[ntet]['timestamps'], 
+                                                                    tmp_waveform_data[ntet]['timestamps'], axis=0)   
         # Apply KlustaKwik on the combined waveform_data
         waveform_datas_comb = applyKlustaKwik(waveform_datas_comb)
         # Extract clusters for each original waveform_data
         for ndata in range(len(waveform_datas)):
             for ntet in range(len(waveform_datas[ndata])):
                 # Get clusterIDs for this dataset and tetrode
-                nspikes = len(waveform_datas[ndata][ntet]['spiketimes'])
+                nspikes = len(waveform_datas[ndata][ntet]['timestamps'])
                 clusterIDs = waveform_datas_comb[ntet]['clusterIDs'][range(nspikes)]
                 waveform_datas[ndata][ntet]['clusterIDs'] = clusterIDs
                 # Remove these clusterIDs from the list

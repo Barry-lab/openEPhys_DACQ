@@ -6,19 +6,15 @@
 ### By Sander Tanni, April 2017, UCL
 
 import sys
-from PyQt4 import QtGui, QtCore
-import ntpath
 import os
 import numpy as np
-import cPickle as pickle
-import re
 import shutil
 from scipy import interpolate
-from scipy.spatial.distance import euclidean
 import subprocess
 import NWBio
 import HelperFunctions as hfunct
 from datetime import datetime
+import argparse
    
     
 def interpolate_waveforms(waves, nr_targetbins=50):
@@ -46,8 +42,8 @@ def create_DACQ_waveform_data(waveform_data, pos_edges):
     hfunct.print_progress(0, len(waveform_data), prefix = 'Converting Waveforms:', initiation=True)
     for ntet in range(len(waveform_data)):
         tet_waveform_data = waveform_data[ntet]
-        # Align spiketimes to beginning of position data
-        tet_waveform_data['spiketimes'] = tet_waveform_data['spiketimes'] - pos_edges[0]
+        # Align timestamps to beginning of position data
+        tet_waveform_data['timestamps'] = tet_waveform_data['timestamps'] - pos_edges[0]
         # Get waveforms
         waves = np.array(tet_waveform_data['waveforms'], dtype=np.float32)
         waves = -waves
@@ -81,7 +77,7 @@ def create_DACQ_waveform_data(waveform_data, pos_edges):
         tmp_waveform_data_dacq['waveform'][:,:waves.shape[1]] = waves
         # Arrange timestamps into a vector where timestamp for a spike is
         # repeated for each of the 4 channels
-        timestamps = np.array(tet_waveform_data['spiketimes'])
+        timestamps = np.array(tet_waveform_data['timestamps'])
         timestamps = np.ravel(np.repeat(np.reshape(timestamps, (len(timestamps), 1)), 4, axis=1),'C')
         # Convert OpenEphys timestamp sampling rate to DACQ sampling rate
         timestamps = timestamps * float(dacq_sampling_rate)
@@ -250,9 +246,15 @@ def header_templates(htype):
     
     
 def getExperimentInfo(fpath):
-    animal = NWBio.load_settings(fpath,'/General/animal/')
-    full_timestring = NWBio.load_settings(fpath,'/Time/')
-    timeobject = datetime.strptime(full_timestring, '%Y-%m-%d_%H-%M-%S')
+    if NWBio.check_if_settings_available(fpath,'/General/animal/'):
+        animal = NWBio.load_settings(fpath,'/General/animal/')
+    else:
+        animal = 'unknown'
+    if NWBio.check_if_settings_available(fpath,'/Time/'):
+        full_timestring = NWBio.load_settings(fpath,'/Time/')
+        timeobject = datetime.strptime(full_timestring, '%Y-%m-%d_%H-%M-%S')
+    else:
+        timeobject = datetime.now()
     datestring = timeobject.strftime('%d-%m-%y')
     timestring = timeobject.strftime('%H-%M-%S')
     experiment_info = {'trial_date': datestring, 
@@ -260,34 +262,6 @@ def getExperimentInfo(fpath):
                        'animal': animal}
     
     return experiment_info
-
-
-def get_speed_data(posfile):
-    pos_csv = np.genfromtxt(posfile, delimiter=',')
-    pos_timestamps = np.array(pos_csv[:,0], dtype=np.float32)
-    xy_pos = pos_csv[:,1:3]
-    # Compute distance travelled between each pos datapoint
-    distance = np.zeros(xy_pos.shape[0], dtype=np.float32)
-    for npos in range(xy_pos.shape[0] - 1):
-        distance[npos] = euclidean(xy_pos[npos,:], xy_pos[npos + 1,:])
-    # Compute total distance traveled in 1 second around each pos datapoint
-    winsize = float(1.0)
-    distance_sum = np.zeros(distance.shape, dtype=np.float32)
-    startpos = np.where(np.diff(pos_timestamps > (pos_timestamps[0] + (winsize / 2))))[0][0] + 1
-    endpos = np.where(np.diff(pos_timestamps < (pos_timestamps[-1] - (winsize / 2))))[0][0]
-    for npos in range(distance.size)[startpos:endpos]:
-        # Find beginning and end of window
-        pos_time = pos_timestamps[npos]
-        time_differences = np.abs(pos_timestamps - pos_time)
-        window_edges = np.where(np.diff(time_differences > winsize / 2))[0]
-        distance_sum[npos] = np.sum(distance[window_edges[0]:window_edges[1]])
-    distance_sum[:startpos] = distance_sum[startpos]
-    distance_sum[endpos:] = distance_sum[endpos - 1]
-    # Convert distance covered to speed cm/s
-    speed = distance_sum / winsize
-
-    return pos_timestamps, speed
-
 
 def createAxonaData(OpenEphysDataPath, waveform_data=None, subfolder='AxonaData', eegChan=1):
     if waveform_data is None:
@@ -437,94 +411,38 @@ def createAxonaData(OpenEphysDataPath, waveform_data=None, subfolder='AxonaData'
     # Opens recording folder with Ubuntu file browser
     subprocess.Popen(['xdg-open', AxonaDataPath])
         
-        
-class MainWindow(QtGui.QWidget):
-
-    def __init__(self):
-        # create GUI
-        QtGui.QMainWindow.__init__(self)
-        self.setWindowTitle('File picker')
-        # Set the window dimensions
-        self.resize(300,75)
-        # vertical layout for widgets
-        self.vbox = QtGui.QVBoxLayout()
-        self.setLayout(self.vbox)
-        # Create a label which displays the path to our chosen file
-        self.lbl = QtGui.QLabel('Select one of the waveform files of interest.\n' + \
-                                'All necessary files for Waveform GUI will be \n' + \
-                                'created and put into subdirectory WaveformGUI.')
-        self.vbox.addWidget(self.lbl)
-        # Create text box to display selected path
-        self.pt_fpath = QtGui.QPlainTextEdit()
-        self.pt_fpath.readOnly = True
-        self.vbox.addWidget(self.pt_fpath)
-        # Create a push button labelled 'choose' and add it to our layout
-        self.pb_choose_file = QtGui.QPushButton('Choose file on path', self)
-        self.vbox.addWidget(self.pb_choose_file)
-        # Connect the clicked signal to the get_fname handler
-        self.connect(self.pb_choose_file, QtCore.SIGNAL('clicked()'), self.get_fname)
-        # Add spin box for showing speed limit
-        self.spinbox = QtGui.QSpinBox()
-        self.spinbox.setPrefix('Speed cut: ')
-        self.spinbox.setSuffix(' cm/s')
-        self.vbox.addWidget(self.spinbox)
-        # Add button to display speed data
-        self.pb_display_speed = QtGui.QPushButton('Display speed data', self)
-        self.vbox.addWidget(self.pb_display_speed)
-        # Connect the clicked signal to the display speed plot function
-        self.connect(self.pb_display_speed, QtCore.SIGNAL('clicked()'), self.plot_speed)
-        # Create a push button labelled 'Create Data' and add it to our layout
-        self.pb_create_data = QtGui.QPushButton('Create Waveform GUI data', self)
-        self.vbox.addWidget(self.pb_create_data)
-        # Connect the clicked signal to the get_fname handler
-        self.connect(self.pb_create_data, QtCore.SIGNAL('clicked()'), self.create_data)
-
-
-    def get_fname(self):
-        # Pops up a GUI to select a single file. All others with same prefix will be loaded
-        dialog = QtGui.QFileDialog(self, caption='Select one from the set of waveform files in the recording folder')
-        dialog.setFileMode(QtGui.QFileDialog.ExistingFile)
-        dialog.setNameFilters(['(*.spikes.p)'])
-        dialog.setViewMode(QtGui.QFileDialog.List) # or Detail
-        if dialog.exec_():
-            # Get path and file name of selection
-            tmp = dialog.selectedFiles()
-            selected_file = str(tmp[0])
-            self.fpath = ntpath.dirname(selected_file)
-            self.pt_fpath.setPlainText(self.fpath)
-            f_s_name = str(ntpath.basename(selected_file))
-            # Check if file name is correct format
-            numstart = f_s_name.find('_CH') + 3
-            numend = f_s_name.find('.spikes.p')
-            if numstart == -1 or numend == -1:
-                print('Error: Unexpected file name')
-            else:
-                # Get prefix for this set of LFPs
-                fprefix = f_s_name[:f_s_name.index('_')]
-                # Get list of all other files and channel numbers from this recording
-                self.fileNames = []
-                for fname in os.listdir(self.fpath):
-                    if fname.startswith(fprefix) and fname.endswith('.spikes.p'):
-                        self.fileNames.append(fname[:-9])
-            self.fileNames = getAllFiles(self.fpath, self.fileNames)
-
-
-    def create_data(self):
-        createAxonaData(fpath=self.fpath, fileNames=self.fileNames)
-        app.instance().quit()
-
-
-    def plot_speed(self):
-        import pyqtgraph as pg
-        tracesPlot = pg.plot()
-        pos_timestamps, speed = get_speed_data(self.fpath + '/' + 'PosLogComb.csv')
-        tracesPlot.plot(pos_timestamps, speed)
-        pen = pg.mkPen('y', width=3, style=QtCore.Qt.DashLine)
-        
-
 # The following is the default ending for a QtGui application script
 if __name__ == "__main__":
-    app = QtGui.QApplication(sys.argv)
-    gui = MainWindow()
-    gui.show()
-    app.exec_()
+    # Input argument handling and help info
+    parser = argparse.ArgumentParser(description='Export data into Axona format.')
+    parser.add_argument('paths', type=str, nargs='*', 
+                        help='recording data folder(s) (can enter multiple paths separated by spaces to KlustaKwik simultaneously)')
+    parser.add_argument('--eegChan', type=int, nargs = 1, 
+                        help='enter channel number to use for creating EEG data')
+    parser.add_argument('--subfolder', type=str, nargs = 1, 
+                        help='enter the name of subfolder to use for AxonaData')
+    args = parser.parse_args()
+    # Get paths to recording files
+    OpenEphysDataPaths = args.paths
+    if isinstance(OpenEphysDataPaths, basestring):
+        OpenEphysDataPaths = [OpenEphysDataPaths]
+    # If directories entered as paths, attempt creating path to file by appending experiment_1.nwb
+    for ndata, OpenEphysDataPath in enumerate(OpenEphysDataPaths):
+        if not os.path.isfile(OpenEphysDataPath):
+            new_path = os.path.join(OpenEphysDataPath, 'experiment_1.nwb')
+            if os.path.isfile(new_path):
+                OpenEphysDataPaths[ndata] = new_path
+            else:
+                raise ValueError('The following path does not lead to a NWB data file:\n' + OpenEphysDataPath)
+    # Get optional arguemtn values
+    if args.eegChan:
+        eegChan = args.eegChan[0]
+    else:
+        eegChan = 1
+    if args.subfolder:
+        subfolder = args.subfolder[0]
+    else:
+        subfolder = 'AxonaData'
+    # Run main script
+    for OpenEphysDataPath in OpenEphysDataPaths:
+        createAxonaData(OpenEphysDataPath, subfolder=subfolder, eegChan=eegChan)

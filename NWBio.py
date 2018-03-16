@@ -83,7 +83,7 @@ def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=Fals
                     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
                            'electrode' + str(ntet + 1) + '/idx_keep'
                     if check_if_path_exists(filename, path):
-                        tet_data['idx_keep'] = h5file[path]
+                        tet_data['idx_keep'] = h5file[path].value
                         if use_idx_keep:
                             if np.sum(tet_data['idx_keep']) == 0:
                                 tet_data['waveforms'] = empty_spike_data()['waveforms']
@@ -95,7 +95,7 @@ def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=Fals
                     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
                            'electrode' + str(ntet + 1) + '/clusterIDs'
                     if check_if_path_exists(filename, path):
-                        tet_data['clusterIDs'] = h5file[path]
+                        tet_data['clusterIDs'] = h5file[path].value
                     # Set spikes to zeros for channels in badChan list
                     if use_badChan:
                         badChan = listBadChannels(filename)
@@ -303,7 +303,7 @@ def use_binary_pos(filename, postprocess=False):
     '''
     recordingKey = get_recordingKey(filename)
     # Load timestamps and position data
-    with h5py.File(filename, write_method) as h5file:
+    with h5py.File(filename, 'r+') as h5file:
         timestamps = np.array(h5file['acquisition']['timeseries'][recordingKey]['events']['binary1']['timestamps'])
         xy = np.array(h5file['acquisition']['timeseries'][recordingKey]['events']['binary1']['data'][:,:2])
     data = {'xy': xy, 'timestamps': timestamps}
@@ -323,13 +323,13 @@ def use_binary_pos(filename, postprocess=False):
         data['xy'] = data['xy'][keepPos,:]
         data['timestamps'] = data['timestamps'][keepPos]
     # Save data to ProcessedPos position with correct format
-    PosData = np.append(data['timestamps'][:,None], data['xy'].astype(np.float64), axis=1)
-    if PosData.shape[1] < 5:
+    TrackingData = np.append(data['timestamps'][:,None], data['xy'].astype(np.float64), axis=1)
+    if TrackingData.shape[1] < 5:
         # Add NaNs for second LED if missing
         nanarray = np.zeros(data['xy'].shape, dtype=np.float64)
         nanarray[:] = np.nan
-        PosData = np.append(PosData, nanarray, axis=1)
-    save_position_data(filename, PosData, ProcessedPos=True, ReProcess=False)
+        TrackingData = np.append(TrackingData, nanarray, axis=1)
+    save_tracking_data(filename, TrackingData, ProcessedPos=True, ReProcess=False)
 
 def save_tetrode_idx_keep(filename, ntet, idx_keep, overwrite=False):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
