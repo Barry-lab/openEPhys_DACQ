@@ -201,7 +201,7 @@ def createWaveformDict(OpenEphysDataPath, UseChans, UseRaw=False, noise_cut_off=
             if 'waveforms' in data.keys():
                 tetrodes_missing_in_spike_data.remove(data['nr_tetrode'])
     else:
-        spike_data = [] * len(tetrode_nrs)
+        spike_data = [{'nr_tetrode': nr_tetrode} for nr_tetrode in tetrode_nrs]
         tetrodes_missing_in_spike_data = tetrode_nrs
     if len(tetrodes_missing_in_spike_data) > 0:
         print('Extracting spikes from raw data for tetrodes: ' + str(tetrodes_missing_in_spike_data))
@@ -251,8 +251,6 @@ def make_UseChans_from_channel_map(channel_map):
         raise ValueError('Channel Map is discontinuous or overlapping between areas.')
     # Create UseChans that covers the whole range of channels
     UseChans = [channels[0], channels[-1] + 1]
-    print(UseChans)
-    error
 
     return UseChans
 
@@ -307,7 +305,7 @@ def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=500, th
                 NWBio.save_tracking_data(OpenEphysDataPath, ProcessedPos, ProcessedPos=True, ReProcess=False)
                 print('ProcessedPos saved to ' + OpenEphysDataPath)
             elif NWBio.check_if_binary_pos(OpenEphysDataPath):
-                NWBio.use_binary_pos(OpenEphysDataPath, postprocess=True)
+                NWBio.use_binary_pos(OpenEphysDataPath, postprocess=False)
                 print('Using binary position data')
     # Extract spikes for each tetrode in each recording into a dictonary
     waveform_datas = []
