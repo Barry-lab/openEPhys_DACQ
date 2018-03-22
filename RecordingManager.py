@@ -459,7 +459,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             if not self.Settings['General']['Tracking']:
                 show_message('Tracking must be active for task to work')
                 raise ValueError('Tracking must be active for task to work')
-        # Initialize task
+        # Initialize tracking
         if self.Settings['General']['Tracking']:
             # Connect to tracking RPis
             print('Connecting to tracking RPis...')

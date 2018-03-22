@@ -64,10 +64,14 @@ def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=Fals
             keyorder = list(np.argsort(np.array(tetrode_keys_int)))
             tetrode_keys = [tetrode_keys[i] for i in keyorder]
             tetrode_keys_int = [tetrode_keys_int[i] for i in keyorder]
+            if tetrode_nrs is None:
+                tetrode_nrs = tetrode_keys_int
             # Put waveforms and timestamps into a list of dictionaries in correct order
             data = []
-            for ntet in range(len(tetrode_keys)):
-                if tetrode_nrs is None or tetrode_keys_int[ntet] in tetrode_nrs:
+            for nr_tetrode in tetrode_nrs:
+                if nr_tetrode in tetrode_keys_int:
+                    # If data is available for this tetrode
+                    ntet = tetrode_keys_int.index(nr_tetrode)
                     waveforms = h5file['/acquisition/timeseries/' + recordingKey + '/spikes/' + \
                                        tetrode_keys[ntet] + '/data/'].value
                     timestamps = h5file['/acquisition/timeseries/' + recordingKey + '/spikes/' + \
@@ -78,10 +82,10 @@ def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=Fals
                         timestamps = empty_spike_data()['timestamps']
                     tet_data = {'waveforms': waveforms, 
                                 'timestamps': timestamps, 
-                                'nr_tetrode': tetrode_keys_int[ntet]}
+                                'nr_tetrode': nr_tetrode}
                     # Include idx_keep if available
                     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
-                           'electrode' + str(ntet + 1) + '/idx_keep'
+                           tetrode_keys[ntet] + '/idx_keep'
                     if check_if_path_exists(filename, path):
                         tet_data['idx_keep'] = h5file[path].value
                         if use_idx_keep:
@@ -93,17 +97,19 @@ def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=Fals
                                 tet_data['timestamps'] = tet_data['timestamps'][tet_data['idx_keep']]
                     # Include clusterIDs if available
                     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
-                           'electrode' + str(ntet + 1) + '/clusterIDs'
+                           tetrode_keys[ntet] + '/clusterIDs'
                     if check_if_path_exists(filename, path):
                         tet_data['clusterIDs'] = h5file[path].value
                     # Set spikes to zeros for channels in badChan list
                     if use_badChan:
                         badChan = listBadChannels(filename)
                         if len(badChan) > 0:
-                            for nchan in tetrode_channels(tetrode_keys_int[ntet]):
+                            for nchan in tetrode_channels(nr_tetrode):
                                 if nchan in badChan:
                                     tet_data['waveforms'][:,:,np.mod(nchan,4)] = 0
                     data.append(tet_data)
+                else:
+                    data.append({'nr_tetrode': nr_tetrode})
         else:
             data = []
         

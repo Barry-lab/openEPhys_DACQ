@@ -10,7 +10,7 @@ import tempfile
 import shutil
 import copy
 
-def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, threshold=50):
+def extract_spikes_from_raw_data(NWBfilePath, UseChans, tetrode_nrs=None, threshold=50):
     '''
     This function mimicks the OpenEphysGUI spike extraction
     Common Average Referencing -> Bandpass Filter -> Thresholding
@@ -21,21 +21,23 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, threshold=50):
                        'nr_tetrode' - the number of extracted tetrode from whole dataset
                                       this corrects for UseChans
     '''
+    # Only extract data based on requested tetrodes
+    if tetrode_nrs is None:
+        tetrode_nrs = get_tetrode_nrs(UseChans)
     # Load data
     print('Loading NWB data for extracting spikes')
     data = NWBio.load_continuous(NWBfilePath)
+    chan_nrs = list(np.arange(data['continuous'].shape[1])[UseChans[0]:UseChans[1]])
     timestamps = np.array(data['timestamps'])
-    if UseChans:
-        continuous = np.array(data['continuous'][:, UseChans[0]:UseChans[1]])
-    else:
-        continuous = np.array(data['continuous'])
+    continuous = np.array(data['continuous'][:, UseChans[0]:UseChans[1]])
     continuous = np.transpose(continuous)
     # Create and edit good channels list according to bad channels list
-    goodChan = np.arange(continuous.shape[0])
-    badChan = get_badChan(NWBfilePath, UseChans=UseChans)
+    badChan = NWBio.listBadChannels(NWBfilePath)
+    goodChan = range(len(chan_nrs))
     if badChan:
-        for nchan in badChan:
-            goodChan = goodChan[goodChan != nchan]
+        for nchan in goodChan:
+            if chan_nrs[nchan] in badChan:
+                goodChan.delete(nchan)
     # Remove the mean of the signal from all channels
     print('Common average referencing all channels.\n' + \
           'Make sure only data on a single drive is selected.')
@@ -44,64 +46,62 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans=False, threshold=50):
     continuous = continuous - np.repeat(continuous_mean, continuous.shape[0], axis=0)
     # Set bad channels to 0
     if badChan:
-        continuous[badChan,:] = np.int16(0)
+        for nchanBad in badChan:
+            nchan = chan_nrs.index(nchanBad)
+        continuous[nchan,:] = np.int16(0)
     # Filter each channel
-    hfunct.print_progress(0, goodChan.size, prefix = 'Filtering raw data:', initiation=True)
-    for nchan in range(goodChan.size):
-        signal_in = np.float64(continuous[goodChan[nchan],:])
+    chanToFilter = [nchan for nchan in goodChan if hfunct.channels_tetrode(chan_nrs[nchan]) in tetrode_nrs]
+    hfunct.print_progress(0, len(chanToFilter), prefix = 'Filtering raw data:', initiation=True)
+    for nchan in range(len(chanToFilter)):
+        signal_in = np.float64(continuous[chanToFilter[nchan],:])
         signal_out = hfunct.butter_bandpass_filter(signal_in)
-        continuous[goodChan[nchan],:] = np.int16(signal_out)
-        hfunct.print_progress(nchan + 1, goodChan.size, prefix = 'Filtering raw data:')
-    n_tetrodes = continuous.shape[0] / 4
+        continuous[chanToFilter[nchan],:] = np.int16(signal_out)
+        hfunct.print_progress(nchan + 1, len(chanToFilter), prefix = 'Filtering raw data:')
     # Find threshold crossings on each tetrode
     threshold_int16 = np.int16(np.round(threshold / 0.195))
     spike_data = []
-    for ntet in range(n_tetrodes):
-        # Get tetrode number right
-        if UseChans:
-            nr_tetrode = ntet + hfunct.channels_tetrode(UseChans[0])
-        else:
-            nr_tetrode = ntet
+    for nr_tetrode in tetrode_nrs:
         # Find threshold crossings for each channel
-        timestamps = np.array([], dtype=np.int64)
-        for nchan in hfunct.tetrode_channels(ntet):
-            tmp = continuous[nchan,:] < -threshold_int16
-            timestamps = np.append(timestamps, np.where(tmp)[0])
-        if len(timestamps) > 0: 
-            timestamps = np.sort(timestamps)
+        spike_indices = np.array([], dtype=np.int64)
+        for chan_nr in hfunct.tetrode_channels(nr_tetrode):
+            tmp = continuous[chan_nrs.index(chan_nr),:] < -threshold_int16
+            spike_indices = np.append(spike_indices, np.where(tmp)[0])
+        if len(spike_indices) > 0: 
+            spike_indices = np.sort(spike_indices)
         # Remove duplicates based on temporal proximity
-        if len(timestamps) > 0:
+        if len(spike_indices) > 0:
             tooclose = np.int64(np.round(30000 * 0.001))
-            spike_diff = np.concatenate((np.array([0]),np.diff(timestamps)))
+            spike_diff = np.concatenate((np.array([0]),np.diff(spike_indices)))
             tooclose_idx = spike_diff < tooclose
-            timestamps = np.delete(timestamps, np.where(tooclose_idx)[0])
-        if len(timestamps) > 0:
-            # Using timestamps create an array of indices (windows) to extract waveforms from LFP trace
+            spike_indices = np.delete(spike_indices, np.where(tooclose_idx)[0])
+        if len(spike_indices) > 0:
+            # Using spike_indices create an array of indices (windows) to extract waveforms from LFP trace
             # The following values are chosen to match OpenEphysGUI default window
             winsize_before = 6
             winsize_after = 34
-            timestamps = np.expand_dims(timestamps, 1)
+            spike_indices = np.expand_dims(spike_indices, 1)
             # Create windows for indexing all samples for a waveform
             windows = np.arange(winsize_before + winsize_after, dtype=np.int32) - winsize_before
-            windows = np.tile(windows, (timestamps.size,1))
-            windows = windows + np.tile(timestamps, (1,windows.shape[1]))
+            windows = np.tile(windows, (spike_indices.size,1))
+            windows = windows + np.tile(spike_indices, (1,windows.shape[1]))
             # Skip windows that are too close to edge of signal
             tooearly = windows < 0
             toolate = windows > (continuous.shape[1] - 1)
             idx_delete = np.any(np.logical_or(tooearly, toolate), axis=1)
             windows = np.delete(windows, np.where(idx_delete)[0], axis=0)
-            timestamps = np.delete(timestamps, np.where(idx_delete)[0], axis=0)
+            spike_indices = np.delete(spike_indices, np.where(idx_delete)[0], axis=0)
             # Create indexing for channels and spikes
             # windows and windows_channels shape must be  nspikes x nchan x windowsize
             windows = np.repeat(windows[:,:,np.newaxis], 4, axis=2)
             windows = np.swapaxes(windows,1,2)
-            windows_channels = np.array(hfunct.tetrode_channels(ntet))
+            windows_channels = [chan_nrs.index(nchan) for nchan in hfunct.tetrode_channels(nr_tetrode)]
+            windows_channels = np.array(windows_channels)
             windows_channels = np.tile(windows_channels[np.newaxis,:,np.newaxis], 
                                        (windows.shape[0], 1, windows.shape[2]))
             waveforms = continuous[windows_channels,windows]
             # Append data as dictionary to spike_data list
             spike_data.append({'waveforms': waveforms, 
-                               'timestamps': timestamps[timestamps.squeeze()],
+                               'timestamps': timestamps[spike_indices.squeeze()],
                                'nr_tetrode': nr_tetrode})
         else:
             spike_data.append({'waveforms': np.zeros((3, 40, 4), dtype=np.int16), 
@@ -177,28 +177,44 @@ def filter_spike_data(spike_data, pos_edges, threshold, noise_cut_off):
 
     return idx_keep
 
-def createWaveformDict(OpenEphysDataPath, UseChans=False, UseRaw=False, noise_cut_off=500, threshold=50):
+def get_tetrode_nrs(UseChans):
+    firstTet = hfunct.channels_tetrode(UseChans[0])
+    lastTet = hfunct.channels_tetrode(UseChans[1])
+    tetrode_nrs = list(np.arange(lastTet - firstTet, dtype=np.int16) + int(firstTet))
+
+    return tetrode_nrs
+
+def createWaveformDict(OpenEphysDataPath, UseChans, UseRaw=False, noise_cut_off=500, threshold=50):
     '''
     This function organises NWB data into dictonaries
     '''
+    # Limit analysis to specific tetrodes channels
+    tetrode_nrs = get_tetrode_nrs(UseChans)
     # Get thresholded spike data for each tetrode
-    print('Loading spikes')
-    spike_data = NWBio.load_spikes(OpenEphysDataPath, use_badChan=True)
-    useTet = np.arange(len(spike_data), dtype=np.int16)
+    if not UseRaw:
+        print('Loading spikes')
+        spike_data = NWBio.load_spikes(OpenEphysDataPath, tetrode_nrs=tetrode_nrs, use_badChan=True)
     if len(spike_data) > 0 and not UseRaw:
-        # Limit analysis to specific tetrodes if channels are specified
-        if UseChans:
-            firstTet = hfunct.channels_tetrode(UseChans[0])
-            lastTet = hfunct.channels_tetrode(UseChans[1] - 1)
-            spike_data = spike_data[firstTet:lastTet + 1]
-            useTet = np.arange(lastTet - firstTet, dtype=np.int16) + int(firstTet)
+        # Check which tetrodes have data missing in the recording
+        tetrodes_missing_in_spike_data = tetrode_nrs
+        for data in spike_data:
+            if 'waveforms' in data.keys():
+                tetrodes_missing_in_spike_data.remove(data['nr_tetrode'])
     else:
-        print('Extracting spikes from raw data.')
-        spike_data = extract_spikes_from_raw_data(OpenEphysDataPath, UseChans, threshold)
+        spike_data = [] * len(tetrode_nrs)
+        tetrodes_missing_in_spike_data = tetrode_nrs
+    if len(tetrodes_missing_in_spike_data) > 0:
+        print('Extracting spikes from raw data for tetrodes: ' + str(tetrodes_missing_in_spike_data))
+        extracted_spike_data = extract_spikes_from_raw_data(OpenEphysDataPath, UseChans, 
+                                                            tetrode_nrs=tetrodes_missing_in_spike_data, 
+                                                            threshold=threshold)
+        # Combine extracted spike data to list of tetrode spike datas
+        for data in extracted_spike_data:
+            spike_data[tetrode_nrs.index(data['nr_tetrode'])] = data
         # Save extracted spikes in recording file
-        for ntet in range(len(spike_data)):
-            NWBio.save_spikes(OpenEphysDataPath, spike_data[ntet]['nr_tetrode'], 
-                              spike_data[ntet]['waveforms'], spike_data[ntet]['timestamps'])
+        for data in extracted_spike_data:
+            NWBio.save_spikes(OpenEphysDataPath, data['nr_tetrode'], 
+                              data['waveforms'], data['timestamps'])
         print('Spikes saved to ' + OpenEphysDataPath)
     # Find eligible spikes on all tetrodes
     pos_edges = NWBio.get_processed_tracking_data_timestamp_edges(OpenEphysDataPath)
@@ -235,10 +251,12 @@ def make_UseChans_from_channel_map(channel_map):
         raise ValueError('Channel Map is discontinuous or overlapping between areas.')
     # Create UseChans that covers the whole range of channels
     UseChans = [channels[0], channels[-1] + 1]
+    print(UseChans)
+    error
 
     return UseChans
 
-def get_badChan(OpenEphysDataPaths, UseChans=False):
+def get_badChan(OpenEphysDataPaths, UseChans):
     if isinstance(OpenEphysDataPaths, basestring):
         OpenEphysDataPaths = [OpenEphysDataPaths]
     # Get bad channels for all datasets
@@ -251,13 +269,12 @@ def get_badChan(OpenEphysDataPaths, UseChans=False):
     # Then use the common badChan list
     badChan = badChans[0]
     print('Ignoring bad channels: ' + str(list(np.array(badChan) + 1)))
-    if UseChans:
-        # Convert bad channel number for later use depending on used channels
-        badChan = np.array(badChan)
-        badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
-        badChan = badChan - np.array(UseChans[0], dtype=np.int16)
-        badChan = badChan[badChan < UseChans[1] - UseChans[0]]
-        badChan = list(badChan)
+    # Convert bad channel number for later use depending on used channels
+    badChan = np.array(badChan)
+    badChan = badChan[badChan >= np.array(UseChans[0], dtype=np.int16)]
+    badChan = badChan - np.array(UseChans[0], dtype=np.int16)
+    badChan = badChan[badChan < UseChans[1] - UseChans[0]]
+    badChan = list(badChan)
 
     return badChan
 
@@ -273,11 +290,14 @@ def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=500, th
             else:
                 raise ValueError('The following path does not lead to a NWB data file:\n' + OpenEphysDataPath)
     # If use chans not specified, get channel list from Genera settgins Channel Map, if available
-    if not UseChans and NWBio.check_if_settings_available(OpenEphysDataPaths[0],'/General/channel_map/'):
-        if len(OpenEphysDataPaths) > 1:
-            print('Using Channel Map from the first dataset on the list.')
-        channel_map = NWBio.load_settings(OpenEphysDataPaths[0],'/General/channel_map/')
-        UseChans = make_UseChans_from_channel_map(channel_map)
+    if not UseChans:
+        if NWBio.check_if_settings_available(OpenEphysDataPaths[0],'/General/channel_map/'):
+            if len(OpenEphysDataPaths) > 1:
+                print('Using Channel Map from the first dataset on the list.')
+            channel_map = NWBio.load_settings(OpenEphysDataPaths[0],'/General/channel_map/')
+            UseChans = make_UseChans_from_channel_map(channel_map)
+        else:
+            raise ValueError('Must specify channels to be used in channel map or function call.')
     # Create ProcessedPos if any raw tracking data available
     for OpenEphysDataPath in OpenEphysDataPaths:
         if not NWBio.check_if_processed_position_data_available(OpenEphysDataPath):
@@ -287,13 +307,13 @@ def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=500, th
                 NWBio.save_tracking_data(OpenEphysDataPath, ProcessedPos, ProcessedPos=True, ReProcess=False)
                 print('ProcessedPos saved to ' + OpenEphysDataPath)
             elif NWBio.check_if_binary_pos(OpenEphysDataPath):
-                NWBio.use_binary_pos(OpenEphysDataPath, postprocess=False)
+                NWBio.use_binary_pos(OpenEphysDataPath, postprocess=True)
                 print('Using binary position data')
     # Extract spikes for each tetrode in each recording into a dictonary
     waveform_datas = []
     for OpenEphysDataPath in OpenEphysDataPaths:
         print('Extracting spikes from: ' + OpenEphysDataPath)
-        waveform_data = createWaveformDict(OpenEphysDataPath, UseChans=UseChans, UseRaw=UseRaw, 
+        waveform_data = createWaveformDict(OpenEphysDataPath, UseChans, UseRaw=UseRaw, 
                                            noise_cut_off=noise_cut_off, threshold=threshold)
         # Add this dictonary to list of all dictionaries
         waveform_datas.append(waveform_data)
