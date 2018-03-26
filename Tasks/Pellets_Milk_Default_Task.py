@@ -8,6 +8,7 @@ import time
 from scipy.spatial.distance import euclidean
 import random
 from PyQt4 import QtGui, QtCore
+from copy import deepcopy
 
 def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
     feeder = RewardControl(FEEDER_type, str(RPiIPBox.text()), 
@@ -484,7 +485,8 @@ class Core(object):
         self.TaskSettings['MilkTrialMinSeparation'] = new_val
 
     def releaseReward(self, FEEDER_type, ID, action='undefined', quantity=1):
-        self.TaskSettings['FEEDERs'][FEEDER_type][ID]['actuator'].release(quantity)
+        # self.TaskSettings['FEEDERs'][FEEDER_type][ID]['actuator'].release(quantity)
+        print('Release Pellet ID: ' + str(ID))
         # Send message to Open Ephys GUI
         OEmessage = 'Reward ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
         self.TaskIO['MessageToOE'](OEmessage)
@@ -714,7 +716,63 @@ class Core(object):
             pygame.draw.rect(self.screen, color, position, 0)
 
     def choose_pellet_feeder(self):
-        n_feeder = random.randint(0, len(self.activePfeeders) - 1)
+        '''
+        Uses relative mean occupancy in bins closest to each feeder
+        to increase probability of selecting feeder with lower mean occupancy.
+        '''
+        # Get list of FEEDER locations
+        N_feeders = len(self.activePfeeders)
+        FEEDER_Locs = []
+        for ID in self.activePfeeders:
+            FEEDER_Locs.append(np.array(self.TaskSettings['FEEDERs']['pellet'][ID]['Position'], dtype=np.float32))
+        # Get occupancy information from RPIPos class
+        with self.TaskIO['RPIPos'].histogramLock:
+            histparam = deepcopy(self.TaskIO['RPIPos'].HistogramParameters)
+            histmap = deepcopy(self.TaskIO['RPIPos'].positionHistogram)
+            histXedges = deepcopy(self.TaskIO['RPIPos'].positionHistogramEdges['x'])
+            histYedges = deepcopy(self.TaskIO['RPIPos'].positionHistogramEdges['y'])
+        # Only recompute histogram bin bindings to feeders if histogram parameters have been updated
+        calc_valid = hasattr(self, 'old_PelletHistogramParameters') and self.old_PelletHistogramParameters == histparam
+        if not calc_valid:
+            self.old_PelletHistogramParameters = histparam
+            self.histogramPfeederMap = {}
+            # Convert histogram edges to bin centers
+            histXbin = (histXedges[1:] + histXedges[:-1]) / 2
+            histYbin = (histYedges[1:] + histYedges[:-1]) / 2
+            # Crop data to only include parts inside the arena boundaries
+            arena_size = self.TaskSettings['arena_size']
+            idx_X = np.logical_and(0 < histXbin, histXbin < arena_size[0])
+            idx_Y = np.logical_and(0 < histYbin, histYbin < arena_size[1])
+            histXbin = histXbin[idx_X]
+            histYbin = histYbin[idx_Y]
+            self.histogramPfeederMap['idx_crop_X'] = np.repeat(np.where(idx_X)[0][None, :], 
+                                                                  histYbin.size, axis=0)
+            self.histogramPfeederMap['idx_crop_Y'] = np.repeat(np.where(idx_Y)[0][:, None], 
+                                                                  histXbin.size, axis=1)
+            # Find closest feeder for each spatial bin
+            histFeeder = np.zeros((histYbin.size, histXbin.size), dtype=np.int16)
+            for xpos in range(histXbin.size):
+                for ypos in range(histYbin.size):
+                    pos = np.array([histXbin[xpos], histYbin[ypos]], dtype=np.float32)
+                    dists = np.zeros(N_feeders, dtype=np.float32)
+                    for n_feeder in range(N_feeders):
+                        dists[n_feeder] = np.linalg.norm(FEEDER_Locs[n_feeder] - pos)
+                    histFeeder[ypos, xpos] = np.argmin(dists)
+            self.histogramPfeederMap['feeder_map'] = histFeeder
+        # Crop histogram to relavant parts
+        histmap = histmap[self.histogramPfeederMap['idx_crop_Y'], self.histogramPfeederMap['idx_crop_X']]
+        # Find mean occupancy in bins nearest to each feeder
+        feeder_bin_occupancy = np.zeros(N_feeders, dtype=np.float64)
+        for n_feeder in range(N_feeders):
+            bin_occupancies = histmap[self.histogramPfeederMap['feeder_map'] == n_feeder]
+            feeder_bin_occupancy[n_feeder] = np.mean(bin_occupancies)
+        # Choose feeder with weighted randomness if any parts occupied
+        if np.any(feeder_bin_occupancy > 0):
+            feederOccupancyWeights = (np.sum(feeder_bin_occupancy) - feeder_bin_occupancy) ** 2
+            feederProbability = feederOccupancyWeights / np.sum(feederOccupancyWeights)
+            n_feeder = np.random.choice(N_feeders, p=feederProbability)
+        else:
+            n_feeder = np.random.choice(N_feeders)
         ID = self.activePfeeders[n_feeder]
 
         return ID

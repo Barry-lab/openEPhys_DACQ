@@ -219,9 +219,10 @@ def list_general_settings_history(path):
     filetimes = []
     filenames = []
     for item in dir_items:
-        filename = os.path.join(path, item)
-        filenames.append(filename)
-        filetimes.append(datetime.strptime(item[:19],'%Y-%m-%d_%H-%M-%S'))
+        if item.endswith('.settings.nwb'):
+            filename = os.path.join(path, item)
+            filenames.append(filename)
+            filetimes.append(datetime.strptime(item[:19],'%Y-%m-%d_%H-%M-%S'))
     # Sort filenames based on filetimes
     filenames = [x for _,x in sorted(zip(filetimes, filenames))][::-1]
     # Load all general settings to memory and build a list of keys
@@ -471,7 +472,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             histogramParameters = {'margins': 10, # histogram data margins in centimeters
                                    'binSize': 2, # histogram binSize in centimeters
                                    'speedLimit': 10}# centimeters of distance in last second to be included
-            self.RPIpos = rpiI.onlineTrackingData(self.Settings['TrackingSettings'], HistogramParameters=histogramParameters, SynthData=False)
+            self.RPIpos = rpiI.onlineTrackingData(self.Settings['TrackingSettings'], HistogramParameters=deepcopy(histogramParameters), SynthData=False)
             print('Initializing Online Tracking Data Successful')
         # Initialize listening to Open Ephys GUI messages
         print('Connecting to Open Ephys GUI via ZMQ...')
@@ -524,7 +525,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Start cumulative plot
         if self.Settings['General']['Tracking']:
             print('Starting Position Plot...')
-            self.PosPlot = PosPlot(self.Settings['TrackingSettings'], self.RPIpos, histogramParameters)
+            self.PosPlot = PosPlot(self.Settings['TrackingSettings'], self.RPIpos, deepcopy(histogramParameters))
             print('Starting Position Plot Successful')
 
     def stop_rec(self):# Stop Task

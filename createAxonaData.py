@@ -15,8 +15,8 @@ import NWBio
 import HelperFunctions as hfunct
 from datetime import datetime
 import argparse
-   
-    
+
+
 def interpolate_waveforms(waves, nr_targetbins=50):
     # Waveforms are interpolated to 50 Hz, assuming the original waveforms were 1000 ms long
     original_bins = np.linspace(0, 1, num=waves.shape[1], dtype=np.float32)
@@ -26,10 +26,10 @@ def interpolate_waveforms(waves, nr_targetbins=50):
         # Interpolate each waveform
         interfunct = interpolate.interp1d(original_bins, waves[nwave,:])
         new_waves[nwave,:] = interfunct(target_bins)
-        
+
     return new_waves
-    
-    
+
+
 def create_DACQ_waveform_data(waveform_data, pos_edges):
     # Create DACQ data tetrode format
     waveform_data_dacq = []
@@ -86,10 +86,10 @@ def create_DACQ_waveform_data(waveform_data, pos_edges):
         tmp_waveform_data_dacq['ts'] = timestamps_dacq
         waveform_data_dacq.append(tmp_waveform_data_dacq)
         hfunct.print_progress(ntet + 1, len(waveform_data), prefix = 'Converting Waveforms:')
-        
+
     return waveform_data_dacq
-    
-    
+
+
 def create_DACQ_pos_data(OpenEphysDataPath):
     posdata = NWBio.load_tracking_data(OpenEphysDataPath, subset='ProcessedPos')
     xy_pos = posdata[:,1:5].astype(np.float32)
@@ -128,7 +128,7 @@ def create_DACQ_pos_data(OpenEphysDataPath):
     # Input timestamps and pos_xy to DACQ array
     pos_data_dacq['ts'] = countstamps
     pos_data_dacq['pos'] = xy_pos
-    
+
     return pos_data_dacq
 
 
@@ -172,7 +172,7 @@ def header_templates(htype):
               'duration', 'sw_version', 'num_chans', 'timebase', \
               'bytes_per_timestamp', 'samples_per_spike', 'sample_rate', \
               'bytes_per_sample', 'spike_format', 'num_spikes']
-            
+
         header = {'trial_date': 'Thursday, 3 Mar 2016', 
                   'trial_time': '11:28:24', 
                   'experimenter': 'ST', 
@@ -197,7 +197,7 @@ def header_templates(htype):
               'bearing_colour_2', 'bearing_colour_3', 'bearing_colour_4', \
               'pos_format', 'bytes_per_coord', 'pixels_per_metre', \
               'num_pos_samples']
-            
+
         header = {'trial_date': 'Thursday, 3 Mar 2016', 
                   'trial_time': '11:28:24', 
                   'experimenter': 'ST', 
@@ -243,8 +243,8 @@ def header_templates(htype):
                   'num_EEG_samples': '300250'}
                   
     return header, keyorder
-    
-    
+
+
 def getExperimentInfo(fpath):
     if NWBio.check_if_settings_available(fpath,'/General/animal/'):
         animal = NWBio.load_settings(fpath,'/General/animal/')
@@ -410,7 +410,7 @@ def createAxonaData(OpenEphysDataPath, waveform_data=None, subfolder='AxonaData'
         file.writelines(lines)
     # Opens recording folder with Ubuntu file browser
     subprocess.Popen(['xdg-open', AxonaDataPath])
-        
+
 # The following is the default ending for a QtGui application script
 if __name__ == "__main__":
     # Input argument handling and help info

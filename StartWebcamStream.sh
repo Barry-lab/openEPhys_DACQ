@@ -39,16 +39,16 @@ v4l2-ctl -d /dev/video1 --set-ctrl=focus_auto=0
 v4l2-ctl -d /dev/video1 --set-ctrl=focus_absolute=0
 v4l2-ctl -d /dev/video1 --set-ctrl=zoom_absolute=100
 
-# If entered a, display the window side camera
+# If entered a, display webcam from /dev/video0
 if [ $1 = "a" ]
 then
     cvlc --no-audio v4l2:///dev/video0:width=640:height=360 --v4l2-chroma MJPG  --sout '#standard{access=http,mux=mpjpeg,host=128.40.57.144,dst=:8554/}'
 fi
 
-# If entered b, display the door side camera
+# If entered b, display webcam from /dev/video1
 if [ $1 = "b" ]
 then
-    cvlc --no-audio v4l2:///dev/video1:width=640:height=360 --v4l2-chroma MJPG  --sout '#standard{access=http,mux=mpjpeg,host=128.40.57.144,dst=:8554/}'
+    cvlc --no-audio v4l2:///dev/video1:width=640:height=360 --v4l2-chroma MJPG  --sout '#standard{access=http,mux=mpjpeg,host=128.40.57.144,dst=:8555/}'
 fi
 
 # If entered ab, display both cameras
