@@ -485,8 +485,7 @@ class Core(object):
         self.TaskSettings['MilkTrialMinSeparation'] = new_val
 
     def releaseReward(self, FEEDER_type, ID, action='undefined', quantity=1):
-        # self.TaskSettings['FEEDERs'][FEEDER_type][ID]['actuator'].release(quantity)
-        print('Release Pellet ID: ' + str(ID))
+        self.TaskSettings['FEEDERs'][FEEDER_type][ID]['actuator'].release(quantity)
         # Send message to Open Ephys GUI
         OEmessage = 'Reward ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
         self.TaskIO['MessageToOE'](OEmessage)
