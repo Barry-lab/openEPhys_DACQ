@@ -10,6 +10,7 @@ from RPi import GPIO
 import time
 import sys
 import threading
+from ZMQcomms import sendMessagesPAIR
 
 GPIO.setmode(GPIO.BOARD) # Use board numbering for TTL pin
 
@@ -102,3 +103,8 @@ for n_pellet  in range(n_pellets):
         pellet_checker.close()
 # Stop signalling to the servo
 sc.close()
+
+# Send message that action was completed
+publisher = sendMessagesPAIR()
+publisher.sendMessage('successful')
+publisher.close()

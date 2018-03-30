@@ -65,11 +65,11 @@ Now update the RPi with terminal commands:
 
 Install OpenCV using the ``install-opencv.sh`` script. Right click on ``install-opencv.sh`` and select Properties. Open Permissions tab and make sure all three Access Control settings (View content, Change content, Exectue) are set to Anyone. Click OK to close the window. Now run the script using terminal command ``./install-opencv.sh``.
 
-To install use the following terminal commands, as copied from https://github.com/MonsieurV/ZeroMQ-RPi
+To install ZeroMQ use the following terminal commands, as copied from https://github.com/MonsieurV/ZeroMQ-RPi
 
 .. code-block:: none
 
-	sudo apt-get install libtool pkg-config build-essential autoconf automake
+	sudo apt-get install libtool pkg-config build-essential autoconf automake python-pip
 	wget https://github.com/jedisct1/libsodium/releases/download/1.0.3/libsodium-1.0.3.tar.gz
 	tar -zxvf libsodium-1.0.3.tar.gz
 	cd libsodium-1.0.3/
@@ -82,11 +82,11 @@ To install use the following terminal commands, as copied from https://github.co
 	cd zeromq-4.1.3/
 	./configure
 	make
-	cd ~/
 	sudo make install
 	sudo ldconfig
 	sudo apt-get install python-dev
 	sudo pip install pyzmq
+	cd ~/
 
 Install packages necessary to run the tracking and calibration scripts
 

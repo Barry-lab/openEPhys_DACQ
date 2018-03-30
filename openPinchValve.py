@@ -12,6 +12,7 @@
 import sys
 import piconzero as pz
 from time import sleep
+from ZMQcomms import sendMessagesPAIR
 
 if len(sys.argv) != 2:
     print('Incorrect input.')
@@ -22,3 +23,8 @@ else:
     sleep(duration)
     pz.setMotor(1,0)
     pz.cleanup()
+
+# Send message that action was completed
+publisher = sendMessagesPAIR()
+publisher.sendMessage('successful')
+publisher.close()

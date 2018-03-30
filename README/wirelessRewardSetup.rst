@@ -63,6 +63,29 @@ To update the RPi Zero software with the following terminal commands:
 	sudo apt-get upgrade       # Strictly upgrades the current packages
 	sudo apt-get dist-upgrade  # Installs updates (new ones)
 
+To install ZeroMQ use the following terminal commands, as copied from https://github.com/MonsieurV/ZeroMQ-RPi
+
+.. code-block:: none
+
+	sudo apt-get install libtool pkg-config build-essential autoconf automake python-pip
+	wget https://github.com/jedisct1/libsodium/releases/download/1.0.3/libsodium-1.0.3.tar.gz
+	tar -zxvf libsodium-1.0.3.tar.gz
+	cd libsodium-1.0.3/
+	./configure
+	make
+	sudo make install
+	cd ~/
+	wget http://download.zeromq.org/zeromq-4.1.3.tar.gz
+	tar -zxvf zeromq-4.1.3.tar.gz
+	cd zeromq-4.1.3/
+	./configure
+	make
+	sudo make install
+	sudo ldconfig
+	sudo apt-get install python-dev
+	sudo pip install pyzmq
+	cd ~/
+
 I2C module needs to be enabled in RPi settings for use of Picon Zero in the Milk FEEDER. You can do this by accessing RPi settings via terminal command ``sudo raspi-config`` and choosing *Interfacing Options* with arrow keys and pressing Enter. Select *I2C* option and choose to *Enable* it. Reboot the RPi.
 
 Install the necessary libraries for working with the Picon Zero controller with the following terminal commands:
@@ -83,7 +106,11 @@ Save the file and reboot the RPi Zero.
 
 If you have assembled the RPi Zero with Picon Zero, you are able to test if everything is running smoothly by entering terminal command ``i2cdetect -y 1``. You should see an output table with empty values everywhere but one element, which should say ``22``.
 
-Finally, put :download:`this script (openPinchValve.py) </openPinchValve.py>` and  :download:`this script (releasePellet.py) </releasePellet.py>` to the  RPi Zero home folder ``/home/pi``. These scripts are for the Milk FEEDER and Pellet FEEDER functions, respectively. You may download these scripts to the RPi over the internet, transfer using a USB stick or send them over a SSH connection once you have it set up later.
+Finally, you need to put the scripts for controlling the feeders onto the RPi Zero. You could copy them over with a USB stick, download them from github or transfer them later using the ``scp`` command. In any case, you need to put the following files from the openEphys_DACQ github to the RPi home directory at ``/home/pi/``:
+
+- openPinchValve.py
+- releasePellet.py
+- ZMQcomms.py
 
 Setting up Raspberry Pi Zero networking with Recording PC
 =========================================================
@@ -157,8 +184,6 @@ Now exit the SSH session or open a new terminal on Recording PC and enter this c
 Now your RPi should be able to connect to the RPi via SSH without a password. Test if it requests for password when you try to conenct to it using SSH.
 
 Now the RPi Zero software and networking is fully configured and after assembling the FEEDER, it will be ready to use with the Recording PC.
-
-If you have not yet put the neccessary scripts for the Milk FEEDER and Pellet FEEDER functions to the home folder of the RPi Zero, you can now do this over the SSH connection using the following commands on the Recording PC: ``scp /home/room418/openEPhys_DACQ/README/openPinchValve.py pi@192.168.0.62:/home/pi/`` and ``scp /home/room418/openEPhys_DACQ/README/releasePellet.py pi@192.168.0.62:/home/pi/``.
 
 Assembling all parts of Wireless Reward Module
 ==============================================

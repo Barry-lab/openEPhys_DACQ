@@ -4,9 +4,128 @@ import thread
 import time
 import sys
 import traceback
+import socket
+
+def get_localhost_ip():
+    # Get local IP address
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    address = s.getsockname()[0]
+    s.close()
+
+    return address
+
+class sendMessagesPAIR(object):
+    '''
+    This class can send messages to listenMessagesPAIR class running on the same
+        or different machine, pointed to the same IP address.
+    Use sendMessage method to send a message in string format.
+    '''
+    def __init__(self, address='localhost', port=5884):
+        # Set up ZMQ connection to OpenEphysGUI
+        if address == 'localhost':
+            address = get_localhost_ip()
+        url = "tcp://%s:%d" % (get_localhost_ip(), port)
+        context = zmq.Context()
+        self.socket = context.socket(zmq.PAIR)
+        self.socket.bind(url)
+
+    def sendMessage(self, message):
+        self.socket.send(message)
+        feedback = self.socket.recv()
+        if feedback != message:
+            raise ValueError('Incorrect string returned')
+
+    def close(self):
+        self.socket.close()
+
+class listenMessagesPAIR(object):
+    '''
+    This class can receive messages from sendMessagesPAIR class running on the same
+        or different machine, pointed to the same IP address.
+    Use add_callback method to add callbacks which will be called when a message
+        is received. You can couple arguments with the callback if presented as a list
+        or tuple, with callback being the first element.
+    '''
+    def __init__(self, address='localhost', port=5884, timeout=2, printMessages=False):
+        if address == 'localhost':
+            address = get_localhost_ip()
+        self.url = "tcp://%s:%d" % (address, port)
+        context = zmq.Context()
+        self.socket = context.socket(zmq.PAIR)
+        self.socket.connect(self.url)
+        self.socket.RCVTIMEO = int(timeout * 1000)  # in milliseconds
+        # Start listening thread
+        self.lock = threading.Lock()
+        self.is_running = True
+        self.thread = threading.Thread(target=self.run)
+        self.thread.start()
+        # Set callbacks list
+        self.callbacks = []
+        if printMessages:
+            self.add_callback(self.printMessage)
+
+    def close(self):
+
+        if self.thread.is_alive():
+
+            self.lock.acquire()
+            self.is_running = False
+            self.lock.release()
+
+            self.thread.join()
+
+            self.socket.disconnect(self.url)
+
+    def add_callback(self, cb):
+        '''
+        The callback function is started in a new thread if a message is received.
+        To pass arguments with callback function, input a list or a tuple with
+            callback function as the first element and the rest as individual arguments.
+        The callback function should be expecting a message input as a string. If additional
+            arguments were passed using the list or tuple method, these arguments should be
+            expected by the function in the same order after the message string.
+        '''
+        self.callbacks.append(cb)
+
+    def _send_message_to_callbacks(self, msg):
+
+        for cb in self.callbacks:
+            if isinstance(cb, list) or isinstance(cb, tuple):
+                threading.Thread(target=cb[0], args=(msg,) + tuple(cb[1:])).start()
+            else:
+                threading.Thread(target=cb, args=(msg,)).start()
+
+    def run(self):
+
+        while True:
+
+            self.lock.acquire()
+            running = self.is_running
+            self.lock.release()
+
+            if not running:
+                break
+
+            try:
+                msg = self.socket.recv()
+                self.socket.send(msg)
+                self._send_message_to_callbacks(msg)
+
+            except zmq.ZMQError:
+                pass
+
+            time.sleep(.01)
+
+    def printMessage(self, msg):
+        print(msg)
 
 class PublishToOpenEphys(object):
-    # This class allows sending messages to open ephys over ZMQ
+    '''
+    This class allows sending messages to Open Ephys GUI over ZMQ.
+    When created with defulat inputs, it will connect to Open Ephys GUI.
+    Use sendMessage method to send messages to Open Ephys GUI
+    '''
     def __init__(self, address='localhost', port=5556):
         # Set up ZMQ connection to OpenEphysGUI
         url = "tcp://%s:%d" % (address, port)
@@ -23,7 +142,10 @@ class PublishToOpenEphys(object):
 
 
 def SendOpenEphysSingleMessage(message):
-    # This function is for sending a single message that is not time-sensitive
+    '''
+    This function creates ZMQ connection with Open Ephys GUI just to send one message.
+    This is sufficiently fast for single messages that are not very time sensitive.
+    '''
     messenger = PublishToOpenEphys()
     messenger.sendMessage(message)
     messenger.close()
@@ -173,12 +295,13 @@ class SubscribeToOpenEphys(object):
 
             time.sleep(.01)
 
-def message_callback(msg):
-    """add code here to handle incoming message"""
-
+def SubscribeToOpenEphys_message_callback(msg):
     print("received event:", msg)
 
-def run_example(args):
+def SubscribeToOpenEphys_run_example(args):
+    '''
+    An example script for using SubscribeToOpenEphys
+    '''
 
     # parse arguments
     address = 'localhost'  # address of system on which OE is running
@@ -195,7 +318,7 @@ def run_example(args):
     try:
         # connect subscriber to event publisher
         sub = SubscribeToOpenEphys(address=address, port=port)
-        sub.add_callback(message_callback)
+        sub.add_callback(SubscribeToOpenEphys_message_callback)
         sub.connect()
 
         # run for T seconds

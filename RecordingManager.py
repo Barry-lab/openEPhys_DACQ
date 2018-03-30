@@ -15,7 +15,7 @@ from shutil import copyfile, copytree, rmtree
 import csv
 import time
 from CumulativePosPlot import PosPlot
-from OpenEphysInterface import SendOpenEphysSingleMessage, SubscribeToOpenEphys
+from ZMQcomms import SendOpenEphysSingleMessage, SubscribeToOpenEphys
 import HelperFunctions as hfunct
 import threading
 from copy import deepcopy
@@ -268,7 +268,6 @@ def find_latest_matching_settings_filepath(path, settings=None):
             filepath = None
 
     return filepath
-
 
 class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
 

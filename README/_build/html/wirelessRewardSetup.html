@@ -186,6 +186,27 @@ sudo apt-get upgrade       # Strictly upgrades the current packages
 sudo apt-get dist-upgrade  # Installs updates (new ones)
 </pre></div>
 </div>
+<p>To install ZeroMQ use the following terminal commands, as copied from <a class="reference external" href="https://github.com/MonsieurV/ZeroMQ-RPi">https://github.com/MonsieurV/ZeroMQ-RPi</a></p>
+<div class="highlight-none"><div class="highlight"><pre>sudo apt-get install libtool pkg-config build-essential autoconf automake python-pip
+wget https://github.com/jedisct1/libsodium/releases/download/1.0.3/libsodium-1.0.3.tar.gz
+tar -zxvf libsodium-1.0.3.tar.gz
+cd libsodium-1.0.3/
+./configure
+make
+sudo make install
+cd ~/
+wget http://download.zeromq.org/zeromq-4.1.3.tar.gz
+tar -zxvf zeromq-4.1.3.tar.gz
+cd zeromq-4.1.3/
+./configure
+make
+sudo make install
+sudo ldconfig
+sudo apt-get install python-dev
+sudo pip install pyzmq
+cd ~/
+</pre></div>
+</div>
 <p>I2C module needs to be enabled in RPi settings for use of Picon Zero in the Milk FEEDER. You can do this by accessing RPi settings via terminal command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">raspi-config</span></code> and choosing <em>Interfacing Options</em> with arrow keys and pressing Enter. Select <em>I2C</em> option and choose to <em>Enable</em> it. Reboot the RPi.</p>
 <p>Install the necessary libraries for working with the Picon Zero controller with the following terminal commands:</p>
 <div class="highlight-none"><div class="highlight"><pre>sudo apt-get install python-smbus python3-smbus python-dev python3-dev
@@ -199,7 +220,12 @@ dtparam=i2c_arm=on
 </div>
 <p>Save the file and reboot the RPi Zero.</p>
 <p>If you have assembled the RPi Zero with Picon Zero, you are able to test if everything is running smoothly by entering terminal command <code class="docutils literal"><span class="pre">i2cdetect</span> <span class="pre">-y</span> <span class="pre">1</span></code>. You should see an output table with empty values everywhere but one element, which should say <code class="docutils literal"><span class="pre">22</span></code>.</p>
-<p>Finally, put <a class="reference download internal" href="_downloads/openPinchValve.py" download=""><code class="xref download docutils literal"><span class="pre">this</span> <span class="pre">script</span> <span class="pre">(openPinchValve.py)</span></code></a> and  <a class="reference download internal" href="_downloads/releasePellet.py" download=""><code class="xref download docutils literal"><span class="pre">this</span> <span class="pre">script</span> <span class="pre">(releasePellet.py)</span></code></a> to the  RPi Zero home folder <code class="docutils literal"><span class="pre">/home/pi</span></code>. These scripts are for the Milk FEEDER and Pellet FEEDER functions, respectively. You may download these scripts to the RPi over the internet, transfer using a USB stick or send them over a SSH connection once you have it set up later.</p>
+<p>Finally, you need to put the scripts for controlling the feeders onto the RPi Zero. You could copy them over with a USB stick, download them from github or transfer them later using the <code class="docutils literal"><span class="pre">scp</span></code> command. In any case, you need to put the following files from the openEphys_DACQ github to the RPi home directory at <code class="docutils literal"><span class="pre">/home/pi/</span></code>:</p>
+<ul class="simple">
+<li>openPinchValve.py</li>
+<li>releasePellet.py</li>
+<li>ZMQcomms.py</li>
+</ul>
 </div>
 </div>
 <div class="section" id="setting-up-raspberry-pi-zero-networking-with-recording-pc">
@@ -248,7 +274,6 @@ static domain_name_servers=192.168.0.1
 <p>Now exit the SSH session or open a new terminal on Recording PC and enter this command <code class="docutils literal"><span class="pre">cat</span> <span class="pre">~/.ssh/id_rsa.pub</span> <span class="pre">|</span> <span class="pre">ssh</span> <span class="pre">pi&#64;192.168.0.40</span> <span class="pre">'cat</span> <span class="pre">&gt;&gt;</span> <span class="pre">.ssh/authorized_keys'</span></code>. Use the correct IP address (the numbers: <code class="docutils literal"><span class="pre">192.168.0.40</span></code>) in that command for the IP address of the RPi you are connecting to. Enter the password <code class="docutils literal"><span class="pre">raspberry</span></code> for your RPi.</p>
 <p>Now your RPi should be able to connect to the RPi via SSH without a password. Test if it requests for password when you try to conenct to it using SSH.</p>
 <p>Now the RPi Zero software and networking is fully configured and after assembling the FEEDER, it will be ready to use with the Recording PC.</p>
-<p>If you have not yet put the neccessary scripts for the Milk FEEDER and Pellet FEEDER functions to the home folder of the RPi Zero, you can now do this over the SSH connection using the following commands on the Recording PC: <code class="docutils literal"><span class="pre">scp</span> <span class="pre">/home/room418/openEPhys_DACQ/README/openPinchValve.py</span> <span class="pre">pi&#64;192.168.0.62:/home/pi/</span></code> and <code class="docutils literal"><span class="pre">scp</span> <span class="pre">/home/room418/openEPhys_DACQ/README/releasePellet.py</span> <span class="pre">pi&#64;192.168.0.62:/home/pi/</span></code>.</p>
 </div>
 </div>
 <div class="section" id="assembling-all-parts-of-wireless-reward-module">
