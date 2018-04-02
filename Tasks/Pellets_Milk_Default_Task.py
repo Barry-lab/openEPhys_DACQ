@@ -154,7 +154,7 @@ def importSettingsToGUI(self, TaskSettings):
             self.settings[key].setChecked(TaskSettings[key])
         elif key == 'FEEDERs':
             for FEEDER_type in TaskSettings['FEEDERs'].keys():
-                for ID in sorted(TaskSettings['FEEDERs'][FEEDER_type].keys(), key=str):
+                for ID in sorted(TaskSettings['FEEDERs'][FEEDER_type].keys(), key=int):
                     FEEDER_settings = TaskSettings['FEEDERs'][FEEDER_type][ID]
                     addFeedersToList(self, FEEDER_type, FEEDER_settings)
         elif key in self.settings.keys():
@@ -398,16 +398,17 @@ class Core(object):
         self.pelletGameOn = self.TaskSettings['pelletGameOn']
         if self.pelletGameOn:
             self.activePfeeders = []
-            for ID in sorted(self.FEEDERs['pellet'].keys(), key=str):
+            for ID in sorted(self.FEEDERs['pellet'].keys(), key=int):
                 if self.FEEDERs['pellet'][ID]['Active']:
                     self.activePfeeders.append(ID)
+            self.lastPelletRewardLock = threading.Lock()
             self.lastPelletReward = time.time()
             self.updatePelletMinSepratation()
         # Set up Milk Rewards
         self.milkGameOn = self.TaskSettings['milkGameOn']
         if self.milkGameOn:
             self.activeMfeeders = []
-            for ID in sorted(self.FEEDERs['milk'].keys(), key=str):
+            for ID in sorted(self.FEEDERs['milk'].keys(), key=int):
                 if self.FEEDERs['milk'][ID]['Active']:
                     self.activeMfeeders.append(ID)
             self.milkTrialPerformance = [{'n_trials': 0, 'successful': 0, 'failed': 0} for i in range(len(self.activeMfeeders))]
@@ -439,6 +440,8 @@ class Core(object):
         # Initialize game
         self.lastRewardLock = threading.Lock()
         self.lastReward = time.time()
+        self.rewardInProgressLock = threading.Lock()
+        self.rewardInProgress = []
         self.gameOn = False
         self.mainLoopActive = True
         self.clock = pygame.time.Clock()
@@ -489,17 +492,15 @@ class Core(object):
         self.TaskSettings['MilkTrialMinSeparation'] = new_val
 
     def releaseReward(self, FEEDER_type, ID, action='undefined', quantity=1):
+        # Notify rest of the program that this is onging
+        with self.rewardInProgressLock:
+            self.rewardInProgress.append(FEEDER_type + ' ' + ID)
         # Make process visible on GUI
         if FEEDER_type == 'pellet':
             feeder_button = self.getButton('buttonReleasePellet', FEEDER_type, ID)
         elif FEEDER_type == 'milk':
             feeder_button = self.getButton('buttonReleaseMilk', FEEDER_type, ID)
         feeder_button['button_pressed'] = True
-        # Reset last reward timer
-        with self.lastRewardLock:
-            self.lastReward = time.time()
-        if 'pellet' == FEEDER_type:
-            self.lastPelletReward = time.time()
         # Send command to release reward and wait for positive feedback
         self.FEEDERs[FEEDER_type][ID]['actuator'].release(quantity, wait_for_feedback=True)
         # Send message to Open Ephys GUI
@@ -507,19 +508,41 @@ class Core(object):
         self.TaskIO['MessageToOE'](OEmessage)
         # Reset GUI signal for feeder activity
         feeder_button['button_pressed'] = False
+        # Reset last reward timer
+        with self.lastRewardLock:
+            self.lastReward = time.time()
+        if 'pellet' == FEEDER_type:
+            with self.lastPelletRewardLock:
+                self.lastPelletReward = time.time()
+        # Remove notification of onging reward delivery
+        with self.rewardInProgressLock:
+            self.rewardInProgress.remove(FEEDER_type + ' ' + ID)
 
     def initRewards(self):
+        '''
+        Deposits initiation rewards simultaneously from all FEEDERs.
+        Completes only once all rewards have been released.
+        '''
+        T_initRewards = []
         if self.pelletGameOn and 'InitPellets' in self.TaskSettings.keys() and self.TaskSettings['InitPellets'] > 0:
             minPellets = int(np.floor(float(self.TaskSettings['InitPellets']) / len(self.activePfeeders)))
             extraPellets = np.mod(self.TaskSettings['InitPellets'], len(self.activePfeeders))
             n_pellets_Feeders = minPellets * np.ones(len(self.activePfeeders), dtype=np.int16)
             n_pellets_Feeders[:extraPellets] = n_pellets_Feeders[:extraPellets] + 1
-            for feeder_list_idx, n_pellets in enumerate(n_pellets_Feeders):
-                ID = self.activePfeeders[feeder_list_idx]
-                self.releaseReward('pellet', ID, 'game_init', n_pellets)
+            for ID, n_pellets in zip(self.activePfeeders, n_pellets_Feeders):
+                if n_pellets > 0:
+                    T = threading.Thread(target=self.releaseReward, 
+                                         args=('pellet', ID, 'game_init', n_pellets))
+                    T.start()
+                    T_initRewards.append(T)
         if self.milkGameOn and 'InitMilk' in self.TaskSettings.keys() and self.TaskSettings['InitMilk'] > 0:
             for ID in self.activeMfeeders:
-                self.releaseReward('milk', ID, 'game_init', self.TaskSettings['InitMilk'])
+                T = threading.Thread(target=self.releaseReward, 
+                                     args=('milk', ID, 'game_init', self.TaskSettings['InitMilk']))
+                T.start()
+                T_initRewards.append(T)
+        for T in T_initRewards:
+            T.join()
 
     def buttonGameOnOff_callback(self, button):
         # Switch Game On and Off
@@ -539,9 +562,10 @@ class Core(object):
     def buttonManualPellet_callback(self, button):
         button['button_pressed'] = True
         # Update last reward time
-        self.lastPelletReward = time.time()
+        with self.lastPelletRewardLock:
+            self.lastPelletReward = time.time()
         with self.lastRewardLock:
-            self.lastReward = self.lastPelletReward
+            self.lastReward = time.time()
         # Send message to Open Ephys GUI
         OEmessage = 'Reward pelletManual'
         self.TaskIO['MessageToOE'](OEmessage)
@@ -742,20 +766,21 @@ class Core(object):
         return progress_bars
 
     def draw_progress_bars(self, game_progress):
-        for gp, pb in zip(game_progress, self.progress_bars):
-            self.screen.blit(pb['name_text'], pb['name_position'])
-            self.screen.blit(self.renderText('T: ' + str(gp['target'])), pb['target_position'])
-            self.screen.blit(self.renderText('C: ' + str(gp['status'])), pb['value_position'])
-            if gp['complete']:
-                color = (255, 255, 255)
-                ylen = int(round(pb['Position']['ymaxlen']))
-                ypos = int(round(pb['Position']['ybottompos'] - pb['Position']['ymaxlen']))
-            else:
-                color = pb['color']
-                ylen = int(round(gp['percentage'] * pb['Position']['ymaxlen']))
-                ypos = pb['Position']['ybottompos'] - ylen
-            position = (pb['Position']['xpos'], ypos, pb['Position']['xlen'], ylen)
-            pygame.draw.rect(self.screen, color, position, 0)
+        if len(game_progress) > 0:
+            for gp, pb in zip(game_progress, self.progress_bars):
+                self.screen.blit(pb['name_text'], pb['name_position'])
+                self.screen.blit(self.renderText('T: ' + str(gp['target'])), pb['target_position'])
+                self.screen.blit(self.renderText('C: ' + str(gp['status'])), pb['value_position'])
+                if gp['complete']:
+                    color = (255, 255, 255)
+                    ylen = int(round(pb['Position']['ymaxlen']))
+                    ypos = int(round(pb['Position']['ybottompos'] - pb['Position']['ymaxlen']))
+                else:
+                    color = pb['color']
+                    ylen = int(round(gp['percentage'] * pb['Position']['ymaxlen']))
+                    ypos = pb['Position']['ybottompos'] - ylen
+                position = (pb['Position']['xpos'], ypos, pb['Position']['xlen'], ylen)
+                pygame.draw.rect(self.screen, color, position, 0)
 
     def choose_pellet_feeder(self):
         '''
@@ -886,16 +911,29 @@ class Core(object):
         self.feederID_milkTrial = self.chooseMilkTrialFeeder()
         self.updateMilkTrialMinSepratation()
 
+    def check_if_reward_in_progress(self):
+        '''
+        Returns True if any rewards are currently being delivered
+        '''
+        with self.rewardInProgressLock:
+            n_rewards_in_progress = len(self.rewardInProgress)
+        reward_in_progress = n_rewards_in_progress > 0
+
+        return reward_in_progress
+
     def game_logic(self):
         game_progress = []
+        reward_in_progress = self.check_if_reward_in_progress()
         # Get animal position history
         with self.TaskIO['RPIPos'].combPosHistoryLock:
             posHistory = self.TaskIO['RPIPos'].combPosHistory[-self.distance_steps:]
         if not (None in posHistory):
             if self.pelletGameOn: # The following progress is monitored only if pellet reward used
-                # Check if animal has been without pellet reward for too long
                 with self.lastRewardLock:
                     timeSinceLastReward = time.time() - self.lastReward
+                with self.lastPelletRewardLock:
+                    timeSinceLastPelletReward = self.lastPelletReward
+                # Check if animal has been without pellet reward for too long
                 game_progress.append({'name': 'Inactivity', 
                                       'goals': ['inactivity'], 
                                       'target': self.TaskSettings['MaxInactivityDuration'], 
@@ -903,15 +941,14 @@ class Core(object):
                                       'complete': timeSinceLastReward >= self.TaskSettings['MaxInactivityDuration'], 
                                       'percentage': timeSinceLastReward / float(self.TaskSettings['MaxInactivityDuration'])})
                 # Check if enough time as passed since last pellet reward
-                timeSinceLastReward = time.time() - self.lastPelletReward
                 game_progress.append({'name': 'Since Pellet', 
                                       'goals': ['pellet', 'milkTrialStart'], 
                                       'target': self.TaskSettings['PelletRewardMinSeparation'], 
-                                      'status': int(round(timeSinceLastReward)), 
-                                      'complete': timeSinceLastReward >= self.TaskSettings['PelletRewardMinSeparation'], 
-                                      'percentage': timeSinceLastReward / float(self.TaskSettings['PelletRewardMinSeparation'])})
+                                      'status': int(round(timeSinceLastPelletReward)), 
+                                      'complete': timeSinceLastPelletReward >= self.TaskSettings['PelletRewardMinSeparation'], 
+                                      'percentage': timeSinceLastPelletReward / float(self.TaskSettings['PelletRewardMinSeparation'])})
                 # Check if animal has been chewing enough since last reward
-                n_chewings = self.number_of_chewings(self.lastPelletReward)
+                n_chewings = self.number_of_chewings(timeSinceLastPelletReward)
                 game_progress.append({'name': 'Chewing', 
                                       'goals': ['pellet'], 
                                       'target': self.TaskSettings['Chewing_Target'], 
@@ -985,7 +1022,7 @@ class Core(object):
                                           'status': 0, 
                                           'complete': False, 
                                           'percentage': 0})
-            if not self.milkTrialOn:
+            if not self.milkTrialOn and not reward_in_progress:
                 # If milk trial currently not active
                 # Check if game progress complete for any outcome
                 pellet_status_complete = []
@@ -1043,18 +1080,17 @@ class Core(object):
 
         return game_progress
 
-    def update_display(self):
+    def update_display(self, game_progress):
         self.screen.fill((0, 0, 0))
         self.draw_buttons()
-        self.draw_progress_bars(self.game_progress)
+        self.draw_progress_bars(game_progress)
         # Update display
         pygame.display.update()
 
-
     def update_states(self):
         if self.gameOn:
-            self.game_progress = self.game_logic()
-        self.update_display()
+            game_progress = self.game_logic()
+        self.update_display(game_progress)
 
     def main_loop(self):
         # Ensure that Position data is available
@@ -1075,6 +1111,7 @@ class Core(object):
         # Signal game start to Open Ephys GUI
         buttonGameOnOff = self.getButton('buttonGameOnOff')
         buttonGameOnOff['callback'](buttonGameOnOff)
+        # Release initation rewards
         self.initRewards()
         # Initialize game state update thread
         T_update_states = threading.Thread(target=self.update_states)
