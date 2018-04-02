@@ -932,7 +932,8 @@ class Core(object):
                 with self.lastRewardLock:
                     timeSinceLastReward = time.time() - self.lastReward
                 with self.lastPelletRewardLock:
-                    timeSinceLastPelletReward = self.lastPelletReward
+                    lastPelletRewardTime = self.lastPelletReward
+                timeSinceLastPelletReward = time.time() - lastPelletRewardTime
                 # Check if animal has been without pellet reward for too long
                 game_progress.append({'name': 'Inactivity', 
                                       'goals': ['inactivity'], 
@@ -948,7 +949,7 @@ class Core(object):
                                       'complete': timeSinceLastPelletReward >= self.TaskSettings['PelletRewardMinSeparation'], 
                                       'percentage': timeSinceLastPelletReward / float(self.TaskSettings['PelletRewardMinSeparation'])})
                 # Check if animal has been chewing enough since last reward
-                n_chewings = self.number_of_chewings(timeSinceLastPelletReward)
+                n_chewings = self.number_of_chewings(lastPelletRewardTime)
                 game_progress.append({'name': 'Chewing', 
                                       'goals': ['pellet'], 
                                       'target': self.TaskSettings['Chewing_Target'], 
