@@ -11,6 +11,7 @@ import time
 import sys
 import threading
 from ZMQcomms import sendMessagesPAIR
+import os
 
 GPIO.setmode(GPIO.BOARD) # Use board numbering for TTL pin
 
@@ -68,43 +69,60 @@ class servo_controller(object):
         self.pwm.stop()
         GPIO.cleanup(self.servoPin)
 
+def update_pelletUseCount(n_pellets):
+    '''
+    Rewrites local file that counts the number of pellets used.
+    If no file 'pelletUseCount' exists, a file is created and count resets to zero.
+    '''
+    pelletUseCountFileName = 'pelletUseCount'
+    if os.path.isfile(pelletUseCountFileName):
+        with open(pelletUseCountFileName, 'r') as file:
+            pelletUseCount = int(file.read())
+    else:
+        pelletUseCount = 0
+    pelletUseCount += n_pellets
+    with open(pelletUseCountFileName, 'w') as file:
+        file.write(str(pelletUseCount))
+
 # Set these angles to work with your feeder
 LoadingAngle = 30
 ReleaseAngle = 90
 # Get input argument for number of pellets
 if len(sys.argv) < 2:
-    n_pellets = 1
+    print('Incorrect input.')
 else:
     n_pellets = int(sys.argv[1])
-# Initialise signalling to servo
-sc = servo_controller()
-# Drop as many pellets as requested
-for n_pellet  in range(n_pellets):
-    release_successful = False
-    while not release_successful:
-        pellet_checker = detect_pellet()
-        # Moves the servo to the loading position
-        sc.setAngle(LoadingAngle)
-        time.sleep(0.4) # Allows time for movement
-        # Jitter in the loading position to make sure a pellet falls in
-        for jitter in [-15, 15, -15, 15, -15, 15]:
-            sc.setAngle(LoadingAngle + jitter)
-            time.sleep(0.1)
-        # Move the servo to the pellet releasing position
-        sc.setAngle(ReleaseAngle)
-        time.sleep(0.4) # Allow time for movement
-        # Check if pellet was dropped.
-        waiting_started = time.time()
-        max_wait_time = 1
-        while not release_successful and time.time() - waiting_started < max_wait_time:
-            time.sleep(0.05)
-            with pellet_checker.pelletDetectedLock:
-                release_successful = pellet_checker.pelletDetected
-        pellet_checker.close()
-# Stop signalling to the servo
-sc.close()
-
-# Send message that action was completed
-publisher = sendMessagesPAIR()
-publisher.sendMessage('successful')
-publisher.close()
+    # Initialise signalling to servo
+    sc = servo_controller()
+    # Drop as many pellets as requested
+    for n_pellet  in range(n_pellets):
+        release_successful = False
+        while not release_successful:
+            pellet_checker = detect_pellet()
+            # Moves the servo to the loading position
+            sc.setAngle(LoadingAngle)
+            time.sleep(0.4) # Allows time for movement
+            # Jitter in the loading position to make sure a pellet falls in
+            for jitter in [-15, 15, -15, 15, -15, 15]:
+                sc.setAngle(LoadingAngle + jitter)
+                time.sleep(0.1)
+            # Move the servo to the pellet releasing position
+            sc.setAngle(ReleaseAngle)
+            time.sleep(0.4) # Allow time for movement
+            # Check if pellet was dropped.
+            waiting_started = time.time()
+            max_wait_time = 1
+            while not release_successful and time.time() - waiting_started < max_wait_time:
+                time.sleep(0.05)
+                with pellet_checker.pelletDetectedLock:
+                    release_successful = pellet_checker.pelletDetected
+            pellet_checker.close()
+    # Stop signalling to the servo
+    sc.close()
+    # Update pelletUseCount file
+    update_pelletUseCount(n_pellets)
+    # Send message that action was completed
+    if len(sys.argv) == 3 and str(sys.argv[2]) == 'feedback':
+        publisher = sendMessagesPAIR()
+        publisher.sendMessage('successful')
+        publisher.close()

@@ -14,7 +14,7 @@ from ZMQcomms import listenMessagesPAIR
 def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
     feeder = RewardControl(FEEDER_type, str(RPiIPBox.text()), 
                            str(RPiUsernameBox.text()), str(RPiPasswordBox.text()))
-    feeder.release(float(str(quantityBox.text())))
+    feeder.release(float(str(quantityBox.text())), wait_for_feedback=False)
     feeder.close()
 
 def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
@@ -401,7 +401,6 @@ class Core(object):
             for ID in sorted(self.FEEDERs['pellet'].keys(), key=str):
                 if self.FEEDERs['pellet'][ID]['Active']:
                     self.activePfeeders.append(ID)
-                    self.FEEDERs['pellet'][ID]['Busy'] = False
             self.lastPelletReward = time.time()
             self.updatePelletMinSepratation()
         # Set up Milk Rewards
@@ -411,7 +410,6 @@ class Core(object):
             for ID in sorted(self.FEEDERs['milk'].keys(), key=str):
                 if self.FEEDERs['milk'][ID]['Active']:
                     self.activeMfeeders.append(ID)
-                    self.FEEDERs['milk'][ID]['Busy'] = False
             self.milkTrialPerformance = [{'n_trials': 0, 'successful': 0, 'failed': 0} for i in range(len(self.activeMfeeders))]
             self.lastMilkTrial = time.time()
             self.updateMilkTrialMinSepratation()
@@ -490,10 +488,6 @@ class Core(object):
         new_val = int(mean_val + jitter)
         self.TaskSettings['MilkTrialMinSeparation'] = new_val
 
-    def feederMessageParser(self, message, FEEDER_type, ID):
-        if message == 'successful':
-            self.FEEDERs[FEEDER_type][ID]['Busy'] = False
-
     def releaseReward(self, FEEDER_type, ID, action='undefined', quantity=1):
         # Make process visible on GUI
         if FEEDER_type == 'pellet':
@@ -506,17 +500,8 @@ class Core(object):
             self.lastReward = time.time()
         if 'pellet' == FEEDER_type:
             self.lastPelletReward = time.time()
-        # Set FEEDER to busy state
-        self.FEEDERs[FEEDER_type][ID]['Busy'] = True
-        # Set up listening for reward confirmation
-        FEEDERmessages = listenMessagesPAIR(address=self.FEEDERs[FEEDER_type][ID]['IP'])
-        FEEDERmessages.add_callback((self.feederMessageParser, FEEDER_type, ID))
-        # Send command to release reward
-        self.FEEDERs[FEEDER_type][ID]['actuator'].release(quantity)
-        # Wait for reward confirmation
-        while self.FEEDERs[FEEDER_type][ID]['Busy']:
-            time.sleep(0.1)
-        FEEDERmessages.close()
+        # Send command to release reward and wait for positive feedback
+        self.FEEDERs[FEEDER_type][ID]['actuator'].release(quantity, wait_for_feedback=True)
         # Send message to Open Ephys GUI
         OEmessage = 'Reward ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
         self.TaskIO['MessageToOE'](OEmessage)

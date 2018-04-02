@@ -11,6 +11,7 @@ import numpy as np
 from scipy.spatial.distance import euclidean
 from itertools import combinations
 from TrackingDataProcessing import combineCamerasData
+from ZMQcomms import listenMessagesPAIR
 
 class TrackingControl(object):
 
@@ -299,15 +300,36 @@ class RewardControl(object):
     # FEEDER_type can be either 'milk' or 'pellet'
     def __init__(self, FEEDER_type, RPiIP, RPiUsername, RPiPassword):
         self.FEEDER_type = FEEDER_type
+        self.RPiIP = RPiIP
         # Set up SSH connection
         self.ssh_connection = ssh(RPiIP, RPiUsername, RPiPassword)
         self.ssh_connection.sendCommand('pkill python') # Ensure any past processes have closed
 
-    def release(self, quantity=1):
+    def release(self, quantity=1, wait_for_feedback=False):
+        self.FEEDER_Busy = True
+        if wait_for_feedback:
+            feedback_string = ' feedback '
+            # Set up listening for reward confirmation
+            FEEDERmessages = listenMessagesPAIR(address=self.RPiIP)
+            FEEDERmessages.add_callback(self.feederMessageParser)
+        else:
+            feedback_string = ''
         if self.FEEDER_type == 'pellet':
-            self.ssh_connection.sendCommand('nohup python releasePellet.py ' + str(int(quantity)) + ' &')
+            self.ssh_connection.sendCommand('nohup python releasePellet.py ' + \
+                                            str(int(quantity)) + feedback_string + ' &')
         elif self.FEEDER_type == 'milk':
-            self.ssh_connection.sendCommand('nohup python openPinchValve.py ' + str(quantity) + ' &')
+            self.ssh_connection.sendCommand('nohup python openPinchValve.py ' + \
+                                            str(quantity) + feedback_string + ' &')
+        if wait_for_feedback:
+            while self.FEEDER_Busy:
+                time.sleep(0.1)
+            FEEDERmessages.close()
+        else:
+            self.FEEDER_Busy = False
+
+    def feederMessageParser(self, message):
+        if message == 'successful':
+            self.FEEDER_Busy = False
 
     def close(self):
         self.ssh_connection.disconnect()
