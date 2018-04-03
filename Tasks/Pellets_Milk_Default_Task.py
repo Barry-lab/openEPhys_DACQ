@@ -853,17 +853,13 @@ class Core(object):
         '''
         N_feeders = len(self.activeMfeeders)
         if N_feeders > 1:
-            # Find percentage of failed trials
-            performance = np.zeros(N_feeders, dtype=np.float64)
+            # Find number of successful trials for each feeder
+            n_successful_trials = np.zeros(N_feeders, dtype=np.float64)
             for n_feeder in range(N_feeders):
-                if self.milkTrialPerformance[n_feeder]['n_trials'] > 0:
-                    srate = self.milkTrialPerformance[n_feeder]['successful'] / self.milkTrialPerformance[n_feeder]['n_trials']
-                else:
-                    srate = 0
-                performance[n_feeder] = srate
+                n_successful_trials[n_feeder] = self.milkTrialPerformance[n_feeder]['successful']
             # Choose feeder with weighted randomness
-            if np.any(performance > 0):
-                feederProbabilityWeights = np.sum(performance) - performance
+            if np.any(n_successful_trials > 0):
+                feederProbabilityWeights = np.sum(n_successful_trials) - n_successful_trials
                 feederProbability = feederProbabilityWeights / np.sum(feederProbabilityWeights)
                 n_feeder = np.random.choice(N_feeders, p=feederProbability)
             else:
