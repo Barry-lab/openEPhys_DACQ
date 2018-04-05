@@ -269,6 +269,54 @@ def find_latest_matching_settings_filepath(path, settings=None):
 
     return filepath
 
+def check_if_device_available_thread(address, output_list, output_pos, output_lock):
+    # Function to allow multi-threading check_if_devices_available function
+    output = hfunct.test_pinging_address(address)
+    with output_lock:
+        output_list[output_pos] = output
+
+def check_if_devices_available(address_list, device_names=[], output='r'):
+    '''
+    Creates a list of devices that fail to ping back.
+    address_list = list of IP address strings
+    device_names = list of strings corresponding to IP. If omitted, becomes string list of range(len(address_list))
+    output='r' returns the list
+    output='d' displays it in a dialog window
+    output='dr' does both
+    '''
+    if len(device_names) != len(address_list):
+        device_names = [str(x + 1) for x in range(len(address_list))]
+    # Check each device in a seperate thread to speed things up
+    output_lock = threading.Lock()
+    address_ping_outcome = [None] * len(address_list)
+    T_address_pings = []
+    for n_address, address in enumerate(address_list):
+        T = threading.Thread(target=check_if_device_available_thread, 
+                             args=[address, address_ping_outcome, n_address, output_lock])
+        T.start()
+        T_address_pings.append(T)
+    for T in T_address_pings:
+        T.join()
+    # List devices that failed to ping back
+    disconnected_devices = []
+    for successful, address, device_name in zip(address_ping_outcome, address_list, device_names):
+        if not successful:
+            disconnected_devices.append({'device_name': device_name, 'address': address})
+    # Provide output as requested
+    if 'd' in output:
+        if len(disconnected_devices) == 0:
+            message = 'All ' + str(len(address_list)) + ' devices available.'
+            message_more = None
+        else:
+            message = str(len(disconnected_devices)) + ' of ' + str(len(address_list)) + ' devices not available!'
+            message_more = ''
+            for device in disconnected_devices:
+                message_more += device['device_name'] + ' @ ' + device['address'] + '\n'
+        show_message(message, message_more=message_more)
+    if 'r' in output:
+        return disconnected_devices
+
+
 class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
 
     def __init__(self, parent=None):
@@ -290,6 +338,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_root_folder.clicked.connect(lambda:self.root_folder_browse())
         self.pb_cam_set.clicked.connect(lambda:self.camera_settings())
         self.pb_task_set.clicked.connect(lambda:self.task_settings())
+        self.pb_test_devices.clicked.connect(lambda:self.test_devices())
         self.pb_start_rec.clicked.connect(lambda:self.start_rec())
         self.pb_stop_rec.clicked.connect(lambda:self.stop_rec())
         self.pb_process_data.clicked.connect(lambda:self.process_data())
@@ -440,6 +489,25 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # If TaskSettings available, load them
         if 'TaskSettings' in self.Settings.keys():
             self.TaskSet.loadSettings(deepcopy(self.Settings['TaskSettings']))
+
+    def test_devices(self):
+        address_list = []
+        device_names = []
+        # Add tracking cameras to list
+        if 'TrackingSettings' in self.Settings.keys():
+            for Camera_ID in sorted(self.Settings['TrackingSettings']['RPiInfo'].keys(), key=int):
+                if self.Settings['TrackingSettings']['RPiInfo'][Camera_ID]['active']:
+                    address_list.append(self.Settings['TrackingSettings']['RPiInfo'][Camera_ID]['IP'])
+                    device_names.append('Tracking Camera ' + str(Camera_ID))
+        # Add feeders to list
+        if 'TaskSettings' in self.Settings.keys():
+            for FEEDER_type in self.Settings['TaskSettings']['FEEDERs'].keys():
+                for FEEDER_ID in sorted(self.Settings['TaskSettings']['FEEDERs'][FEEDER_type].keys(), key=int):
+                    if self.Settings['TaskSettings']['FEEDERs'][FEEDER_type][FEEDER_ID]['Active']:
+                        address_list.append(self.Settings['TaskSettings']['FEEDERs'][FEEDER_type][FEEDER_ID]['IP'])
+                        device_names.append('Feeder ' + FEEDER_type + ' '  + FEEDER_ID)
+        # Test devices and display results in dialog box
+        check_if_devices_available(address_list, device_names, output='d')
 
     def start_rec(self):
         # Load settings

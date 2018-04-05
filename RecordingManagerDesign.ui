@@ -637,6 +637,13 @@
         </widget>
        </item>
        <item>
+        <widget class="QPushButton" name="pb_test_devices">
+         <property name="text">
+          <string>Test Devices</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QFrame" name="f_rec_folder">
          <property name="maximumSize">
           <size>

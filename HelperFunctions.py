@@ -4,6 +4,7 @@ from scipy.signal import butter, lfilter
 import os
 import numpy as np
 from PyQt4 import QtGui
+import subprocess
 
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
@@ -127,3 +128,15 @@ def openSingleFileDialog(loadsave, directory=os.path.expanduser("~"), suffix='',
         selected_file = str(tmp[0])
 
     return selected_file
+
+
+def test_pinging_address(address='localhost'):
+    '''
+    Returns True if successful in pinging the input IP address, False otherwise
+    '''
+    with open(os.devnull, 'w') as devnull:
+        result = subprocess.call(['ping', '-c', '3', address], stdout=devnull, stderr=devnull)
+    if result == 0:
+        return True
+    else:
+        return False
