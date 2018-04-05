@@ -408,10 +408,11 @@ class Core(object):
         self.milkGameOn = self.TaskSettings['milkGameOn']
         if self.milkGameOn:
             self.activeMfeeders = []
+            self.milkTrialPerformance = {}
             for ID in sorted(self.FEEDERs['milk'].keys(), key=int):
                 if self.FEEDERs['milk'][ID]['Active']:
                     self.activeMfeeders.append(ID)
-            self.milkTrialPerformance = [{'n_trials': 0, 'successful': 0, 'failed': 0} for i in range(len(self.activeMfeeders))]
+                    self.milkTrialPerformance[ID] = {'n_trials': 0, 'successful': 0, 'failed': 0}
             self.lastMilkTrial = time.time()
             self.updateMilkTrialMinSepratation()
             self.milkTrialFailTime = time.time() - self.TaskSettings['MilkTrialFailPenalty']
@@ -491,29 +492,52 @@ class Core(object):
         new_val = int(mean_val + jitter)
         self.TaskSettings['MilkTrialMinSeparation'] = new_val
 
+    def inactivated_feeder_callback(self, button):
+        [FEEDER_type, ID] = button['callargs']
+        print('FEEDER ' + FEEDER_type + ' ' + ID + ' is deactivated.')
+
     def releaseReward(self, FEEDER_type, ID, action='undefined', quantity=1):
         # Notify rest of the program that this is onging
         with self.rewardInProgressLock:
             self.rewardInProgress.append(FEEDER_type + ' ' + ID)
         # Make process visible on GUI
         if FEEDER_type == 'pellet':
-            feeder_button = self.getButton('buttonReleasePellet', FEEDER_type, ID)
+            feeder_button = self.getButton('buttonReleasePellet', ID)
         elif FEEDER_type == 'milk':
-            feeder_button = self.getButton('buttonReleaseMilk', FEEDER_type, ID)
+            feeder_button = self.getButton('buttonReleaseMilk', ID)
         feeder_button['button_pressed'] = True
         # Send command to release reward and wait for positive feedback
-        self.FEEDERs[FEEDER_type][ID]['actuator'].release(quantity, wait_for_feedback=True)
-        # Send message to Open Ephys GUI
-        OEmessage = 'Reward ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
-        self.TaskIO['MessageToOE'](OEmessage)
-        # Reset GUI signal for feeder activity
-        feeder_button['button_pressed'] = False
-        # Reset last reward timer
-        with self.lastRewardLock:
-            self.lastReward = time.time()
-        if 'pellet' == FEEDER_type:
-            with self.lastPelletRewardLock:
-                self.lastPelletReward = time.time()
+        feedback = self.FEEDERs[FEEDER_type][ID]['actuator'].release(quantity, wait_for_feedback=True, 
+                                                                     fail_limit=10)
+        if feedback == 'successful':
+            # Send message to Open Ephys GUI
+            OEmessage = 'Reward ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
+            self.TaskIO['MessageToOE'](OEmessage)
+            # Reset GUI signal for feeder activity
+            feeder_button['button_pressed'] = False
+            # Reset last reward timer
+            with self.lastRewardLock:
+                self.lastReward = time.time()
+            if 'pellet' == FEEDER_type:
+                with self.lastPelletRewardLock:
+                    self.lastPelletReward = time.time()
+        elif feedback == 'failed':
+            # Send message to Open Ephys GUI
+            OEmessage = 'Feeder Failure: ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
+            self.TaskIO['MessageToOE'](OEmessage)
+            # If failed, remove feeder from game and change button(s) red
+            if FEEDER_type == 'pellet':
+                self.activePfeeders.remove(ID)
+                # Make sure Pellet feeder choice function will reset
+                self.old_PelletHistogramParameters = None
+            elif FEEDER_type == 'milk':
+                self.activeMfeeders.remove(ID)
+            feeder_button['toggled']['color'] = (255, 0, 0)
+            feeder_button['callback'] = self.inactivated_feeder_callback
+            if FEEDER_type == 'milk':
+                buttonMilkTrial = self.getButton('buttonMilkTrial', ID)
+                buttonMilkTrial['toggled']['color'] = (255, 0, 0)
+                buttonMilkTrial['callback'] = self.inactivated_feeder_callback
         # Remove notification of onging reward delivery
         with self.rewardInProgressLock:
             self.rewardInProgress.remove(FEEDER_type + ' ' + ID)
@@ -578,13 +602,16 @@ class Core(object):
         self.feederID_milkTrial = button['callargs'][0]
         self.start_milkTrial(action='user')
 
-    def getButton(self, button_name, FEEDER_type=None, FEEDER_ID=None):
+    def getButton(self, button_name, FEEDER_ID=None):
         button = self.buttons[self.button_names.index(button_name)]
-        if isinstance(button, list):
-            if FEEDER_type == 'milk':
-                button = button[self.activeMfeeders.index(FEEDER_ID) + 1]
-            elif FEEDER_type == 'pellet':
-                button = button[self.activePfeeders.index(FEEDER_ID) + 1]
+        if isinstance(button, list): 
+            if FEEDER_ID is None:
+                raise ValueError('getButton needs FEEDER_ID for this button_name.')
+            else:
+                for subbutton in button:
+                    if 'text' in subbutton.keys() and subbutton['text'] == FEEDER_ID:
+                        button = subbutton
+                        break
 
         return button
 
@@ -854,9 +881,10 @@ class Core(object):
         N_feeders = len(self.activeMfeeders)
         if N_feeders > 1:
             # Find number of successful trials for each feeder
-            n_successful_trials = np.zeros(N_feeders, dtype=np.float64)
-            for n_feeder in range(N_feeders):
-                n_successful_trials[n_feeder] = self.milkTrialPerformance[n_feeder]['successful']
+            n_successful_trials = []
+            for ID in self.activeMfeeders:
+                n_successful_trials.append(self.milkTrialPerformance[ID]['successful'])
+            n_successful_trials = np.array(n_successful_trials, dtype=np.float64)
             # Choose feeder with weighted randomness
             if np.any(n_successful_trials > 0):
                 feederProbabilityWeights = np.sum(n_successful_trials) - n_successful_trials
@@ -872,7 +900,7 @@ class Core(object):
 
     def start_milkTrial(self, action='undefined'):
         # Make process visible on GUI
-        feeder_button = self.getButton('buttonMilkTrial', 'milk', self.feederID_milkTrial)
+        feeder_button = self.getButton('buttonMilkTrial', self.feederID_milkTrial)
         feeder_button['button_pressed'] = True
         # These settings put the game_logic into milkTrial mode
         self.lastMilkTrial = time.time()
@@ -889,20 +917,19 @@ class Core(object):
         OEmessage = 'milkTrialEnd Success:' + str(successful)
         self.TaskIO['MessageToOE'](OEmessage)
         # Reset GUI signal of trial process
-        feeder_button = self.getButton('buttonMilkTrial', 'milk', self.feederID_milkTrial)
+        feeder_button = self.getButton('buttonMilkTrial', self.feederID_milkTrial)
         feeder_button['button_pressed'] = False
         # Record outcome and release reward if successful
-        n_feeder = self.activeMfeeders.index(self.feederID_milkTrial)
-        self.milkTrialPerformance[n_feeder]['n_trials'] += 1
+        self.milkTrialPerformance[self.feederID_milkTrial]['n_trials'] += 1
         if successful:
             threading.Thread(target=self.releaseReward, 
                              args=('milk', self.feederID_milkTrial, 'goal_milk', 
                                    self.TaskSettings['MilkQuantity'])
                              ).start()
-            self.milkTrialPerformance[n_feeder]['successful'] += 1
+            self.milkTrialPerformance[self.feederID_milkTrial]['successful'] += 1
         else:
             self.milkTrialFailTime = time.time()
-            self.milkTrialPerformance[n_feeder]['failed'] += 1
+            self.milkTrialPerformance[self.feederID_milkTrial]['failed'] += 1
         # Update n_feeder_milkTrial for next trial
         self.feederID_milkTrial = self.chooseMilkTrialFeeder()
         self.updateMilkTrialMinSepratation()

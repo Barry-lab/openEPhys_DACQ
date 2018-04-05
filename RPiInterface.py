@@ -305,30 +305,77 @@ class RewardControl(object):
         self.ssh_connection = ssh(RPiIP, RPiUsername, RPiPassword)
         self.ssh_connection.sendCommand('pkill python') # Ensure any past processes have closed
 
-    def release(self, quantity=1, wait_for_feedback=False):
+    def release(self, quantity=1, wait_for_feedback=False, fail_limit=10):
+        self.quantity = quantity
+        self.success_count = 0
+        self.fail_limit = fail_limit
+        self.fail_count = 0
         self.FEEDER_Busy = True
+        # Set input to feeder to include feedback command if requested
         if wait_for_feedback:
             feedback_string = ' feedback '
             # Set up listening for reward confirmation
             FEEDERmessages = listenMessagesPAIR(address=self.RPiIP)
             FEEDERmessages.add_callback(self.feederMessageParser)
+            self.responses_incoming = False
         else:
             feedback_string = ''
+        # Send correct command to the feeder
         if self.FEEDER_type == 'pellet':
             self.ssh_connection.sendCommand('nohup python releasePellet.py ' + \
                                             str(int(quantity)) + feedback_string + ' &')
         elif self.FEEDER_type == 'milk':
             self.ssh_connection.sendCommand('nohup python openPinchValve.py ' + \
                                             str(quantity) + feedback_string + ' &')
+        # If feedback requested, 
         if wait_for_feedback:
-            while self.FEEDER_Busy:
+            if self.FEEDER_type == 'pellet':
+                max_wait_time = 4 # This allows enough time for the pellet feeder to send the first message
+            if self.FEEDER_type == 'milk':
+                max_wait_time = quantity + 4 # This allows enough time for the milk feeder
+            waiting_started = time.time()
+            # Make sure not to wait too long
+            while not self.responses_incoming and time.time() - waiting_started < max_wait_time:
                 time.sleep(0.1)
+            # If any messages received in time given, wait for feederMessageParser to set FEEDER_Busy to False
+            if self.responses_incoming:
+                while self.FEEDER_Busy:
+                    time.sleep(0.1)
+            # Stop listening messages
             FEEDERmessages.close()
+            # If feedback failed, stop feeder and return failed message
+            if self.FEEDER_Busy:
+                self.ssh_connection.sendCommand('pkill python') # Stop the feeder
+                return 'failed'
+            else:
+                # If feedback successful, send the feedback
+                return self.message
         else:
             self.FEEDER_Busy = False
 
     def feederMessageParser(self, message):
-        if message == 'successful':
+        '''
+        Checks the feedback message. If successful, sets FEEDER_Busy to False.
+        Counts failed attempts and stops feeder when fail_limit reached.
+        If multiple pellets requested, fail_count is reset after each successful pellet.
+        '''
+        self.responses_incoming = True
+        if message == 'failed':
+            self.fail_count += 1
+            if self.fail_count > self.fail_limit:
+                self.ssh_connection.sendCommand('pkill python') # Stop the feeder
+                self.message = 'failed'
+                self.FEEDER_Busy = False
+        elif message == 'successful':
+            self.success_count += 1
+            if self.FEEDER_type == 'milk' or (self.FEEDER_type == 'pellet' and self.success_count >= self.quantity):
+                self.message = 'successful'
+                self.FEEDER_Busy = False
+            else:
+                self.fail_count = 0
+        else:
+            self.ssh_connection.sendCommand('pkill python') # Stop the feeder
+            self.message = 'failed'
             self.FEEDER_Busy = False
 
     def close(self):

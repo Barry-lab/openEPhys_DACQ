@@ -92,6 +92,9 @@ if len(sys.argv) < 2:
     print('Incorrect input.')
 else:
     n_pellets = int(sys.argv[1])
+    # Initialise messaging pipe
+    if len(sys.argv) == 3 and str(sys.argv[2]) == 'feedback':
+        publisher = sendMessagesPAIR()
     # Initialise signalling to servo
     sc = servo_controller()
     # Drop as many pellets as requested
@@ -117,12 +120,16 @@ else:
                 with pellet_checker.pelletDetectedLock:
                     release_successful = pellet_checker.pelletDetected
             pellet_checker.close()
+            # Send message of outcome
+            if len(sys.argv) == 3 and str(sys.argv[2]) == 'feedback':
+                if release_successful:
+                    publisher.sendMessage('successful')
+                else:
+                    publisher.sendMessage('failed')
     # Stop signalling to the servo
     sc.close()
     # Update pelletUseCount file
     update_pelletUseCount(n_pellets)
-    # Send message that action was completed
+    # Close messaging pipe
     if len(sys.argv) == 3 and str(sys.argv[2]) == 'feedback':
-        publisher = sendMessagesPAIR()
-        publisher.sendMessage('successful')
         publisher.close()
