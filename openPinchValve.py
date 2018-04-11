@@ -12,11 +12,24 @@
 import sys
 import piconzero as pz
 from time import sleep
-from ZMQcomms import sendMessagesPAIR
+from ZMQcomms import paired_messenger
+from threading import Thread
+
+publisher = None
+
+def initialize_publisher():
+    global publisher
+    publisher = paired_messenger(port=1232)
+    sleep(1)
 
 if len(sys.argv) < 2:
     print('Incorrect input.')
 else:
+    # Prepare feedback messaging connection in a separate thread
+    if len(sys.argv) == 3 and str(sys.argv[2]) == 'feedback':
+        T_initialize_publisher = Thread(target=initialize_publisher)
+        T_initialize_publisher.start()
+    # Perform pinch valve operation
     duration = float(sys.argv[1])
     pz.init()
     pz.setMotor(1,127)
@@ -25,6 +38,6 @@ else:
     pz.cleanup()
     # Send message that action was completed
     if len(sys.argv) == 3 and str(sys.argv[2]) == 'feedback':
-        publisher = sendMessagesPAIR()
+        T_initialize_publisher.join() # Make sure publisher initialization thread is finished
         publisher.sendMessage('successful')
         publisher.close()

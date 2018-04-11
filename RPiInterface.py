@@ -11,7 +11,7 @@ import numpy as np
 from scipy.spatial.distance import euclidean
 from itertools import combinations
 from TrackingDataProcessing import combineCamerasData
-from ZMQcomms import listenMessagesPAIR
+from ZMQcomms import paired_messenger
 
 class TrackingControl(object):
 
@@ -36,7 +36,7 @@ class TrackingControl(object):
 
     def start(self):
         for connection in self.RPiSSH:
-            command = 'cd ' + self.TrackingSettings['tracking_folder'] + ' && nohup python tracking.py &'
+            command = 'cd ' + self.TrackingSettings['tracking_folder'] + ' && python tracking.py &'
             connection.sendCommand(command)
 
     def stop(self):
@@ -298,12 +298,20 @@ class onlineTrackingData(object):
 class RewardControl(object):
     # This class allows control of FEEDERs
     # FEEDER_type can be either 'milk' or 'pellet'
-    def __init__(self, FEEDER_type, RPiIP, RPiUsername, RPiPassword):
+    def __init__(self, FEEDER_type, RPiIP, RPiUsername, RPiPassword, audioControl=False, audioFreq=(4000, 0)):
         self.FEEDER_type = FEEDER_type
         self.RPiIP = RPiIP
+        self.audioControl = audioControl
         # Set up SSH connection
         self.ssh_connection = ssh(RPiIP, RPiUsername, RPiPassword)
         self.ssh_connection.sendCommand('pkill python') # Ensure any past processes have closed
+        # Initialize audio control script if audioControl=True
+        if self.audioControl:
+            self.ssh_connection.sendCommand('amixer sset PCM,0 99%' + ' &')
+            threading.Thread(target=self.ssh_connection.sendCommand, 
+                             args=('python audioSignalControl.py ' + \
+                                   str(audioFreq[0]) + ' ' + str(audioFreq[1]),)).start()
+            self.audioController = paired_messenger(address=self.RPiIP, port=4186)
 
     def release(self, quantity=1, wait_for_feedback=False, fail_limit=10):
         self.quantity = quantity
@@ -315,17 +323,17 @@ class RewardControl(object):
         if wait_for_feedback:
             feedback_string = ' feedback '
             # Set up listening for reward confirmation
-            FEEDERmessages = listenMessagesPAIR(address=self.RPiIP)
-            FEEDERmessages.add_callback(self.feederMessageParser)
             self.responses_incoming = False
+            FEEDERmessages = paired_messenger(address=self.RPiIP, port=1232)
+            FEEDERmessages.add_callback(self.feederMessageParser)
         else:
             feedback_string = ''
         # Send correct command to the feeder
         if self.FEEDER_type == 'pellet':
-            self.ssh_connection.sendCommand('nohup python releasePellet.py ' + \
+            self.ssh_connection.sendCommand('python releasePellet.py ' + \
                                             str(int(quantity)) + feedback_string + ' &')
         elif self.FEEDER_type == 'milk':
-            self.ssh_connection.sendCommand('nohup python openPinchValve.py ' + \
+            self.ssh_connection.sendCommand('python openPinchValve.py ' + \
                                             str(quantity) + feedback_string + ' &')
         # If feedback requested, 
         if wait_for_feedback:
@@ -378,5 +386,20 @@ class RewardControl(object):
             self.message = 'failed'
             self.FEEDER_Busy = False
 
+    def playAudioSignal(self):
+        if self.audioControl:
+            self.audioController.sendMessage('play')
+        else:
+            raise ValueError('audioControl not activated!')
+
+    def stopAudioSignal(self):
+        if self.audioControl:
+            self.audioController.sendMessage('stop')
+        else:
+            raise ValueError('audioControl not activated!')
+
     def close(self):
+        if self.audioControl:
+            self.audioController.close()
+        self.ssh_connection.sendCommand('pkill python')
         self.ssh_connection.disconnect()

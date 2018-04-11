@@ -9,8 +9,8 @@
 from RPi import GPIO
 import time
 import sys
-import threading
-from ZMQcomms import sendMessagesPAIR
+from threading import Thread, Lock
+from ZMQcomms import paired_messenger
 import os
 
 GPIO.setmode(GPIO.BOARD) # Use board numbering for TTL pin
@@ -28,8 +28,8 @@ class detect_pellet(object):
         self.beamPin = beamPin
         GPIO.setup(self.beamPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         self.pelletDetected = False
-        self.pelletDetectedLock = threading.Lock()
-        threading.Thread(target=self.wait_for_pellet).start()
+        self.pelletDetectedLock = Lock()
+        Thread(target=self.wait_for_pellet).start()
 
     def wait_for_pellet(self):
         while not self.pelletDetected:
@@ -84,6 +84,13 @@ def update_pelletUseCount(n_pellets):
     with open(pelletUseCountFileName, 'w') as file:
         file.write(str(pelletUseCount))
 
+publisher = None
+
+def initialize_publisher():
+    global publisher
+    publisher = paired_messenger(port=1232)
+    time.sleep(1)
+
 # Set these angles to work with your feeder
 LoadingAngle = 30
 ReleaseAngle = 90
@@ -94,7 +101,8 @@ else:
     n_pellets = int(sys.argv[1])
     # Initialise messaging pipe
     if len(sys.argv) == 3 and str(sys.argv[2]) == 'feedback':
-        publisher = sendMessagesPAIR()
+        T_initialize_publisher = Thread(target=initialize_publisher)
+        T_initialize_publisher.start()
     # Initialise signalling to servo
     sc = servo_controller()
     # Drop as many pellets as requested
@@ -122,6 +130,7 @@ else:
             pellet_checker.close()
             # Send message of outcome
             if len(sys.argv) == 3 and str(sys.argv[2]) == 'feedback':
+                T_initialize_publisher.join() # Make sure publisher initialization thread is finished
                 if release_successful:
                     publisher.sendMessage('successful')
                 else:

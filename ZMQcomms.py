@@ -15,55 +15,47 @@ def get_localhost_ip():
 
     return address
 
-class sendMessagesPAIR(object):
+class paired_messenger(object):
     '''
-    This class can send messages to listenMessagesPAIR class running on the same
+    This class can exchange messages with another pair_messenger instance running on the same
         or different machine, pointed to the same IP address.
-    Use sendMessage method to send a message in string format.
-    '''
-    def __init__(self, address='localhost', port=5884):
-        # Set up ZMQ connection to OpenEphysGUI
-        if address == 'localhost':
-            address = get_localhost_ip()
-        url = "tcp://%s:%d" % (get_localhost_ip(), port)
-        context = zmq.Context()
-        self.socket = context.socket(zmq.PAIR)
-        self.socket.bind(url)
-
-    def sendMessage(self, message):
-        self.socket.send(message)
-        feedback = self.socket.recv()
-        if feedback != message:
-            raise ValueError('Incorrect string returned')
-
-    def close(self):
-        self.socket.close()
-
-class listenMessagesPAIR(object):
-    '''
-    This class can receive messages from sendMessagesPAIR class running on the same
-        or different machine, pointed to the same IP address.
+    Bind one of the instances to address='localhost' 
+        and the other pointing to the corresponding IP address.
     Use add_callback method to add callbacks which will be called when a message
         is received. You can couple arguments with the callback if presented as a list
         or tuple, with callback being the first element.
+    NOTE! On slower systems, the initialization process may take some time.
+        If messages are expected to be received or sent immediately, a delay may be necessary
+        after instantiation of this object. Depending on system, 0.25 to 1.0 seconds.
     '''
-    def __init__(self, address='localhost', port=5884, timeout=2, printMessages=False):
+    def __init__(self, address='localhost', port=5884, timeout=0.5, printMessages=False):
+        # Identify if client or server instance
         if address == 'localhost':
+            self.localhost = True
             address = get_localhost_ip()
+        else:
+            self.localhost = False
+        # Connect to an address
         self.url = "tcp://%s:%d" % (address, port)
         context = zmq.Context()
         self.socket = context.socket(zmq.PAIR)
-        self.socket.connect(self.url)
+        if self.localhost:
+            self.socket.bind(self.url)
+        else:
+            self.socket.connect(self.url)
         self.socket.RCVTIMEO = int(timeout * 1000)  # in milliseconds
+        # Set callbacks list
+        self.callbacks = []
+        if printMessages:
+            self.add_callback(self.printMessage)
         # Start listening thread
         self.lock = threading.Lock()
         self.is_running = True
         self.thread = threading.Thread(target=self.run)
         self.thread.start()
-        # Set callbacks list
-        self.callbacks = []
-        if printMessages:
-            self.add_callback(self.printMessage)
+
+    def sendMessage(self, message):
+        self.socket.send(message)
 
     def close(self):
 
@@ -109,7 +101,6 @@ class listenMessagesPAIR(object):
 
             try:
                 msg = self.socket.recv()
-                self.socket.send(msg)
                 self._send_message_to_callbacks(msg)
 
             except zmq.ZMQError:
