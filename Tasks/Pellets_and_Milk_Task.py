@@ -13,7 +13,9 @@ from copy import deepcopy
 def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
     feeder = RewardControl(FEEDER_type, str(RPiIPBox.text()), 
                            str(RPiUsernameBox.text()), str(RPiPasswordBox.text()))
-    feeder.release(float(str(quantityBox.text())), wait_for_feedback=False)
+    feedback = feeder.release(float(str(quantityBox.text())), wait_for_feedback=True)
+    if feedback == 'failed':
+        print('FEEDER ' + FEEDER_type + ' @' + str(RPiIPBox.text()) + ' activation FAILED.')
     feeder.close()
 
 def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):

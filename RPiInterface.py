@@ -330,10 +330,10 @@ class RewardControl(object):
             feedback_string = ''
         # Send correct command to the feeder
         if self.FEEDER_type == 'pellet':
-            self.ssh_connection.sendCommand('python releasePellet.py ' + \
+            self.ssh_connection.sendCommand('nohup python releasePellet.py ' + \
                                             str(int(quantity)) + feedback_string + ' &')
         elif self.FEEDER_type == 'milk':
-            self.ssh_connection.sendCommand('python openPinchValve.py ' + \
+            self.ssh_connection.sendCommand('nohup python openPinchValve.py ' + \
                                             str(quantity) + feedback_string + ' &')
         # If feedback requested, 
         if wait_for_feedback:
