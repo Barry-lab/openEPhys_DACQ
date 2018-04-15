@@ -16,7 +16,7 @@ class ssh:
         self.client.set_missing_host_key_policy(client.AutoAddPolicy())
         self.client.connect(address, username=username, password=password, look_for_keys=False)
 
-    def sendCommand(self, command):
+    def sendCommand(self, command, verbose=True):
         if(self.client):
             stdin, stdout, stderr = self.client.exec_command(command)
             while not stdout.channel.exit_status_ready():
@@ -28,7 +28,8 @@ class ssh:
                         prevdata = stdout.channel.recv(1024)
                         alldata += prevdata
 
-                    print(str(alldata))
+                    if verbose:
+                        print(str(alldata))
         else:
             print("Connection not opened.")
 

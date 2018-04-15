@@ -1099,11 +1099,20 @@ class Core(object):
         # Check if animal has been without pellet reward for too long
         game_progress_names.append('inactivity')
         game_progress.append({'name': 'Inactivity', 
-                              'game_states': ['pellet', 'milk'], 
+                              'game_states': ['interval', 'pellet', 'milk'], 
                               'target': self.TaskSettings['MaxInactivityDuration'], 
                               'status': int(round(timeSinceLastReward)), 
                               'complete': timeSinceLastReward >= self.TaskSettings['MaxInactivityDuration'], 
                               'percentage': timeSinceLastReward / float(self.TaskSettings['MaxInactivityDuration'])})
+        # Check if animal has been chewing enough since last reward
+        game_progress_names.append('chewing')
+        n_chewings = self.number_of_chewings(lastPelletRewardTime)
+        game_progress.append({'name': 'Chewing', 
+                              'game_states': ['interval'], 
+                              'target': self.TaskSettings['Chewing_Target'], 
+                              'status': n_chewings, 
+                              'complete': n_chewings >= self.TaskSettings['Chewing_Target'], 
+                              'percentage': n_chewings / float(self.TaskSettings['Chewing_Target'])})
         # Check if enough time as passed since last pellet reward
         game_progress_names.append('time_since_last_pellet')
         game_progress.append({'name': 'Since Pellet', 
@@ -1139,15 +1148,6 @@ class Core(object):
                               'status': int(round(total_distance)), 
                               'complete': total_distance >= self.TaskSettings['LastTravelDist'], 
                               'percentage': total_distance / float(self.TaskSettings['LastTravelDist'])})
-        # Check if animal has been chewing enough since last reward
-        game_progress_names.append('chewing')
-        n_chewings = self.number_of_chewings(lastPelletRewardTime)
-        game_progress.append({'name': 'Chewing', 
-                              'game_states': ['pellet'], 
-                              'target': self.TaskSettings['Chewing_Target'], 
-                              'status': n_chewings, 
-                              'complete': n_chewings >= self.TaskSettings['Chewing_Target'], 
-                              'percentage': n_chewings / float(self.TaskSettings['Chewing_Target'])})
         # Check if animal is far enough from milk rewards
         game_progress_names.append('distance_from_milk_feeders')
         if len(self.activeMfeeders) > 0:
@@ -1189,15 +1189,27 @@ class Core(object):
         # IF IN INTERVAL STATE
         if self.game_state == 'interval':
             # If in interval state, check if conditions met for milk or pellet state transition
-            conditions = {'pellet_interval': game_progress[game_progress_names.index('time_since_last_pellet')]['complete'], 
+            conditions = {'inactivity': game_progress[game_progress_names.index('inactivity')]['complete'], 
+                          'chewing': game_progress[game_progress_names.index('chewing')]['complete'], 
+                          'pellet_interval': game_progress[game_progress_names.index('time_since_last_pellet')]['complete'], 
                           'milk_trial_penalty': game_progress[game_progress_names.index('fail_penalty')]['complete'], 
                           'milk_trial_interval': game_progress[game_progress_names.index('time_since_last_milk_trial')]['complete']}
-            if conditions['pellet_interval'] and conditions['milk_trial_penalty'] and conditions['milk_trial_interval']:
+            if conditions['inactivity']:
+                # If animal has been without any rewards for too long, release pellet reward
+                self.game_state = 'reward_in_progress'
+                ID = self.choose_pellet_feeder()
+                threading.Thread(target=self.releaseReward, 
+                                 args=('pellet', ID, 'goal_inactivity', self.TaskSettings['PelletQuantity'])
+                                 ).start()
+            elif conditions['chewing'] and conditions['pellet_interval'] and conditions['milk_trial_penalty'] and conditions['milk_trial_interval']:
                 # If conditions for pellet and milk state are met, choose one based on choose_subtask function
                 self.game_state = self.choose_subtask()
-            elif conditions['pellet_interval'] and conditions['milk_trial_penalty'] and not conditions['milk_trial_interval']:
+            elif conditions['chewing'] and conditions['pellet_interval'] and conditions['milk_trial_penalty'] and (not conditions['milk_trial_interval']):
                 # If conditions are met for pellet but not for milk, change game state to pellet
                 self.game_state = 'pellet'
+            elif (not conditions['chewing']) and conditions['pellet_interval'] and conditions['milk_trial_penalty'] and conditions['milk_trial_interval']:
+                # If conditions are met for milk but not for pellet, change game state to milk
+                self.game_state = 'milk'
             # Make sure there are feeders for this game state
             if self.game_state == 'pellet' and len(self.activePfeeders) == 0:
                 self.game_state = 'interval'
@@ -1206,8 +1218,7 @@ class Core(object):
         # IF IN PELLET STATE
         elif self.game_state == 'pellet':
             conditions = {'inactivity': game_progress[game_progress_names.index('inactivity')]['complete'], 
-                          'mobility': game_progress[game_progress_names.index('mobility')]['complete'], 
-                          'chewing': game_progress[game_progress_names.index('chewing')]['complete']}
+                          'mobility': game_progress[game_progress_names.index('mobility')]['complete']}
             if conditions['inactivity']:
                 # If animal has been without any rewards for too long, release pellet reward
                 self.game_state = 'reward_in_progress'
@@ -1215,7 +1226,7 @@ class Core(object):
                 threading.Thread(target=self.releaseReward, 
                                  args=('pellet', ID, 'goal_inactivity', self.TaskSettings['PelletQuantity'])
                                  ).start()
-            elif conditions['chewing'] and conditions['mobility']:
+            elif conditions['mobility']:
                 # If animal has chewed enough and is mobile enough, release pellet reward
                 self.game_state = 'reward_in_progress'
                 ID = self.choose_pellet_feeder()
@@ -1351,7 +1362,16 @@ class Core(object):
         threading.Thread(target=self.main_loop).start()
 
     def stop(self):
+        # Make sure reward delivery is finished before closing game processes
+        while self.game_state == 'reward_in_progress':
+            print('Waiting for reward_in_progress to finish...')
+            time.sleep(1)
+        # Stop main game loop
         self.mainLoopActive = False
+        # Send message to Open Ephys
+        self.gameOn = False
+        OEmessage = 'Game On: ' + str(self.gameOn)
+        self.TaskIO['MessageToOE'](OEmessage)
         # Close FEEDER connections
         print('Closing FEEDER connections...')
         self.closeAllFEEDERs()

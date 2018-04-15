@@ -30,7 +30,7 @@ class TrackingControl(object):
 
     def initRPiSSH(self, n_rpi, nRPi):
         connection = ssh(self.TrackingSettings['RPiInfo'][str(n_rpi)]['IP'], self.TrackingSettings['username'], self.TrackingSettings['password'])
-        connection.sendCommand('pkill python') # Ensure any past processes have closed
+        connection.sendCommand('sudo pkill python') # Ensure any past processes have closed
         with self.RPiSSH_Lock:
             self.RPiSSH[nRPi] = connection
 
@@ -304,14 +304,40 @@ class RewardControl(object):
         self.audioControl = audioControl
         # Set up SSH connection
         self.ssh_connection = ssh(RPiIP, RPiUsername, RPiPassword)
-        self.ssh_connection.sendCommand('pkill python') # Ensure any past processes have closed
+        self.ssh_connection.sendCommand('sudo pkill python') # Ensure any past processes have closed
         # Initialize audio control script if audioControl=True
         if self.audioControl:
-            self.ssh_connection.sendCommand('amixer sset PCM,0 99%' + ' &')
-            threading.Thread(target=self.ssh_connection.sendCommand, 
-                             args=('python audioSignalControl.py ' + \
-                                   str(audioFreq[0]) + ' ' + str(audioFreq[1]),)).start()
-            self.audioController = paired_messenger(address=self.RPiIP, port=4186)
+            self.init_audioController(RPiIP, RPiUsername, RPiPassword, audioFreq)
+
+    def init_audioController(self, RPiIP, RPiUsername, RPiPassword, audioFreq):
+        '''
+        Starts audioSignalControl.py on the RPi and checks if initialization successful.
+            If no message is received of a successful initialization within 20 seconds, 
+            the process is killed and initialization is attempted again.
+            It is unclear, what causes the unsuccessful initializations.
+        '''
+        self.audioController_init_successful = False
+        self.audioController_messenger = paired_messenger(address=self.RPiIP, port=4186)
+        self.audioController_messenger.add_callback(self.audioController_init_check)
+        self.ssh_audioControl_connection = ssh(RPiIP, RPiUsername, RPiPassword)
+        self.ssh_audioControl_connection.sendCommand('amixer sset PCM,0 99%', verbose=False)
+        self.T_audioControl = threading.Thread(target=self.ssh_audioControl_connection.sendCommand, 
+                                               args=('python audioSignalControl.py ' + \
+                                               str(audioFreq[0]) + ' ' + str(audioFreq[1]),))
+        self.T_audioControl.start()
+        audioController_init_start_time = time.time()
+        while not self.audioController_init_successful:
+            if time.time() - audioController_init_start_time < 20:
+                time.sleep(0.25)
+            else:
+                print('FAILURE: audioController.py initialisation failed @' + self.RPiIP + ' Re-initializing...')
+                self.ssh_audioControl_connection.sendCommand('sudo pkill python')
+                self.T_audioControl.join()
+                self.T_audioControl = threading.Thread(target=self.ssh_audioControl_connection.sendCommand, 
+                                                       args=('python audioSignalControl.py ' + \
+                                                       str(audioFreq[0]) + ' ' + str(audioFreq[1]),))
+                self.T_audioControl.start()
+                audioController_init_start_time = time.time()
 
     def release(self, quantity=1, wait_for_feedback=False, fail_limit=10):
         self.quantity = quantity
@@ -353,7 +379,7 @@ class RewardControl(object):
             FEEDERmessages.close()
             # If feedback failed, stop feeder and return failed message
             if self.FEEDER_Busy:
-                self.ssh_connection.sendCommand('pkill python') # Stop the feeder
+                self.ssh_connection.sendCommand('sudo pkill python') # Stop the feeder
                 return 'failed'
             else:
                 # If feedback successful, send the feedback
@@ -371,7 +397,7 @@ class RewardControl(object):
         if message == 'failed':
             self.fail_count += 1
             if self.fail_count > self.fail_limit:
-                self.ssh_connection.sendCommand('pkill python') # Stop the feeder
+                self.ssh_connection.sendCommand('sudo pkill python') # Stop the feeder
                 self.message = 'failed'
                 self.FEEDER_Busy = False
         elif message == 'successful':
@@ -382,24 +408,31 @@ class RewardControl(object):
             else:
                 self.fail_count = 0
         else:
-            self.ssh_connection.sendCommand('pkill python') # Stop the feeder
+            self.ssh_connection.sendCommand('sudo pkill python') # Stop the feeder
             self.message = 'failed'
             self.FEEDER_Busy = False
 
     def playAudioSignal(self):
         if self.audioControl:
-            self.audioController.sendMessage('play')
+            self.audioController_messenger.sendMessage('play')
         else:
             raise ValueError('audioControl not activated!')
 
     def stopAudioSignal(self):
         if self.audioControl:
-            self.audioController.sendMessage('stop')
+            self.audioController_messenger.sendMessage('stop')
         else:
             raise ValueError('audioControl not activated!')
 
+    def audioController_init_check(self, message):
+        if message == 'initialization_successful':
+            self.audioController_init_successful = True
+
     def close(self):
         if self.audioControl:
-            self.audioController.close()
-        self.ssh_connection.sendCommand('pkill python')
+            self.audioController_messenger.sendMessage('close')
+            self.T_audioControl.join()
+            self.audioController_messenger.close()
+            self.ssh_audioControl_connection.disconnect()
+        self.ssh_connection.sendCommand('sudo pkill python')
         self.ssh_connection.disconnect()

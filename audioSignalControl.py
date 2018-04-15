@@ -1,6 +1,4 @@
-from pygame import init as pygame_init
-from pygame import sndarray as pygame_sndarray
-from pygame import mixer
+import pygame
 import numpy as np
 import time
 from ZMQcomms import paired_messenger
@@ -22,7 +20,7 @@ def createSineWaveSound(frequency, modulation_frequency=0):
         marr = marr / max(marr)
         arr = np.int16(arr.astype(np.float64) * marr)
     arr = np.repeat(arr[:,None],2,axis=1)
-    sound = pygame_sndarray.make_sound(arr)
+    sound = pygame.sndarray.make_sound(arr)
 
     # Use sound.play(-1) to start sound. (-1) means it is in infinite loop
     # Use sound.stop() to stop the sound
@@ -32,16 +30,16 @@ def createSineWaveSound(frequency, modulation_frequency=0):
 class audioControl(object):
     def __init__(self, frequency, modulation_frequency=0):
         # Initialize pygame for playing sound
-        mixer.pre_init(48000, -16, 2)
-        pygame_init()
+        pygame.mixer.pre_init(48000, -16, 2)
+        pygame.mixer.init()
+        pygame.init()
         # Get sound
         self.sound = createSineWaveSound(frequency, modulation_frequency)
         # Set up ZMQ communications
         self.ControlMessages = paired_messenger(port=4186)
+        time.sleep(1)
         self.ControlMessages.add_callback(self.command_parser)
-        # Make audioControl responsive to commands
-        self.KeepListeningCommands = True
-        self.run()
+        self.ControlMessages.sendMessage('initialization_successful')
 
     def command_parser(self, message):
         if message == 'play':
@@ -52,12 +50,15 @@ class audioControl(object):
             self.KeepListeningCommands = False
             self.ControlMessages.close()
 
-    def run(self):
+    def runUntilCloseCommand(self):
+        self.KeepListeningCommands = True
         while self.KeepListeningCommands:
             time.sleep(0.25)
+        pygame.quit()
 
 def main():
     controller = audioControl(int(sys.argv[1]), int(sys.argv[2]))
+    controller.runUntilCloseCommand()
 
 if __name__ == '__main__':
     main()
