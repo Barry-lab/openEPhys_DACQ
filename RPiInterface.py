@@ -357,10 +357,12 @@ class RewardControl(object):
         # Send correct command to the feeder
         if self.FEEDER_type == 'pellet':
             self.ssh_connection.sendCommand('nohup python releasePellet.py ' + \
-                                            str(int(quantity)) + feedback_string + ' &')
+                                            str(int(quantity)) + feedback_string + ' &', 
+                                            timeout=5)
         elif self.FEEDER_type == 'milk':
             self.ssh_connection.sendCommand('nohup python openPinchValve.py ' + \
-                                            str(quantity) + feedback_string + ' &')
+                                            str(quantity) + feedback_string + ' &', 
+                                            timeout=5)
         # If feedback requested, 
         if wait_for_feedback:
             if self.FEEDER_type == 'pellet':
@@ -412,15 +414,25 @@ class RewardControl(object):
             self.message = 'failed'
             self.FEEDER_Busy = False
 
-    def playAudioSignal(self):
+    def playAudioSignal(self, feedback=False):
         if self.audioControl:
-            self.audioController_messenger.sendMessage('play')
+            if self.ssh_audioControl_connection.testConnection():
+                self.audioController_messenger.sendMessage('play')
+                if feedback:
+                    return 'successful'
+            elif feedback:
+                return 'failed'
         else:
             raise ValueError('audioControl not activated!')
 
-    def stopAudioSignal(self):
+    def stopAudioSignal(self, feedback=False):
         if self.audioControl:
-            self.audioController_messenger.sendMessage('stop')
+            if self.ssh_audioControl_connection.testConnection():
+                self.audioController_messenger.sendMessage('stop')
+                if feedback:
+                    return 'successful'
+            elif feedback:
+                return 'failed'
         else:
             raise ValueError('audioControl not activated!')
 

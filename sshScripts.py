@@ -4,6 +4,7 @@
 # Then send commands with connection.sendCommand('type_command_here')
 
 from paramiko import client
+from paramiko.ssh_exception import SSHException
 
 class ssh:
     # This class was taken from:
@@ -12,26 +13,53 @@ class ssh:
     client = None
 
     def __init__(self, address, username, password):
+        self.address = address
         self.client = client.SSHClient()
         self.client.set_missing_host_key_policy(client.AutoAddPolicy())
         self.client.connect(address, username=username, password=password, look_for_keys=False)
 
-    def sendCommand(self, command, verbose=True):
+    def sendCommand(self, command, timeout=5, verbose=True):
         if(self.client):
-            stdin, stdout, stderr = self.client.exec_command(command)
-            while not stdout.channel.exit_status_ready():
-                # Print data when available
-                if stdout.channel.recv_ready():
-                    alldata = stdout.channel.recv(1024)
-                    prevdata = b"1"
-                    while prevdata:
-                        prevdata = stdout.channel.recv(1024)
-                        alldata += prevdata
+            try:
+                stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
+                while not stdout.channel.exit_status_ready():
+                    # Print data when available
+                    if stdout.channel.recv_ready():
+                        alldata = stdout.channel.recv(1024)
+                        prevdata = b"1"
+                        while prevdata:
+                            prevdata = stdout.channel.recv(1024)
+                            alldata += prevdata
 
-                    if verbose:
-                        print(str(alldata))
+                        if verbose:
+                            print(str(alldata))
+            except SSHException as e:
+                if e.__str__() == 'Timeout opening channel.':
+                    print('ERROR: Command timeout!' + '\nFailed to send command: ' + command + ' | To: ' + self.address)
+                elif e.__str__() == 'SSH session not active':
+                    print('ERROR: Connection lost!' + '\nFailed to send command: ' + command + ' | To: ' + self.address)
+                else:
+                    raise e
         else:
             print("Connection not opened.")
+
+    def testConnection(self, timeout=5):
+        '''
+        Returns True if connection is active. False if connection inactive until timeout or session inactive.
+        '''
+        if(self.client):
+            try:
+                stdin, stdout, stderr = self.client.exec_command('ls', timeout=timeout)
+                return True
+            except SSHException as e:
+                if e.__str__() == 'Timeout opening channel.':
+                    return False
+                elif e.__str__() == 'SSH session not active':
+                    return False
+                else:
+                    raise e
+        else:
+            return False
 
     def disconnect(self):
         if(self.client):

@@ -526,7 +526,7 @@ class Core(object):
         new_val = int(mean_val + jitter)
         self.TaskSettings['MilkTrialMinSeparation'] = new_val
 
-    def inactivate_feeder(self, feeder_button, FEEDER_type, ID):
+    def inactivate_feeder(self, FEEDER_type, ID):
         # Remove feeder from active feeder list
         if FEEDER_type == 'pellet':
             self.activePfeeders.remove(ID)
@@ -534,12 +534,20 @@ class Core(object):
             self.old_PelletHistogramParameters = None
         elif FEEDER_type == 'milk':
             self.activeMfeeders.remove(ID)
+        # Get FEEDER button on GUI
+        if FEEDER_type == 'pellet':
+            feeder_button = self.getButton('buttonReleasePellet', ID)
+        elif FEEDER_type == 'milk':
+            feeder_button = self.getButton('buttonReleaseMilk', ID)
         # Inactivate feeder reward button
         feeder_button['enabled'] = False
         if FEEDER_type == 'milk':
             # If milk feeder, inactivate the corresponding milk trial button
             buttonMilkTrial = self.getButton('buttonMilkTrial', ID)
             buttonMilkTrial['enabled'] = False
+        # Send Note to Open Ephys GUI
+        OEmessage = 'FEEDER ' + str(self.feederID_milkTrial) + ' inactivated'
+        self.TaskIO['MessageToOE'](OEmessage)
 
     def releaseReward(self, FEEDER_type, ID, action='undefined', quantity=1):
         # Notify rest of the program that this is onging
@@ -575,7 +583,7 @@ class Core(object):
             OEmessage = 'Feeder Failure: ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
             self.TaskIO['MessageToOE'](OEmessage)
             # If failed, remove feeder from game and change button(s) red
-            self.inactivate_feeder(feeder_button, FEEDER_type, ID)
+            self.inactivate_feeder(FEEDER_type, ID)
         # Remove notification of onging reward delivery
         with self.rewardInProgressLock:
             self.rewardInProgress.remove(FEEDER_type + ' ' + ID)
@@ -911,7 +919,7 @@ class Core(object):
             self.screen.blit(self.renderText(ID), (columnedges[2], topedge + i * textSpace))
         # Display milk trial counts
         self.screen.blit(self.renderText('milk trials'), (columnedges[3], title_topedge))
-        for i, count in enumerate(self.game_counters['Successful']['count']):
+        for i, count in enumerate(self.game_counters['Milk trials']['count']):
             self.screen.blit(self.renderText(str(count)), (columnedges[3], topedge + i * textSpace))
         # Display successful milk trial counts
         self.screen.blit(self.renderText('successful'), (columnedges[4], title_topedge))
@@ -1014,13 +1022,18 @@ class Core(object):
                                                      self.FEEDERs['milk'][self.feederID_milkTrial]['ModulHz'])
             self.milkTrialTone.play(-1)
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
-            self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].playAudioSignal()
+            feedback = self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].playAudioSignal(feedback=True)
+            if feedback == 'failed':
+                self.game_state = 'interval'
+                self.inactivate_feeder('milk', self.feederID_milkTrial)
 
     def stop_milkTrialAudioSignal(self):
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
             self.milkTrialTone.stop()
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
-            self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].stopAudioSignal()
+            feedback = self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].stopAudioSignal(feedback=True)
+            if feedback == 'failed':
+                self.inactivate_feeder('milk', self.feederID_milkTrial)
 
     def start_milkTrial(self, action='undefined'):
         # These settings put the game_logic into milkTrial mode
