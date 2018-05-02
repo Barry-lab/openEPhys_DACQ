@@ -143,13 +143,13 @@ class Tracking(picamera.array.PiRGBAnalysis):
             cv2.imwrite('frame{}.jpg'.format(currenttime),frame)
 
 # Here is the actual core of the script
-with picamera.PiCamera() as camera: # Initializes the RPi camera module
+with picamera.PiCamera(clock_mode='raw') as camera: # Initializes the RPi camera module
     with Tracking(camera) as output: # Initializes the Tracking class
         camera.resolution = (imageres[0], imageres[1]) # Set frame capture resolution
         camera.exposure_mode = exposure_setting
         camera.iso = camera_iso # Set Camera ISO value (sensitivity to light)
         camera.shutter_speed = shutter_speed # Set camera shutter speed
-        setattr(picamera.array.PiRGBAnalysis, 'camera', camera) # Makes camera module accessible in Tracking class (necessary for getting timestamps from camera module)
+        setattr(output, 'camera', camera) # Makes camera module accessible in Tracking class (necessary for getting timestamps from camera module)
         # Start Recording Process
         camera.start_recording(output, format='bgr') # Initializes the camera
         print('Starting recording')

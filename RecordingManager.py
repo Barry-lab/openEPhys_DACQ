@@ -154,7 +154,6 @@ def process_single_tracking_data(n_rpi, filename, data_events):
     RPiTime2Sec = 10 ** 6 # This values is used to convert RPi times to seconds
     # Read position data for this camera
     trackingData = np.genfromtxt(filename, delimiter=',')
-    trackingData[0,2] = 0 # Set first frametime to 0
     # Read OpenEphys frame times for this camera in seconds
     OEtimes = data_events['timestamps'][np.array(data_events['eventID']) == n_rpi + 1] # Use the timestamps where RPi sent pulse to OE board
     if OEtimes.size != trackingData.shape[0]: # If TrackingLog*.csv has more datapoints than TTL pulses recorded 
@@ -164,12 +163,12 @@ def process_single_tracking_data(n_rpi, filename, data_events):
         print('WARNING! Camera ' + str(n_rpi) + ' Pos data longer than TTL pulses recorded by ' + str(offset) + '\n' + \
               'Assuming that OpenEphysGUI was stopped before cameras stopped.' + '\n' + \
               str(offset) + ' datapoints deleted from the end of position data.')
-    # Get trackingData frametimes and TTL times in seconds
-    camera_frametimes = np.float64(trackingData[:,2]) / RPiTime2Sec
+    # Get trackingData TTL times and frametimes in seconds
     camera_TTLtimes = np.float64(trackingData[:,1]) / RPiTime2Sec
+    camera_frametimes = np.float64(trackingData[:,2]) / RPiTime2Sec
     # Use pos_frametimes and camera_TTLtimes differences to correct OEtimes
-    RPiClockOffset = np.mean(camera_TTLtimes - camera_frametimes)
-    times = OEtimes - (camera_TTLtimes - camera_frametimes - RPiClockOffset)
+    frame_TTL_latency = camera_TTLtimes - camera_frametimes
+    times = OEtimes - frame_TTL_latency
     # Combine corrected timestamps with position data
     TrackingData = np.concatenate((np.expand_dims(times, axis=1), trackingData[:,3:]), axis=1).astype(np.float64)
 
