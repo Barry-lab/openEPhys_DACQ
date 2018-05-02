@@ -132,22 +132,36 @@ def create_DACQ_pos_data(OpenEphysDataPath):
     return pos_data_dacq
 
 
-def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges, eegChan, bitVolts=0.195):
+def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, lowpass_frequency, pos_edges, eegChan, bitVolts=0.195):
     '''
     EEG is downsampled to dacq_eeg_samplingrate and inverted to same polarity as spikes in AxonaFormat.
     EEG is also rescaled to microvolt values.
     '''
-    # Load EEG data of second channel
-    data = np.array(NWBio.load_continuous(fpath)['continuous'][:,eegChan], dtype=np.float64)
+    # Load EEG data of selected channel
+    continuous_data = NWBio.load_continuous(fpath)
+    if not (continuous_data is None):
+        timestamps = np.array(continuous_data['timestamps'])# Lowpass filter data
+        data = np.array(continuous_data['continuous'][:,eegChan], dtype=np.float64)
+        data = hfunct.butter_lowpass_filter(data, sampling_rate=30000.0, lowpass_frequency=lowpass_frequency, filt_order=4)
+    else:
+        # If no raw data available, load downsampled data for that tetrode
+        lowpass_data = NWBio.load_tetrode_lowpass(fpath)
+        timestamps = lowpass_data['tetrode_lowpass_timestamps']
+        data = lowpass_data['tetrode_lowpass'][:,hfunct.channels_tetrode(eegChan)]
+        lowpass_downsampling = int([i for i in  lowpass_data['tetrode_lowpass_info'] if 'downsampling ' in i][0][13:])
+        OpenEphys_SamplingRate = OpenEphys_SamplingRate / lowpass_downsampling
+        lowpass_data_filter_frequency = float([i for i in  lowpass_data['tetrode_lowpass_info'] if 'lowpass_frequency ' in i][0][18:])
+        if lowpass_data_filter_frequency > lowpass_frequency:
+            data = hfunct.butter_lowpass_filter(data, sampling_rate=OpenEphys_SamplingRate, lowpass_frequency=lowpass_frequency, filt_order=4)
+    # Resample data to dacq_eeg sampling rate
+    data = data[::int(np.round(OpenEphys_SamplingRate/dacq_eeg_samplingRate))]
+    # Invert data
     data = -data * bitVolts
-    timestamps = np.array(NWBio.load_continuous(fpath)['timestamps'])
     # Crop data outside position data
     idx_outside_pos_data = timestamps < pos_edges[0]
     idx_outside_pos_data = np.logical_or(idx_outside_pos_data, timestamps > pos_edges[1])
     idx_outside_pos_data = np.where(idx_outside_pos_data)[0]
     data = np.delete(data, idx_outside_pos_data, 0)
-    # Lowpass filter data
-    data = hfunct.butter_lowpass_filter(data, sampling_rate=30000.0, lowpass_frequency=125.0, filt_order=4)
     # Adjust EEG data format and range
     data = data - np.mean(data)
     data = data / 4000 # Set data range to between 4000 microvolts
@@ -155,7 +169,6 @@ def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, p
     data[data > 127] = 127
     data[data < -127] = -127
     # Create DACQ data eeg format
-    data = data[::int(np.round(OpenEphys_SamplingRate/dacq_eeg_samplingRate))]
     dacq_eeg_dtype = [('eeg', '=b')]
     dacq_eeg_data_dtype = '=b'
     dacq_eeg = data.astype(dtype=dacq_eeg_data_dtype)
@@ -276,8 +289,9 @@ def createAxonaData(OpenEphysDataPath, waveform_data=None, subfolder='AxonaData'
     pos_data_dacq = create_DACQ_pos_data(OpenEphysDataPath)
     OpenEphys_SamplingRate = 30000
     dacq_eeg_samplingRate = 250 # Sampling rate in Hz
+    lowpass_frequency = 125.0
     print('Converting LFP to EEG data')
-    eeg_data_dacq = create_DACQ_eeg_data(OpenEphysDataPath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, pos_edges, eegChan)
+    eeg_data_dacq = create_DACQ_eeg_data(OpenEphysDataPath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, lowpass_frequency, pos_edges, eegChan)
     # Get headers for both datatypes
     header_wave, keyorder_wave = header_templates('waveforms')
     header_pos, keyorder_pos = header_templates('pos')

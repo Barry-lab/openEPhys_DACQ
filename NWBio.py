@@ -19,9 +19,32 @@ def load_continuous(filename):
     # Load timestamps and continuous data
     recordingKey = get_recordingKey(filename)
     processorKey = get_processorKey(filename)
-    continuous = f['acquisition']['timeseries'][recordingKey]['continuous'][processorKey]['data'] # not converted to microvolts!!!! need to multiply by 0.195
-    timestamps = f['acquisition']['timeseries'][recordingKey]['continuous'][processorKey]['timestamps'] # not converted to microvolts!!!! need to multiply by 0.195
-    data = {'continuous': continuous, 'timestamps': timestamps} 
+    path = '/acquisition/timeseries/' + recordingKey + '/continuous/' + processorKey
+    if check_if_path_exists(filename, path + '/data'):
+        continuous = f[path + '/data'] # not converted to microvolts!!!! need to multiply by 0.195
+        timestamps = f[path + '/timestamps'] # not converted to microvolts!!!! need to multiply by 0.195
+        data = {'continuous': continuous, 'timestamps': timestamps}
+    else:
+        data = None
+
+    return data
+
+def load_tetrode_lowpass(filename):
+    # Load timestamps and continuous data
+    recordingKey = get_recordingKey(filename)
+    processorKey = get_processorKey(filename)
+    path = '/acquisition/timeseries/' + recordingKey + '/continuous/' + processorKey
+    if check_if_path_exists(filename, path + '/tetrode_lowpass'):
+        with h5py.File(filename, 'r') as f:
+            tetrode_lowpass = f[path + '/tetrode_lowpass'].value # not converted to microvolts!!!! need to multiply by 0.195
+            tetrode_lowpass_timestamps = f[path + '/tetrode_lowpass_timestamps'].value # not converted to microvolts!!!! need to multiply by 0.195
+            tetrode_lowpass_info = list(f[path + '/tetrode_lowpass_info'].value)
+            tetrode_lowpass_info = [str(i) for i in tetrode_lowpass_info]
+            data = {'tetrode_lowpass': tetrode_lowpass, 
+                    'tetrode_lowpass_timestamps': tetrode_lowpass_timestamps, 
+                    'tetrode_lowpass_info': tetrode_lowpass_info}
+    else:
+        data = None
 
     return data
 
