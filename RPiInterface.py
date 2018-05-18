@@ -298,7 +298,7 @@ class onlineTrackingData(object):
 class RewardControl(object):
     # This class allows control of FEEDERs
     # FEEDER_type can be either 'milk' or 'pellet'
-    def __init__(self, FEEDER_type, RPiIP, RPiUsername, RPiPassword, audioControl=False, audioFreq=(4000, 0)):
+    def __init__(self, FEEDER_type, RPiIP, RPiUsername, RPiPassword, audioControl=False, audioFreq=(4000, 500, 0)):
         self.FEEDER_type = FEEDER_type
         self.RPiIP = RPiIP
         self.audioControl = audioControl
@@ -323,7 +323,7 @@ class RewardControl(object):
         self.ssh_audioControl_connection.sendCommand('amixer sset PCM,0 99%', verbose=False)
         self.T_audioControl = threading.Thread(target=self.ssh_audioControl_connection.sendCommand, 
                                                args=('python audioSignalControl.py ' + \
-                                               str(audioFreq[0]) + ' ' + str(audioFreq[1]),))
+                                               str(audioFreq[0]) + ' ' + str(audioFreq[1]) + ' ' + str(audioFreq[2]),))
         self.T_audioControl.start()
         audioController_init_start_time = time.time()
         while not self.audioController_init_successful:
@@ -335,7 +335,7 @@ class RewardControl(object):
                 self.T_audioControl.join()
                 self.T_audioControl = threading.Thread(target=self.ssh_audioControl_connection.sendCommand, 
                                                        args=('python audioSignalControl.py ' + \
-                                                       str(audioFreq[0]) + ' ' + str(audioFreq[1]),))
+                                                       str(audioFreq[0]) + ' ' + str(audioFreq[1]) + ' ' + str(audioFreq[2]),))
                 self.T_audioControl.start()
                 audioController_init_start_time = time.time()
 

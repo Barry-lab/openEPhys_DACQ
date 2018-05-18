@@ -9,6 +9,7 @@ from scipy.spatial.distance import euclidean
 import random
 from PyQt4 import QtGui, QtCore
 from copy import deepcopy
+from audioSignalControl import createAudioSignal
 
 def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
     feeder = RewardControl(FEEDER_type, str(RPiIPBox.text()), 
@@ -26,6 +27,7 @@ def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
                            'IP': '192.168.0.40', 
                            'Position': np.array([100,50]), 
                            'SignalHz': np.array(4000), 
+                           'SignalHzWidth': np.array(500), 
                            'ModulHz': np.array(0)}
     # Create interface for interacting with this FEEDER
     FEEDER = {'Type': FEEDER_type}
@@ -69,12 +71,20 @@ def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
         hbox.addWidget(QtGui.QLabel('Signal (Hz):'))
         FEEDER['SignalHz'] = QtGui.QLineEdit(str(FEEDER_settings['SignalHz']))
         hbox.addWidget(FEEDER['SignalHz'])
+        hbox.addWidget(QtGui.QLabel('W:'))
+        if not 'SignalHzWidth' in FEEDER_settings.keys():
+            print('Remove this section in Pellets_and_Milk_Task.py when settings resaved!')
+            FEEDER_settings['SignalHzWidth'] = np.array(500)
+        FEEDER['SignalHzWidth'] = QtGui.QLineEdit(str(FEEDER_settings['SignalHzWidth']))
+        hbox.addWidget(FEEDER['SignalHzWidth'])
+        hbox.addWidget(QtGui.QLabel('M:'))
         FEEDER['ModulHz'] = QtGui.QLineEdit(str(FEEDER_settings['ModulHz']))
         hbox.addWidget(FEEDER['ModulHz'])
         playSignalButton = QtGui.QPushButton('Play')
         playSignalButton.setMaximumWidth(40)
-        playSignalButton.clicked.connect(lambda: playSineWaveSound(FEEDER['SignalHz'], 
-                                                                   FEEDER['ModulHz']))
+        playSignalButton.clicked.connect(lambda: playSiginal(FEEDER['SignalHz'], 
+                                                             FEEDER['SignalHzWidth'], 
+                                                             FEEDER['ModulHz']))
         hbox.addWidget(playSignalButton)
         vbox.addLayout(hbox)
     frame = QtGui.QFrame()
@@ -138,6 +148,7 @@ def exportSettingsFromGUI(self):
                                                  'Position': np.array(map(int, str(feeder['Position'].text()).split(',')))}
                 if FEEDER_type == 'milk':
                     FEEDERs[FEEDER_type][IDs[-1]]['SignalHz'] = np.int64(float(str(feeder['SignalHz'].text())))
+                    FEEDERs[FEEDER_type][IDs[-1]]['SignalHzWidth'] = np.int64(float(str(feeder['SignalHzWidth'].text())))
                     FEEDERs[FEEDER_type][IDs[-1]]['ModulHz'] = np.int64(float(str(feeder['ModulHz'].text())))
             # Check if there are duplicates of FEEDER IDs
             if any(IDs.count(ID) > 1 for ID in IDs):
@@ -171,39 +182,18 @@ def importSettingsToGUI(self, TaskSettings):
         elif key in self.settings.keys():
             self.settings[key].setText(str(TaskSettings[key]))
 
-def createSineWaveSound(frequency, modulation_frequency=0):
-    # Calling this function must be preceded by calling the following lines
-    # for pygame to recognise the mono sound
-    # pygame.mixer.pre_init(48000, -16, 2) # here 44100 needs to match the sampleRate in this function
-    # pygame.init()
-    sampleRate = 48000 # Must be the same as in the line 
-    peak = 4096 # 4096 : the peak ; volume ; loudness
-    arr = np.array([peak * np.sin(2.0 * np.pi * frequency * x / sampleRate) for x in range(0, sampleRate)]).astype(np.int16)
-    if modulation_frequency > 0:
-        # Modulate pure tone at specified frequency
-        modulation_frequency = int(modulation_frequency)
-        marr = np.array([np.sin(2.0 * np.pi * modulation_frequency * x / sampleRate) for x in range(0, sampleRate)]).astype(np.float64)
-        marr = marr - min(marr)
-        marr = marr / max(marr)
-        arr = np.int16(arr.astype(np.float64) * marr)
-    arr = np.repeat(arr[:,None],2,axis=1)
-    sound = pygame.sndarray.make_sound(arr)
-
-    # Use sound.play(-1) to start sound. (-1) means it is in infinite loop
-    # Use sound.stop() to stop the sound
-
-    return sound
-
-def playSineWaveSound(frequency, modulation_frequency=0):
+def playSiginal(frequency, frequency_band_width, modulation_frequency):
     if type(frequency) == QtGui.QLineEdit:
         frequency = np.int64(float(str(frequency.text())))
+    if type(frequency_band_width) == QtGui.QLineEdit:
+        frequency_band_width = np.int64(float(str(frequency_band_width.text())))
     if type(modulation_frequency) == QtGui.QLineEdit:
         modulation_frequency = np.int64(float(str(modulation_frequency.text())))
     # Initialize pygame for playing sound
     pygame.mixer.pre_init(48000, -16, 2)
     pygame.init()
     # Get sound
-    sound = createSineWaveSound(frequency, modulation_frequency)
+    sound = createAudioSignal(frequency, frequency_band_width, modulation_frequency)
     # Play 2 seconds of the sound
     sound.play(2)
 
@@ -466,8 +456,13 @@ class Core(object):
         self.game_state = 'interval'
         self.mainLoopActive = True
         self.clock = pygame.time.Clock()
-        pygame.mixer.pre_init(48000, -16, 2)  # This is necessary for mono sound to work
+        pygame.mixer.pre_init(48000, -16, 2)  # This is necessary for sound to work
         pygame.init()
+        # If ambient sound signals are required, create the sound
+        if self.TaskSettings['AudioSignalMode'] == 'ambient':
+            self.milkTrialSignal = createAudioSignal(self.FEEDERs['milk'][self.feederID_milkTrial]['SignalHz'], 
+                                                     self.FEEDERs['milk'][self.feederID_milkTrial]['SignalHzWidth'], 
+                                                     self.FEEDERs['milk'][self.feederID_milkTrial]['ModulHz'])
 
     def initFEEDER(self, FEEDER_type, ID):
         with self.TaskSettings_Lock:
@@ -479,7 +474,9 @@ class Core(object):
             actuator = RewardControl(FEEDER_type, IP, username, password)
         elif self.TaskSettings['AudioSignalMode'] == 'localised' and FEEDER_type == 'milk':
             # If audio signal is localised and this is for milk feeder, activate also FEEDER's speaker
-            audioFreq = (self.FEEDERs['milk'][ID]['SignalHz'], self.FEEDERs['milk'][ID]['ModulHz'])
+            audioFreq = (self.FEEDERs['milk'][ID]['SignalHz'], 
+                         self.FEEDERs['milk'][ID]['SignalHzWidth'], 
+                         self.FEEDERs['milk'][ID]['ModulHz'])
             actuator = RewardControl(FEEDER_type, IP, username, password, 
                                      audioControl=True, audioFreq=audioFreq)
         with self.TaskSettings_Lock:
@@ -676,7 +673,6 @@ class Core(object):
                         break
 
         return button
-
 
     def defineButtons(self):
         # Add or remove buttons in this function
@@ -1020,9 +1016,7 @@ class Core(object):
 
     def start_milkTrialAudioSignal(self):
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
-            self.milkTrialTone = createSineWaveSound(self.FEEDERs['milk'][self.feederID_milkTrial]['SignalHz'], 
-                                                     self.FEEDERs['milk'][self.feederID_milkTrial]['ModulHz'])
-            self.milkTrialTone.play(-1)
+            self.milkTrialSignal.play(-1)
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
             feedback = self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].playAudioSignal(feedback=True)
             if feedback == 'failed':
@@ -1031,7 +1025,7 @@ class Core(object):
 
     def stop_milkTrialAudioSignal(self):
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
-            self.milkTrialTone.stop()
+            self.milkTrialSignal.stop()
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
             feedback = self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].stopAudioSignal(feedback=True)
             if feedback == 'failed':
