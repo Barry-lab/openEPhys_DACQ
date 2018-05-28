@@ -68,7 +68,6 @@ class multiprocess(object):
         with self.output_list_Lock:
             self.output_list.append(None)
         n_in_list = self.n_total - 1
-        print('Starting a new process...')
         p = multiprocessing.Process(target=self.processor, args=(n_in_list, f, args))
         p.start()
         self.processor_list.append(p)

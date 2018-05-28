@@ -44,11 +44,9 @@ def lowpass_and_downsample_channel(signal, lowpass_freq, downsampling):
     return filtered_signal
 
 def lowpass_and_downsample_channel_on_each_tetrode(downsampling, lowpass_freq, data, n_tetrodes, badChans):
-    print('Getting downsampled data size...')
     tmp = range(data.shape[0])
     new_data_size = len(tmp[::downsampling])
     del tmp
-    print('Preparing for processing raw data...')
     processed_data_array = np.zeros((new_data_size, n_tetrodes), dtype=np.int16)
     processed_chans = []
     processed_tets = []
@@ -62,14 +60,11 @@ def lowpass_and_downsample_channel_on_each_tetrode(downsampling, lowpass_freq, d
         if len(chan) > 0:
             processed_chans.append(chan[0])
             processed_tets.append(n_tet)
-    print('Processing Raw data....')
     multiprocessor = multiprocess()
     for chan in processed_chans:
-        print('Processing channel: ' + str(chan) + '...')
         signal = np.array(data[:, chan:chan + 1]).squeeze()
         multiprocessor.run(lowpass_and_downsample_channel, (signal, lowpass_freq, downsampling))
     processed_data_list = multiprocessor.results()
-    print('Compiling processed data into an array...')
     for n_tet, processed_data in zip(processed_tets, processed_data_list):
         processed_data_array[:, n_tet] = np.int16(processed_data)
 
@@ -106,7 +101,6 @@ for dirName, subdirList, fileList in os.walk(root_path):
                         if SpikesAvailable:
                             print('Downsample and save: ' + fpath)
                             with h5py.File(fpath,'r') as h5file:
-                                print('Downsampling timestamps...')
                                 timestamps = h5file['acquisition']['timeseries'][recordingKey]['continuous'][processorKey]['timestamps'].value
                                 downsampled_data_timestamps = timestamps[::downsampling]
                                 badChans = listBadChannels(fpath)
@@ -120,7 +114,6 @@ for dirName, subdirList, fileList in os.walk(root_path):
                                 h5file['acquisition']['timeseries'][recordingKey]['continuous'][processorKey]['tetrode_lowpass_timestamps'] = downsampled_data_timestamps
                                 asciiList = [n.encode("ascii", "ignore") for n in downsampling_settings_list]
                                 h5file['acquisition']['timeseries'][recordingKey]['continuous'][processorKey]['tetrode_lowpass_info'] = h5file.create_dataset(None, (len(asciiList),),'S100', asciiList)
-                                print('Copying AUX data...')
                                 data = h5file[raw_data_path]
                                 data_AUX = np.array(data[:,auxChanStart:])
                                 h5file['acquisition']['timeseries'][recordingKey]['continuous'][processorKey]['data_AUX'] = data_AUX
