@@ -5,7 +5,107 @@ import os
 import numpy as np
 from PyQt4 import QtGui
 import subprocess
+import copy
+import multiprocessing
+from time import sleep
 
+class multiprocess(object):
+    '''
+    This class makes it easy to use multiprocessing module in a loop.
+    Use map method if memory usage is not an issue, otherwise
+    use the map method as an example how to use run and results methods.
+    '''
+    def __init__(self):
+        self.max_processes = multiprocessing.cpu_count()-1 or 1
+        self.multiprocessingManager = multiprocessing.Manager()
+        self.n_active = multiprocessing.Value('i', 0)
+        self.n_active_Lock = multiprocessing.Lock()
+        self.output_list = self.multiprocessingManager.list([])
+        self.output_list_Lock = multiprocessing.Lock()
+        self.n_total = 0
+        self.processor_list = []
+        self.run_in_progress = False
+
+    def processor(self, n_in_list, f, args):
+        '''
+        This method called by run method in a separate process to utilize multiprocessing
+        '''
+        # Evaluate the function with input arguments
+        output = f(*args)
+        # Update output list and active process counter
+        with self.output_list_Lock:
+            self.output_list[n_in_list] = output
+        with self.n_active_Lock:
+            self.n_active.value -= 1
+
+    def run(self, f, args):
+        '''
+        This method processes the function in a separate multiprocessing.Process,
+        allowing the use of multiple CPU cores.
+        If all CPU cores are in use, this function blocks until a core is from a process.
+
+        f - function to be called in a separate process
+        args - tuple of input arguments for that function
+        '''
+        if not (type(args) is tuple):
+            raise ValueError('Input args must be a tuple.')
+        # Avoid this method being called in separate threads
+        if self.run_in_progress:
+            raise Exception('multiprocessing.run method called before previous call finshed.')
+        self.run_in_progress = True
+        # If maximum number of processes active, wait until one has finished
+        with self.n_active_Lock:
+            currently_active = copy.deepcopy(self.n_active.value)
+        while currently_active >= self.max_processes:
+            sleep(0.05)
+            with self.n_active_Lock:
+                currently_active = copy.deepcopy(self.n_active.value)
+        # Update counters
+        with self.n_active_Lock:
+            self.n_active.value += 1
+        self.n_total += 1
+        # Start independent processor
+        with self.output_list_Lock:
+            self.output_list.append(None)
+        n_in_list = self.n_total - 1
+        print('Starting a new process...')
+        p = multiprocessing.Process(target=self.processor, args=(n_in_list, f, args))
+        p.start()
+        self.processor_list.append(p)
+        # Open run method for another call
+        self.run_in_progress = False
+
+    def results(self):
+        '''
+        This method returns a list, where each element corresponds to output
+        from functions as they are passed into run method, in the same order.
+        This method blocks if run method is currently being called or
+        if processors have not yet finished.
+        '''
+        # Ensure run method is not currently running
+        while self.run_in_progress:
+            sleep(0.05)
+        # Ensure all processors have finished
+        for p in self.processor_list:
+            p.join()
+
+        return self.output_list
+
+    def map(self, f, args_list):
+        '''
+        This function evaluates function f with each set of arguments in args_list
+        using multiprocessing module. It outputs a list where each element is the output
+        from function f for each set of arguments in args_list.
+        This function is more convenient to use that run and results separately,
+        but it requires loading all input arguments into memory, which is not always ideal.
+
+        f - function to evaluate
+        args_list - list of tuples of arguments for function f
+        '''
+        for args in args_list:
+            self.run(f, args)
+
+        return self.results()
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
     nyq = 0.5 * fs

@@ -47,7 +47,8 @@ def extract_spikes_from_raw_data(NWBfilePath, UseChans, tetrode_nrs=None, thresh
     # Set bad channels to 0
     if badChan:
         for nchanBad in badChan:
-            nchan = chan_nrs.index(nchanBad)
+            if nchanBad in chan_nrs:
+                nchan = chan_nrs.index(nchanBad)
         continuous[nchan,:] = np.int16(0)
     # Filter each channel
     chanToFilter = [nchan for nchan in goodChan if hfunct.channels_tetrode(chan_nrs[nchan]) in tetrode_nrs]
@@ -184,7 +185,7 @@ def get_tetrode_nrs(UseChans):
 
     return tetrode_nrs
 
-def createWaveformDict(OpenEphysDataPath, UseChans, UseRaw=False, noise_cut_off=500, threshold=50):
+def createWaveformDict(OpenEphysDataPath, UseChans, UseRaw=False, noise_cut_off=1000, threshold=50):
     '''
     This function organises NWB data into dictonaries
     '''
@@ -194,7 +195,7 @@ def createWaveformDict(OpenEphysDataPath, UseChans, UseRaw=False, noise_cut_off=
     if not UseRaw:
         print('Loading spikes')
         spike_data = NWBio.load_spikes(OpenEphysDataPath, tetrode_nrs=tetrode_nrs, use_badChan=True)
-    if len(spike_data) > 0 and not UseRaw:
+    if not UseRaw and len(spike_data) > 0:
         # Check which tetrodes have data missing in the recording
         tetrodes_missing_in_spike_data = tetrode_nrs
         for data in spike_data:
@@ -276,7 +277,7 @@ def get_badChan(OpenEphysDataPaths, UseChans):
 
     return badChan
 
-def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=500, threshold=50):
+def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=1000, threshold=50):
     if isinstance(OpenEphysDataPaths, basestring):
         OpenEphysDataPaths = [OpenEphysDataPaths]
     # If directories entered as paths, attempt creating path to file by appending experiment_1.nwb
@@ -363,7 +364,7 @@ if __name__ == '__main__':
     parser.add_argument('--chan', type=int, nargs = 2, 
                         help='list the first and last channel to process (counting starts from 1)')
     parser.add_argument('--noisecut', type=int, nargs = 1, 
-                        help='enter 0 to skip or value in microvolts for noise cutoff (default is 500)')
+                        help='enter 0 to skip or value in microvolts for noise cutoff (default is 1000)')
     parser.add_argument('--threshold', type=int, nargs = 1, 
                         help='enter spike threshold in microvolts (default is 50)')
     parser.add_argument('--useraw', action='store_true',

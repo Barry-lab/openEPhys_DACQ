@@ -29,66 +29,68 @@ def interpolate_waveforms(waves, nr_targetbins=50):
 
     return new_waves
 
-
-def create_DACQ_waveform_data(waveform_data, pos_edges):
+def create_DACQ_waveform_data_for_single_tetrode(tet_waveform_data, pos_edges):
     # Create DACQ data tetrode format
     waveform_data_dacq = []
     dacq_waveform_dtype = [('ts', '>i'), ('waveform', '50b')]
-    # dacq_waveform_timestamps_dtype = '>i4'
     dacq_waveform_waves_dtype = '>i1'
     dacq_waveform_timestamps_dtype = '>i'
-    # dacq_waveform_waves_dtype = '50b'
     dacq_sampling_rate = 96000
-    hfunct.print_progress(0, len(waveform_data), prefix = 'Converting Waveforms:', initiation=True)
-    for ntet in range(len(waveform_data)):
-        tet_waveform_data = waveform_data[ntet]
-        # Align timestamps to beginning of position data
-        tet_waveform_data['timestamps'] = tet_waveform_data['timestamps'] - pos_edges[0]
-        # Get waveforms
-        waves = np.array(tet_waveform_data['waveforms'], dtype=np.float32)
-        waves = -waves
-        waves = np.swapaxes(waves,1,2)
-        nspikes = waves.shape[0]
-        # Set waveforms values on this tetrode to range -127 to 127
-        if nspikes > 1:
-            mean_waves = np.mean(waves, axis=0)
-            wave_peak = mean_waves.max()
-            maxchan = np.where(mean_waves == wave_peak)[1][0]
-            maxidx = np.where(mean_waves == wave_peak)[0][0]
-            wave_peak_std = np.std(waves[:,maxidx,maxchan])
-            max_range = wave_peak + 4 * wave_peak_std # This sets int8 range
-            waves = waves / max_range
-            waves = waves * 127
-            waves[waves > 127] = 127
-            waves[waves < -127] = -127
-        waves = waves.astype(np.int8)
-        # Where channels are missing, add 0 values to waveform values
-        if waves.shape[2] < 4:
-            waves = np.concatenate((waves, np.zeros((waves.shape[0], waves.shape[1], 4 - waves.shape[2]))), axis=2)
-        # Reshape 3D waveform matrix into 2D matrix such that waveforms for 
-        # first spike from all four channels are on consecutive rows.
-        waves = np.reshape(np.ravel(np.transpose(waves, (0, 2, 1)), 'C'), (nspikes * 4, waves.shape[1]))
-        # Interpolate waveforms to 48000 Hz resolution
-        waves = interpolate_waveforms(waves=waves, nr_targetbins=50)
-        # Create DACQ datatype structured array
-        tmp_waveform_data_dacq = np.zeros(nspikes * 4, dtype=dacq_waveform_dtype)
-        # Input waveform values, leaving a trailing end of zeros due to lower sampling rate
-        waves = waves.astype(dtype=dacq_waveform_waves_dtype)
-        tmp_waveform_data_dacq['waveform'][:,:waves.shape[1]] = waves
-        # Arrange timestamps into a vector where timestamp for a spike is
-        # repeated for each of the 4 channels
-        timestamps = np.array(tet_waveform_data['timestamps'])
-        timestamps = np.ravel(np.repeat(np.reshape(timestamps, (len(timestamps), 1)), 4, axis=1),'C')
-        # Convert OpenEphys timestamp sampling rate to DACQ sampling rate
-        timestamps = timestamps * float(dacq_sampling_rate)
-        timestamps_dacq = np.round(timestamps).astype(dtype=dacq_waveform_timestamps_dtype)
-        # Input timestamp values to the dacq data matrix
-        tmp_waveform_data_dacq['ts'] = timestamps_dacq
-        waveform_data_dacq.append(tmp_waveform_data_dacq)
-        hfunct.print_progress(ntet + 1, len(waveform_data), prefix = 'Converting Waveforms:')
-
+    # Align timestamps to beginning of position data
+    tet_waveform_data['timestamps'] = tet_waveform_data['timestamps'] - pos_edges[0]
+    # Get waveforms
+    waves = np.array(tet_waveform_data['waveforms'], dtype=np.float32)
+    waves = -waves
+    waves = np.swapaxes(waves,1,2)
+    nspikes = waves.shape[0]
+    # Set waveforms values on this tetrode to range -127 to 127
+    if nspikes > 1:
+        mean_waves = np.mean(waves, axis=0)
+        wave_peak = mean_waves.max()
+        maxchan = np.where(mean_waves == wave_peak)[1][0]
+        maxidx = np.where(mean_waves == wave_peak)[0][0]
+        wave_peak_std = np.std(waves[:,maxidx,maxchan])
+        max_range = wave_peak + 4 * wave_peak_std # This sets int8 range
+        waves = waves / max_range
+        waves = waves * 127
+        waves[waves > 127] = 127
+        waves[waves < -127] = -127
+    waves = waves.astype(np.int8)
+    # Where channels are missing, add 0 values to waveform values
+    if waves.shape[2] < 4:
+        waves = np.concatenate((waves, np.zeros((waves.shape[0], waves.shape[1], 4 - waves.shape[2]))), axis=2)
+    # Reshape 3D waveform matrix into 2D matrix such that waveforms for 
+    # first spike from all four channels are on consecutive rows.
+    waves = np.reshape(np.ravel(np.transpose(waves, (0, 2, 1)), 'C'), (nspikes * 4, waves.shape[1]))
+    # Interpolate waveforms to 48000 Hz resolution
+    waves = interpolate_waveforms(waves=waves, nr_targetbins=50)
+    # Create DACQ datatype structured array
+    waveform_data_dacq = np.zeros(nspikes * 4, dtype=dacq_waveform_dtype)
+    # Input waveform values, leaving a trailing end of zeros due to lower sampling rate
+    waves = waves.astype(dtype=dacq_waveform_waves_dtype)
+    waveform_data_dacq['waveform'][:,:waves.shape[1]] = waves
+    # Arrange timestamps into a vector where timestamp for a spike is
+    # repeated for each of the 4 channels
+    timestamps = np.array(tet_waveform_data['timestamps'])
+    timestamps = np.ravel(np.repeat(np.reshape(timestamps, (len(timestamps), 1)), 4, axis=1),'C')
+    # Convert OpenEphys timestamp sampling rate to DACQ sampling rate
+    timestamps = timestamps * float(dacq_sampling_rate)
+    timestamps_dacq = np.round(timestamps).astype(dtype=dacq_waveform_timestamps_dtype)
+    # Input timestamp values to the dacq data matrix
+    waveform_data_dacq['ts'] = timestamps_dacq
+    
     return waveform_data_dacq
 
+def create_DACQ_waveform_data(waveform_data, pos_edges):
+    print('Converting Waveforms...')
+    input_args = []
+    for tet_waveform_data in waveform_data:
+        input_args.append((tet_waveform_data, pos_edges))
+    multiprocessor = hfunct.multiprocess()
+    waveform_data_dacq = multiprocessor.map(create_DACQ_waveform_data_for_single_tetrode, input_args)
+    print('Converting Waveforms Successful.')
+
+    return waveform_data_dacq
 
 def create_DACQ_pos_data(OpenEphysDataPath):
     posdata = NWBio.load_tracking_data(OpenEphysDataPath, subset='ProcessedPos')
