@@ -15,15 +15,15 @@ def get_processorKey(filename):
 
 def load_continuous(filename):
     # Load data file
-    f = h5py.File(filename, 'r')
+    h5file = h5py.File(filename, 'r')
     # Load timestamps and continuous data
     recordingKey = get_recordingKey(filename)
     processorKey = get_processorKey(filename)
     path = '/acquisition/timeseries/' + recordingKey + '/continuous/' + processorKey
     if check_if_path_exists(filename, path + '/data'):
-        continuous = f[path + '/data'] # not converted to microvolts!!!! need to multiply by 0.195
-        timestamps = f[path + '/timestamps'] # not converted to microvolts!!!! need to multiply by 0.195
-        data = {'continuous': continuous, 'timestamps': timestamps}
+        continuous = h5file[path + '/data'] # not converted to microvolts!!!! need to multiply by 0.195
+        timestamps = h5file[path + '/timestamps']
+        data = {'continuous': continuous, 'timestamps': timestamps, 'file_handle': h5file}
     else:
         data = None
 

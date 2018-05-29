@@ -32,7 +32,6 @@ kwd_deleted = 0
 continuous_deleted = 0
 
 def lowpass_and_downsample_channel(fpath, raw_data_path, chan, lowpass_freq, downsampling):
-    print('Loading chan ' + str(chan) + '...')
     with h5py.File(fpath,'r') as h5file:
         data = h5file[raw_data_path]
         data = data[:, chan:chan + 1]
@@ -48,7 +47,6 @@ def lowpass_and_downsample_channel(fpath, raw_data_path, chan, lowpass_freq, dow
     # which is then downsampled to 1 kHz.
     # The phase shift is unavoidable, unless filtering is done both ways, using the future of the signal.
     processed_signal = np.append(processed_signal[1:], processed_signal[-1])
-    print('Processed chan ' + str(chan) + '.')
 
     return processed_signal
 
