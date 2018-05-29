@@ -8,6 +8,7 @@ import subprocess
 import copy
 import multiprocessing
 from time import sleep
+import psutil
 
 class multiprocess(object):
     '''
@@ -106,13 +107,42 @@ class multiprocess(object):
 
         return self.results()
 
+def proceed_when_enough_memory_available(memory_needed=None, percent=None, array_size=None, dtype=None):
+    '''
+    This function blocks until required memory is available.
+    Input can be any of the following:
+        memory_needed - in bytes
+        percent - percent (e.g 0.75 for 75%) of total memory to be available
+        array_size and dtype - to compute memory needed to store array in memory
+    '''
+    # Compute the memory_needed if not provided directly
+    if memory_needed is None:
+        if percent is None:
+            if array_size is None or dtype is None:
+                raise ValueError('Input needed.')
+            else:
+                memory_needed = array_size * dtype(1).nbytes
+        else:
+            memory_needed = psutil.virtual_memory().total * percent
+    # Wait until this amount of memory is available
+    memory_available = False
+    while not memory_available:
+        if psutil.virtual_memory().available > memory_needed:
+            memory_available = True
+        else:
+            print(str(psutil.virtual_memory().available / (10 ** 6)) + \
+                  ' MB of memory availalbe, but ' + \
+                  str(memory_needed / (10 ** 6)) + ' MB needed.')
+            sleep(1)
+
+    return memory_available
+
 def butter_bandpass(lowcut, highcut, fs, order=5):
     nyq = 0.5 * fs
     low = lowcut / nyq
     high = highcut / nyq
     b, a = butter(order, [low, high], btype='band')
     return b, a
-
 
 def butter_bandpass_filter(signal_in, sampling_rate=30000.0, highpass_frequency=300.0, lowpass_frequency=6000.0, filt_order=4):
     b, a = butter_bandpass(highpass_frequency, lowpass_frequency, sampling_rate, order=filt_order)

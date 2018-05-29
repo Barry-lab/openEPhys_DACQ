@@ -1,10 +1,10 @@
 import os
 import sys
 import h5py
-from HelperFunctions import butter_lowpass_filter, tetrode_channels, multiprocess
+import HelperFunctions as hfunct
 from NWBio import listBadChannels
 import numpy as np
-
+from time import sleep
 
 def get_recordingKey(fpath):
     with h5py.File(fpath, 'r') as h5file:
@@ -31,28 +31,39 @@ ioError = 0
 kwd_deleted = 0
 continuous_deleted = 0
 
-def lowpass_and_downsample_channel(signal, lowpass_freq, downsampling):
-    signal = np.float32(signal)
-    filtered_signal = butter_lowpass_filter(signal, lowpass_freq, sampling_rate=30000.0, filt_order=4)
-    filtered_signal = np.int16(filtered_signal[::downsampling])
+def lowpass_and_downsample_channel(fpath, raw_data_path, chan, lowpass_freq, downsampling):
+    print('Loading chan ' + str(chan) + '...')
+    with h5py.File(fpath,'r') as h5file:
+        data = h5file[raw_data_path]
+        data = data[:, chan:chan + 1]
+    data_array = np.array(data).squeeze()
+    del data
+    signal = np.float32(data_array)
+    del data_array
+    processed_signal = hfunct.butter_lowpass_filter(signal, lowpass_freq, sampling_rate=30000.0, filt_order=4)
+    del signal
+    processed_signal = np.int16(processed_signal[::downsampling])
     # NOTE! The following line roughly corrects the phase shift due to filtering
     # given that filtering is done lowpass at 500 Hz on a signal with 30 kHz samling rate,
     # which is then downsampled to 1 kHz.
     # The phase shift is unavoidable, unless filtering is done both ways, using the future of the signal.
-    filtered_signal = np.append(filtered_signal[1:], filtered_signal[-1])
+    processed_signal = np.append(processed_signal[1:], processed_signal[-1])
+    print('Processed chan ' + str(chan) + '.')
 
-    return filtered_signal
+    return processed_signal
 
-def lowpass_and_downsample_channel_on_each_tetrode(downsampling, lowpass_freq, data, n_tetrodes, badChans):
-    tmp = range(data.shape[0])
-    new_data_size = len(tmp[::downsampling])
-    del tmp
+def lowpass_and_downsample_channel_on_each_tetrode(fpath, raw_data_path, downsampling, lowpass_freq, n_tetrodes, badChans):
+    with h5py.File(fpath,'r') as h5file:
+        data = h5file[raw_data_path]
+        tmp = range(data.shape[0])
+        new_data_size = len(tmp[::downsampling])
+        del tmp
     processed_data_array = np.zeros((new_data_size, n_tetrodes), dtype=np.int16)
     processed_chans = []
     processed_tets = []
     processed_data_list = []
     for n_tet in range(n_tetrodes):
-        chans = tetrode_channels(n_tet)
+        chans = hfunct.tetrode_channels(n_tet)
         chan = []
         for c in chans:
             if c not in badChans:
@@ -60,10 +71,11 @@ def lowpass_and_downsample_channel_on_each_tetrode(downsampling, lowpass_freq, d
         if len(chan) > 0:
             processed_chans.append(chan[0])
             processed_tets.append(n_tet)
-    multiprocessor = multiprocess()
+    multiprocessor = hfunct.multiprocess()
     for chan in processed_chans:
-        signal = np.array(data[:, chan:chan + 1]).squeeze()
-        multiprocessor.run(lowpass_and_downsample_channel, (signal, lowpass_freq, downsampling))
+        if hfunct.proceed_when_enough_memory_available(percent=0.66):
+            multiprocessor.run(lowpass_and_downsample_channel, (fpath, raw_data_path, chan, lowpass_freq, downsampling))
+            sleep(4)
     processed_data_list = multiprocessor.results()
     for n_tet, processed_data in zip(processed_tets, processed_data_list):
         processed_data_array[:, n_tet] = np.int16(processed_data)
@@ -103,10 +115,8 @@ for dirName, subdirList, fileList in os.walk(root_path):
                             with h5py.File(fpath,'r') as h5file:
                                 timestamps = h5file['acquisition']['timeseries'][recordingKey]['continuous'][processorKey]['timestamps'].value
                                 downsampled_data_timestamps = timestamps[::downsampling]
-                                badChans = listBadChannels(fpath)
-                                data = h5file[raw_data_path]
-                                downsampled_data = lowpass_and_downsample_channel_on_each_tetrode(downsampling, lowpass_freq, data, n_tetrodes, badChans)
-                            del data
+                            badChans = listBadChannels(fpath)
+                            downsampled_data = lowpass_and_downsample_channel_on_each_tetrode(fpath, raw_data_path, downsampling, lowpass_freq, n_tetrodes, badChans)
                             downsampling_settings_list = ['downsampling ' + str(downsampling), 
                                                           'lowpass_frequency ' + str(lowpass_freq)]
                             with h5py.File(fpath,'r+') as h5file:
