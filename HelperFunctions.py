@@ -130,9 +130,6 @@ def proceed_when_enough_memory_available(memory_needed=None, percent=None, array
         if psutil.virtual_memory().available > memory_needed:
             memory_available = True
         else:
-            print(str(psutil.virtual_memory().available / (10 ** 6)) + \
-                  ' MB of memory availalbe, but ' + \
-                  str(memory_needed / (10 ** 6)) + ' MB needed.')
             sleep(1)
 
     return memory_available
