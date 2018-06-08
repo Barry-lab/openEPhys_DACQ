@@ -374,7 +374,8 @@ def smooth_edge_padding(data, smoothing):
 
 def compute_distance_travelled(posHistory, smoothing):
     distances = []
-    posHistory = np.array(posHistory)[:, :2]
+    posHistory = np.array(posHistory)
+    posHistory = posHistory[:, :2]
     posHistory[:,0] = smooth_edge_padding(posHistory[:,0], smoothing)
     posHistory[:,1] = smooth_edge_padding(posHistory[:,1], smoothing)
     for npos in range(posHistory.shape[0] - 1):
@@ -469,18 +470,26 @@ class Core(object):
             IP = self.FEEDERs[FEEDER_type][ID]['IP']
             username = self.TaskSettings['Username']
             password = self.TaskSettings['Password']
-        if FEEDER_type == 'pellet' or self.TaskSettings['AudioSignalMode'] == 'ambient':
-            # If pellet feeder or ambient audio signal is used, simply initialize FEEDER
-            actuator = RewardControl(FEEDER_type, IP, username, password)
-        elif self.TaskSettings['AudioSignalMode'] == 'localised' and FEEDER_type == 'milk':
-            # If audio signal is localised and this is for milk feeder, activate also FEEDER's speaker
-            audioFreq = (self.FEEDERs['milk'][ID]['SignalHz'], 
-                         self.FEEDERs['milk'][ID]['SignalHzWidth'], 
-                         self.FEEDERs['milk'][ID]['ModulHz'])
-            actuator = RewardControl(FEEDER_type, IP, username, password, 
-                                     audioControl=True, audioFreq=audioFreq)
-        with self.TaskSettings_Lock:
-            self.FEEDERs[FEEDER_type][ID]['actuator'] = actuator
+        try:
+            if FEEDER_type == 'pellet' or self.TaskSettings['AudioSignalMode'] == 'ambient':
+                # If pellet feeder or ambient audio signal is used, simply initialize FEEDER
+                actuator = RewardControl(FEEDER_type, IP, username, password)
+            elif self.TaskSettings['AudioSignalMode'] == 'localised' and FEEDER_type == 'milk':
+                # If audio signal is localised and this is for milk feeder, activate also FEEDER's speaker
+                audioFreq = (self.FEEDERs['milk'][ID]['SignalHz'], 
+                             self.FEEDERs['milk'][ID]['SignalHzWidth'], 
+                             self.FEEDERs['milk'][ID]['ModulHz'])
+                actuator = RewardControl(FEEDER_type, IP, username, password, 
+                                         audioControl=True, audioFreq=audioFreq)
+            with self.TaskSettings_Lock:
+                self.FEEDERs[FEEDER_type][ID]['actuator'] = actuator
+        except Exception as e:
+            from inspect import currentframe, getframeinfo
+            frameinfo = getframeinfo(currentframe())
+            print('Error in ' + frameinfo.filename + ' line ' + str(frameinfo.lineno - 3))
+            print('initFEEDER failed for feeder: ' + FEEDER_type + ' ' + ID)
+            print(e)
+            self.FEEDERs[FEEDER_type][ID]['init_successful'] = False
 
     def closeAllFEEDERs(self):
         for FEEDER_type in self.FEEDERs.keys():
@@ -543,47 +552,52 @@ class Core(object):
             buttonMilkTrial = self.getButton('buttonMilkTrial', ID)
             buttonMilkTrial['enabled'] = False
         # Send Note to Open Ephys GUI
-        OEmessage = 'FEEDER ' + str(self.feederID_milkTrial) + ' inactivated'
+        OEmessage = 'FEEDER ' + FEEDER_type + ' ' + ID + ' inactivated'
         self.TaskIO['MessageToOE'](OEmessage)
 
     def releaseReward(self, FEEDER_type, ID, action='undefined', quantity=1):
-        # Notify rest of the program that this is onging
-        with self.rewardInProgressLock:
-            self.rewardInProgress.append(FEEDER_type + ' ' + ID)
-        # Make process visible on GUI
-        if FEEDER_type == 'pellet':
-            feeder_button = self.getButton('buttonReleasePellet', ID)
-        elif FEEDER_type == 'milk':
-            feeder_button = self.getButton('buttonReleaseMilk', ID)
-        feeder_button['button_pressed'] = True
-        # Update counter if pellet reward and not user input
-        if FEEDER_type == 'pellet' and (action == 'goal_inactivity' or action == 'goal_pellet'):
-            idx = self.game_counters['Pellets']['ID'].index(ID)
-            self.game_counters['Pellets']['count'][idx] += 1
-        # Send command to release reward and wait for positive feedback
-        feedback = self.FEEDERs[FEEDER_type][ID]['actuator'].release(quantity, wait_for_feedback=True, 
-                                                                     fail_limit=10)
-        if feedback == 'successful':
-            # Send message to Open Ephys GUI
-            OEmessage = 'Reward ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
-            self.TaskIO['MessageToOE'](OEmessage)
-            # Reset GUI signal for feeder activity
-            feeder_button['button_pressed'] = False
-            # Reset last reward timer
-            with self.lastRewardLock:
-                self.lastReward = time.time()
-            if 'pellet' == FEEDER_type:
-                with self.lastPelletRewardLock:
-                    self.lastPelletReward = time.time()
-        elif feedback == 'failed':
-            # Send message to Open Ephys GUI
+        if self.FEEDERs[FEEDER_type][ID]['init_successful']:
+            # Notify rest of the program that this is onging
+            with self.rewardInProgressLock:
+                self.rewardInProgress.append(FEEDER_type + ' ' + ID)
+            # Make process visible on GUI
+            if FEEDER_type == 'pellet':
+                feeder_button = self.getButton('buttonReleasePellet', ID)
+            elif FEEDER_type == 'milk':
+                feeder_button = self.getButton('buttonReleaseMilk', ID)
+            feeder_button['button_pressed'] = True
+            # Update counter if pellet reward and not user input
+            if FEEDER_type == 'pellet' and (action == 'goal_inactivity' or action == 'goal_pellet'):
+                idx = self.game_counters['Pellets']['ID'].index(ID)
+                self.game_counters['Pellets']['count'][idx] += 1
+            # Send command to release reward and wait for positive feedback
+            feedback = self.FEEDERs[FEEDER_type][ID]['actuator'].release(quantity, wait_for_feedback=True, 
+                                                                         fail_limit=10)
+            if feedback == 'successful':
+                # Send message to Open Ephys GUI
+                OEmessage = 'Reward ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
+                self.TaskIO['MessageToOE'](OEmessage)
+                # Reset GUI signal for feeder activity
+                feeder_button['button_pressed'] = False
+                # Reset last reward timer
+                with self.lastRewardLock:
+                    self.lastReward = time.time()
+                if 'pellet' == FEEDER_type:
+                    with self.lastPelletRewardLock:
+                        self.lastPelletReward = time.time()
+            elif feedback == 'failed':
+                # Send message to Open Ephys GUI
+                OEmessage = 'Feeder Failure: ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
+                self.TaskIO['MessageToOE'](OEmessage)
+                # If failed, remove feeder from game and change button(s) red
+                self.inactivate_feeder(FEEDER_type, ID)
+            # Remove notification of onging reward delivery
+            with self.rewardInProgressLock:
+                self.rewardInProgress.remove(FEEDER_type + ' ' + ID)
+        else:
             OEmessage = 'Feeder Failure: ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
             self.TaskIO['MessageToOE'](OEmessage)
-            # If failed, remove feeder from game and change button(s) red
             self.inactivate_feeder(FEEDER_type, ID)
-        # Remove notification of onging reward delivery
-        with self.rewardInProgressLock:
-            self.rewardInProgress.remove(FEEDER_type + ' ' + ID)
 
     def initRewards(self):
         '''
@@ -702,6 +716,7 @@ class Core(object):
             nFeederButton = {'callback': self.buttonReleaseReward_callback, 
                              'callargs': ['pellet', ID], 
                              'text': ID, 
+                             'enabled': self.FEEDERs['pellet'][ID]['init_successful'], 
                              'toggled': {'text': ID, 
                                          'color': (0, 128, 0)}}
             buttonReleasePellet.append(nFeederButton)
@@ -714,6 +729,7 @@ class Core(object):
             nFeederButton = {'callback': self.buttonMilkTrial_callback, 
                              'callargs': [ID], 
                              'text': ID, 
+                             'enabled': self.FEEDERs['milk'][ID]['init_successful'], 
                              'toggled': {'text': ID, 
                                          'color': (0, 128, 0)}}
             buttonMilkTrial.append(nFeederButton)
@@ -726,6 +742,7 @@ class Core(object):
             nFeederButton = {'callback': self.buttonReleaseReward_callback, 
                              'callargs': ['milk', ID], 
                              'text': ID, 
+                             'enabled': self.FEEDERs['milk'][ID]['init_successful'], 
                              'toggled': {'text': ID, 
                                          'color': (0, 128, 0)}}
             buttonReleaseMilk.append(nFeederButton)
@@ -759,11 +776,13 @@ class Core(object):
             if isinstance(button, dict):
                 if not ('enabled' in button.keys()):
                     buttons[i]['enabled'] = True
+                if not ('enabled' in button.keys()):
                     buttons[i]['not_enabled_color'] = (255, 0, 0)
             elif isinstance(button, list):
                 for j, subbutton in enumerate(button[1:]):
                     if not ('enabled' in subbutton.keys()):
                         buttons[i][j + 1]['enabled'] = True
+                    if not ('not_enabled_color' in subbutton.keys()):
                         buttons[i][j + 1]['not_enabled_color'] = (255, 0, 0)
         # Compute button locations
         xpos = self.screen_button_space_start + self.screen_margins

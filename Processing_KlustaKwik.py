@@ -277,7 +277,7 @@ def get_badChan(OpenEphysDataPaths, UseChans):
 
     return badChan
 
-def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=1000, threshold=50):
+def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=1000, threshold=50, open_AxonaData_folder=True):
     if isinstance(OpenEphysDataPaths, basestring):
         OpenEphysDataPaths = [OpenEphysDataPaths]
     # If directories entered as paths, attempt creating path to file by appending experiment_1.nwb
@@ -354,7 +354,8 @@ def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=1000, t
             subfolder = 'AxonaData'
         # Create Axona data
         createAxonaData.createAxonaData(OpenEphysDataPath, waveform_data, 
-                                        subfolder=subfolder, eegChan=1)
+                                        subfolder=subfolder, eegChan=1, 
+                                        open_output_folder=open_AxonaData_folder)
 
 if __name__ == '__main__':
     # Input argument handling and help info
@@ -382,10 +383,10 @@ if __name__ == '__main__':
     if args.noisecut:
         noise_cut_off = args.noisecut[0]
     else:
-        noise_cut_off = 500
+        noise_cut_off = 1000
     if args.threshold:
         threshold = args.threshold[0]
     else:
         threshold = 50
     # Run the script
-    main(OpenEphysDataPaths, UseChans, args.useraw, noise_cut_off, threshold)
+    main(OpenEphysDataPaths, UseChans, args.useraw, noise_cut_off, threshold, open_AxonaData_folder=True)

@@ -355,14 +355,20 @@ class RewardControl(object):
         else:
             feedback_string = ''
         # Send correct command to the feeder
-        if self.FEEDER_type == 'pellet':
-            self.ssh_connection.sendCommand('nohup python releasePellet.py ' + \
-                                            str(int(quantity)) + feedback_string + ' &', 
-                                            timeout=5)
-        elif self.FEEDER_type == 'milk':
-            self.ssh_connection.sendCommand('nohup python openPinchValve.py ' + \
-                                            str(quantity) + feedback_string + ' &', 
-                                            timeout=5)
+        try:
+            if self.FEEDER_type == 'pellet':
+                self.ssh_connection.sendCommand('nohup python releasePellet.py ' + \
+                                                str(int(quantity)) + feedback_string + ' &', 
+                                                timeout=5)
+            elif self.FEEDER_type == 'milk':
+                self.ssh_connection.sendCommand('nohup python openPinchValve.py ' + \
+                                                str(quantity) + feedback_string + ' &', 
+                                                timeout=5)
+        except Exception as e:
+            from inspect import currentframe, getframeinfo
+            frameinfo = getframeinfo(currentframe())
+            print('Error in ' + frameinfo.filename + ' line ' + str(frameinfo.lineno - 3))
+            print(e)
         # If feedback requested, 
         if wait_for_feedback:
             if self.FEEDER_type == 'pellet':
@@ -441,10 +447,17 @@ class RewardControl(object):
             self.audioController_init_successful = True
 
     def close(self):
-        if self.audioControl:
-            self.audioController_messenger.sendMessage('close')
-            self.T_audioControl.join()
-            self.audioController_messenger.close()
-            self.ssh_audioControl_connection.disconnect()
-        self.ssh_connection.sendCommand('sudo pkill python')
-        self.ssh_connection.disconnect()
+        try:
+            if self.audioControl:
+                self.audioController_messenger.sendMessage('close')
+                self.T_audioControl.join()
+                self.audioController_messenger.close()
+                self.ssh_audioControl_connection.disconnect()
+            self.ssh_connection.sendCommand('sudo pkill python')
+            self.ssh_connection.disconnect()
+        except Exception as e:
+            from inspect import currentframe, getframeinfo
+            frameinfo = getframeinfo(currentframe())
+            print('Error in ' + frameinfo.filename + ' line ' + str(frameinfo.lineno - 3))
+            print('Failed to close connection: ' + str(self.RPiIP))
+            print(e)

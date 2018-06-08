@@ -278,7 +278,7 @@ def getExperimentInfo(fpath):
     
     return experiment_info
 
-def createAxonaData(OpenEphysDataPath, waveform_data=None, subfolder='AxonaData', eegChan=1):
+def createAxonaData(OpenEphysDataPath, waveform_data=None, subfolder='AxonaData', eegChan=1, open_output_folder=True):
     if waveform_data is None:
         print('Loading waveform data from file')
         waveform_data = NWBio.load_spikes(OpenEphysDataPath, use_idx_keep=True, use_badChan=True)
@@ -425,7 +425,8 @@ def createAxonaData(OpenEphysDataPath, waveform_data=None, subfolder='AxonaData'
     with open(fname, 'wb') as file:
         file.writelines(lines)
     # Opens recording folder with Ubuntu file browser
-    subprocess.Popen(['xdg-open', AxonaDataPath])
+    if open_output_folder:
+        subprocess.Popen(['xdg-open', AxonaDataPath])
 
 # The following is the default ending for a QtGui application script
 if __name__ == "__main__":
