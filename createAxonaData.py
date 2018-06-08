@@ -278,10 +278,16 @@ def getExperimentInfo(fpath):
     
     return experiment_info
 
-def createAxonaData(OpenEphysDataPath, waveform_data=None, subfolder='AxonaData', eegChan=1, open_output_folder=True):
+def createAxonaData(OpenEphysDataPath, waveform_data=None, spike_name='spikes', subfolder='AxonaData', eegChan=1, open_output_folder=True):
     if waveform_data is None:
         print('Loading waveform data from file')
-        waveform_data = NWBio.load_spikes(OpenEphysDataPath, use_idx_keep=True, use_badChan=True)
+        waveform_data = NWBio.load_spikes(OpenEphysDataPath, spike_name=spike_name, use_idx_keep=True, use_badChan=True)
+    else:
+        # Ensure idx_keep has been applied to incoming data
+        for spike_data_tet in waveform_data:
+            if spike_data_tet['idx_keep'].size == spike_data_tet['waveforms'].shape[0]:
+                spike_data_tet['waveforms'] = spike_data_tet['waveforms'][spike_data_tet['idx_keep'], :, :]
+                spike_data_tet['timestamps'] = spike_data_tet['timestamps'][spike_data_tet['idx_keep']]
     print('Converting data')
     # Get position data start and end times
     pos_edges = NWBio.get_processed_tracking_data_timestamp_edges(OpenEphysDataPath)
@@ -308,10 +314,6 @@ def createAxonaData(OpenEphysDataPath, waveform_data=None, subfolder='AxonaData'
     nspikes_tet = []
     for waves in waveform_data_dacq:
         nspikes_tet.append(str(int(len(waves) / 4)))
-    # header_pos['window_min_x'] = str(int(np.min(pos_data_dacq['pos'][:,0])))
-    # header_pos['window_max_x'] = str(int(np.max(pos_data_dacq['pos'][:,0])))
-    # header_pos['window_min_y'] = str(int(np.min(pos_data_dacq['pos'][:,1])))
-    # header_pos['window_max_y'] = str(int(np.max(pos_data_dacq['pos'][:,1])))
     header_pos['trial_date'] = experiment_info['trial_date']
     header_pos['trial_time'] = experiment_info['trial_time']
     header_pos['comments'] = experiment_info['animal']
@@ -438,6 +440,8 @@ if __name__ == "__main__":
                         help='enter channel number to use for creating EEG data')
     parser.add_argument('--subfolder', type=str, nargs = 1, 
                         help='enter the name of subfolder to use for AxonaData')
+    parser.add_argument('--spike_name', type=str, nargs = 1, 
+                        help='enter the name of spike set in NWB file to use for AxonaData')
     args = parser.parse_args()
     # Get paths to recording files
     OpenEphysDataPaths = args.paths
@@ -460,6 +464,10 @@ if __name__ == "__main__":
         subfolder = args.subfolder[0]
     else:
         subfolder = 'AxonaData'
+    if args.spike_name:
+        spike_name = args.spike_name[0]
+    else:
+        spike_name = 'spikes'
     # Run main script
     for OpenEphysDataPath in OpenEphysDataPaths:
-        createAxonaData(OpenEphysDataPath, subfolder=subfolder, eegChan=eegChan)
+        createAxonaData(OpenEphysDataPath, spike_name=spike_name, subfolder=subfolder, eegChan=eegChan)

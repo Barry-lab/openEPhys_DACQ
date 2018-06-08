@@ -8,6 +8,8 @@ import numpy as np
 import os
 import re
 from subprocess import Popen, PIPE, STDOUT
+import tempfile
+import shutil
 
 class Kluster():
     '''
@@ -323,3 +325,38 @@ def klustakwik(waveforms, d, filename_root):
         mask = c.get_mask()
         c.make_fmask(mask)
         c.kluster()
+
+def applyKlustaKwik_on_spike_data_tet(spike_data_tet):
+    '''
+    Returns the input dictionary with added field 'clusterIDs'
+    Input dictionary required fields:
+        'waveforms' - nspikes x waveformLength x n_channels - spike waveforms for one tetrode
+        'idx_keep' - logical indexing array of length nspikes to specify which spikes to use
+    Returns a vector clusterIDs of length equal to sum(idx_keep)
+
+        Added by Sander Tanni 04/06/2018
+    '''
+    if spike_data_tet['waveforms'].shape[0] > 1:
+        # Create spike waveform array and filter using idx_keep
+        waves = spike_data_tet['waveforms'][spike_data_tet['idx_keep'],:,:]
+        # Create temporary processing folder
+        KlustaKwikProcessingFolder = tempfile.mkdtemp('KlustaKwikProcessing')
+        # Prepare input to KlustaKwik
+        features2use = ['PC1', 'PC2', 'PC3', 'Amp', 'Vt']
+        d = {0: features2use}
+        klustakwik(waves, d, os.path.join(KlustaKwikProcessingFolder, 'KlustaKwikTemp'))
+        # Read in cluster IDs
+        cluFileName = os.path.join(KlustaKwikProcessingFolder, 'KlustaKwikTemp.clu.0')
+        with open(cluFileName, 'rb') as file:
+            lines = file.readlines()
+        clusterIDs = []
+        for line in lines:
+            clusterIDs.append(int(line.rstrip()))
+        clusterIDs = clusterIDs[1:] # Drop the first value which is number of spikes
+        clusterIDs = np.array(clusterIDs, dtype=np.int16)
+        # Delete KlustaKwik temporary processing folder
+        shutil.rmtree(KlustaKwikProcessingFolder)
+    else:
+        clusterIDs = np.ones(spike_data_tet['waveforms'].shape[0], dtype=np.int16)
+    
+    return clusterIDs

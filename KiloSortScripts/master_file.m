@@ -1,32 +1,6 @@
-function [ varargout ] = master_file ( varargin )
+function [ varargout ] = master_file (nchannels, pname)
 
-if length(varargin) < 1
-    nchannels = 64;
-    badChan = [];
-    pname = '/media/DataDrive/sander/Documents/KiloSortProcess';
-    fname = 'experiment_1.dat';
-elseif length(varargin) < 2
-    nchannels = varargin{1};
-    badChan = [];
-    pname = '/media/DataDrive/sander/Documents/KiloSortProcess';
-    fname = 'experiment_1.dat';
-elseif length(varargin) < 3
-    nchannels = varargin{1};
-    badChan = varargin{2};
-    pname = '/media/DataDrive/sander/Documents/KiloSortProcess';
-    fname = 'experiment_1.dat';
-elseif length(varargin) < 4
-    nchannels = varargin{1};
-    badChan = varargin{2};
-    pname = varargin{3};
-    fname = 'experiment_1.dat';
-else
-    nchannels = varargin{1};
-    badChan = varargin{2};
-    pname = varargin{3};
-    fname = varargin{4};
-end
-originalChannels = nchannels + length(badChan);
+originalChannels = 4;
 % default options are in parenthesis after the comment
 
 addpath(genpath('/usr/local/MATLAB/R2017a/toolbox/kilosort')) % path to kilosort folder

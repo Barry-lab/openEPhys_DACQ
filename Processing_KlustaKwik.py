@@ -303,7 +303,7 @@ def main(OpenEphysDataPaths, UseChans=False, UseRaw=False, noise_cut_off=1000, t
             if NWBio.check_if_tracking_data_available(OpenEphysDataPath):
                 print('Processing tracking data...')
                 ProcessedPos = process_tracking_data(OpenEphysDataPath)
-                NWBio.save_tracking_data(OpenEphysDataPath, ProcessedPos, ProcessedPos=True, ReProcess=False)
+                NWBio.save_tracking_data(OpenEphysDataPath, ProcessedPos, ProcessedPos=True)
                 print('ProcessedPos saved to ' + OpenEphysDataPath)
             elif NWBio.check_if_binary_pos(OpenEphysDataPath):
                 NWBio.use_binary_pos(OpenEphysDataPath, postprocess=False)

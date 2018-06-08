@@ -37,7 +37,7 @@ def load_tetrode_lowpass(filename):
     if check_if_path_exists(filename, path + '/tetrode_lowpass'):
         with h5py.File(filename, 'r') as f:
             tetrode_lowpass = f[path + '/tetrode_lowpass'].value # not converted to microvolts!!!! need to multiply by 0.195
-            tetrode_lowpass_timestamps = f[path + '/tetrode_lowpass_timestamps'].value # not converted to microvolts!!!! need to multiply by 0.195
+            tetrode_lowpass_timestamps = f[path + '/tetrode_lowpass_timestamps'].value
             tetrode_lowpass_info = list(f[path + '/tetrode_lowpass_info'].value)
             tetrode_lowpass_info = [str(i) for i in tetrode_lowpass_info]
             data = {'tetrode_lowpass': tetrode_lowpass, 
@@ -52,12 +52,12 @@ def empty_spike_data():
     '''
     Creates a fake waveforms of 0 values and at timepoint 0
     '''
-    waveforms = np.zeros((1,40,4), dtype=np.int16)
+    waveforms = np.zeros((1,4,40), dtype=np.int16)
     timestamps = np.array([0], dtype=np.float64)
 
     return {'waveforms': waveforms, 'timestamps': timestamps}
 
-def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=False):
+def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=False, use_badChan=False):
     '''
     Inputs:
         filename - pointer to NWB file to load
@@ -78,7 +78,7 @@ def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=Fals
     recordingKey = get_recordingKey(filename)
     with h5py.File(filename, 'r') as h5file:
         # Get data file spikes folder keys and sort them into ascending order by tetrode number
-        tetrode_keys = h5file['acquisition']['timeseries'][recordingKey]['spikes'].keys()
+        tetrode_keys = h5file['acquisition']['timeseries'][recordingKey][spike_name].keys()
         if len(tetrode_keys) > 0:
             # Sort tetrode keys into ascending order
             tetrode_keys_int = []
@@ -95,22 +95,22 @@ def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=Fals
                 if nr_tetrode in tetrode_keys_int:
                     # If data is available for this tetrode
                     ntet = tetrode_keys_int.index(nr_tetrode)
-                    waveforms = h5file['/acquisition/timeseries/' + recordingKey + '/spikes/' + \
+                    waveforms = h5file['/acquisition/timeseries/' + recordingKey + '/' + spike_name + '/' + \
                                        tetrode_keys[ntet] + '/data/'].value
-                    timestamps = h5file['/acquisition/timeseries/' + recordingKey + '/spikes/' + \
+                    timestamps = h5file['/acquisition/timeseries/' + recordingKey + '/' + spike_name + '/' + \
                                         tetrode_keys[ntet] + '/timestamps/'].value
                     if waveforms.shape[0] == 0:
                         # If no waveforms are available, enter one waveform of zeros at timepoint zero
                         waveforms = empty_spike_data()['waveforms']
                         timestamps = empty_spike_data()['timestamps']
-                    tet_data = {'waveforms': waveforms, 
-                                'timestamps': timestamps, 
+                    tet_data = {'waveforms': np.int16(waveforms), 
+                                'timestamps': np.float64(timestamps).squeeze(), 
                                 'nr_tetrode': nr_tetrode}
                     # Include idx_keep if available
-                    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
+                    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/' + \
                            tetrode_keys[ntet] + '/idx_keep'
                     if check_if_path_exists(filename, path):
-                        tet_data['idx_keep'] = h5file[path].value
+                        tet_data['idx_keep'] = np.array(h5file[path].value).squeeze()
                         if use_idx_keep:
                             if np.sum(tet_data['idx_keep']) == 0:
                                 tet_data['waveforms'] = empty_spike_data()['waveforms']
@@ -119,17 +119,17 @@ def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=Fals
                                 tet_data['waveforms'] = tet_data['waveforms'][tet_data['idx_keep'],:,:]
                                 tet_data['timestamps'] = tet_data['timestamps'][tet_data['idx_keep']]
                     # Include clusterIDs if available
-                    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
+                    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/' + \
                            tetrode_keys[ntet] + '/clusterIDs'
                     if check_if_path_exists(filename, path):
-                        tet_data['clusterIDs'] = h5file[path].value
+                        tet_data['clusterIDs'] = np.int16(h5file[path].value).squeeze()
                     # Set spikes to zeros for channels in badChan list
                     if use_badChan:
                         badChan = listBadChannels(filename)
                         if len(badChan) > 0:
                             for nchan in tetrode_channels(nr_tetrode):
                                 if nchan in badChan:
-                                    tet_data['waveforms'][:,:,np.mod(nchan,4)] = 0
+                                    tet_data['waveforms'][:,np.mod(nchan,4),:] = 0
                     data.append(tet_data)
                 else:
                     data.append({'nr_tetrode': nr_tetrode})
@@ -138,22 +138,22 @@ def load_spikes(filename, tetrode_nrs=None, use_idx_keep=False, use_badChan=Fals
         
         return data
 
-def save_spikes(filename, ntet, data, timestamps):
+def save_spikes(filename, tetrode_nr, data, timestamps, spike_name='spikes'):
     '''
     Stores spike data in NWB file in the same format as with OpenEphysGUI.
-    ntet=0 for first tetrode.
+    tetrode_nr=0 for first tetrode.
     '''
     if data.dtype != np.int16:
         raise ValueError('Waveforms are not int16.')
     if timestamps.dtype != np.float64:
         raise ValueError('Timestamps are not float64.')
     recordingKey = get_recordingKey(filename)
-    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
-           'electrode' + str(ntet + 1) + '/'
+    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/' + \
+           'electrode' + str(tetrode_nr + 1) + '/'
     if not check_if_path_exists(filename, path):
         with h5py.File(filename, 'r+') as h5file:
             h5file[path + 'data'] = data
-            h5file[path + 'timestamps'] = timestamps
+            h5file[path + 'timestamps'] = np.float64(timestamps).squeeze()
 
 def load_events(filename):
     # Outputs a dictionary timestamps and eventIDs for TTL signals received
@@ -278,12 +278,12 @@ def listBadChannels(filename):
 
     return badChan
 
-def save_tracking_data(filename, TrackingData, ProcessedPos=False, ReProcess=False):
+def save_tracking_data(filename, TrackingData, ProcessedPos=False, overwrite=False):
     '''
     TrackingData is expected as dictionary with keys for each source ID
     If saving processed data, TrackingData is expected to be numpy array
         Use ProcessedPos=True to store processed data
-        Use ReProcess=True to force overwriting existing processed data
+        Use overwrite=True to force overwriting existing processed data
     '''
     if os.path.isfile(filename):
         write_method = 'r+'
@@ -295,9 +295,9 @@ def save_tracking_data(filename, TrackingData, ProcessedPos=False, ReProcess=Fal
         if not ProcessedPos:
             recursively_save_dict_contents_to_group(h5file, full_path, TrackingData)
         elif ProcessedPos:
-            # If ReProcess is true, path is first cleared
+            # If overwrite is true, path is first cleared
             processed_pos_path = full_path + 'ProcessedPos/'
-            if ReProcess and 'ProcessedPos' in h5file[full_path].keys():
+            if overwrite and 'ProcessedPos' in h5file[full_path].keys():
                 del h5file[processed_pos_path]
             h5file[processed_pos_path] = TrackingData
 
@@ -358,10 +358,10 @@ def use_binary_pos(filename, postprocess=False):
         nanarray = np.zeros(data['xy'].shape, dtype=np.float64)
         nanarray[:] = np.nan
         TrackingData = np.append(TrackingData, nanarray, axis=1)
-    save_tracking_data(filename, TrackingData, ProcessedPos=True, ReProcess=False)
+    save_tracking_data(filename, TrackingData, ProcessedPos=True, overwrite=False)
 
-def save_tetrode_idx_keep(filename, ntet, idx_keep, overwrite=False):
-    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
+def save_tetrode_idx_keep(filename, ntet, idx_keep, spike_name='spikes', overwrite=False):
+    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/' + \
            'electrode' + str(ntet + 1) + '/idx_keep'
     with h5py.File(filename, 'r+') as h5file:
         if path in h5file:
@@ -371,8 +371,8 @@ def save_tetrode_idx_keep(filename, ntet, idx_keep, overwrite=False):
                 raise ValueError('Tetrode ' + str(ntet + 1) + ' idx_keep already exists in ' + filename)
         h5file[path] = idx_keep
 
-def save_tetrode_clusterIDs(filename, ntet, clusterIDs, overwrite=False):
-    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/spikes/' + \
+def save_tetrode_clusterIDs(filename, ntet, clusterIDs, spike_name='spikes', overwrite=False):
+    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/' + \
            'electrode' + str(ntet + 1) + '/clusterIDs'
     with h5py.File(filename, 'r+') as h5file:
         if path in h5file:
@@ -380,4 +380,4 @@ def save_tetrode_clusterIDs(filename, ntet, clusterIDs, overwrite=False):
                 del h5file[path]
             else:
                 raise ValueError('Tetrode ' + str(ntet + 1) + ' clusterIDs already exists in ' + filename)
-        h5file[path] = clusterIDs
+        h5file[path] = np.int16(clusterIDs).squeeze()
