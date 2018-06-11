@@ -20,7 +20,7 @@ class continuous_data_preloader(object):
         channels - continuous list of channels to prepare, e.g. range(0,16,1) for first 4 tetrodes
     '''
     def __init__(self, OpenEphysDataPath, channels):
-        self.chan_nrs = channels
+        self.chan_nrs = list(channels)
         # Load data
         print('Loading continuous data from NWB file.')
         data = NWBio.load_continuous(OpenEphysDataPath)
@@ -241,6 +241,29 @@ def clarify_OpenEphysDataPaths(OpenEphysDataPaths):
 
     return OpenEphysDataPaths
 
+def check_if_channel_maps_are_same(channel_map_1, channel_map_2):
+    '''
+    Determines if two channel maps are identical
+    '''
+    # Check that there are same number of areas in the dictionary
+    if len(channel_map_1) != len(channel_map_2):
+        return False
+    # Sort the area names because dictionary is not ordered
+    channel_map_1_keys = channel_map_1.keys()
+    channel_map_1_keys.sort()
+    channel_map_2_keys = channel_map_2.keys()
+    channel_map_2_keys.sort()
+    # Check that the areas have the same name
+    for n_area in range(len(channel_map_1_keys)):
+        if channel_map_1_keys[n_area] != channel_map_2_keys[n_area]:
+            return False
+    # Check that the channel lists are the same
+    for area in channel_map_1_keys:
+        if not all(channel_map_1[area]['list'] == channel_map_2[area]['list']):
+            return False
+
+    return True
+
 def get_channel_map(OpenEphysDataPaths):
     # Get channel maps for all datasets
     channel_maps = []
@@ -250,7 +273,7 @@ def get_channel_map(OpenEphysDataPaths):
         else:
             raise Exception('No channel map for: ' + OpenEphysDataPath)
     # Ensure that channel map is the same in all datasets
-    if not all(x == channel_maps[0] for x in channel_maps):
+    if not all([check_if_channel_maps_are_same(channel_maps[0], x) for x in channel_maps]):
         raise Exception('Not all channel maps are the same in: ' + str(OpenEphysDataPaths))
     channel_map = channel_maps[0]
     # Check if the channel list fully coveres a set of tetrodes
@@ -291,8 +314,9 @@ def ensure_data_available_for_all_tetrodes(spike_data, tetrode_nrs):
 
 def combine_spike_datas_tet(spike_datas_tet):
     # Combine all spike_datas into a single spike_data
-    spike_datas_tet_comb = copy.deepcopy(spike_datas_tet[0])
-    for tmp_spike_data in spike_datas_tet[1:]:
+    orig_spike_datas_tet = copy.deepcopy(spike_datas_tet)
+    spike_datas_tet_comb = orig_spike_datas_tet[0]
+    for tmp_spike_data in orig_spike_datas_tet[1:]:
         spike_datas_tet_comb['waveforms'] = np.append(spike_datas_tet_comb['waveforms'], 
                                                       tmp_spike_data['waveforms'], axis=0)
         spike_datas_tet_comb['timestamps'] = np.append(spike_datas_tet_comb['timestamps'], 
@@ -325,14 +349,14 @@ def applyKlustaKwik_to_combined_recordings(spike_datas_tet):
 def split_KiloSort_output(datas_comb_clusterIDs, datas_comb_spike_indices, datas_tet_shape):
     datas_clusterIDs = []
     datas_spike_indices = []
+    data_start_pos = 0
     for data_shape in datas_tet_shape:
-        nspikes = sum(datas_comb_spike_indices < data_shape[1])
-        datas_spike_indices.append(datas_comb_spike_indices[:nspikes])
+        nspikes = sum(datas_comb_spike_indices < data_start_pos + data_shape[1])
+        datas_spike_indices.append(datas_comb_spike_indices[:nspikes] - data_start_pos)
         datas_clusterIDs.append(datas_comb_clusterIDs[:nspikes])
         datas_comb_spike_indices = np.delete(datas_comb_spike_indices, range(nspikes))
         datas_comb_clusterIDs = np.delete(datas_comb_clusterIDs, range(nspikes))
-
-    print('split_KiloSort_output leftovers: ' + str(len(datas_comb_spike_indices) + len(datas_comb_clusterIDs)))
+        data_start_pos += data_shape[1]
 
     return datas_clusterIDs, datas_spike_indices
 
@@ -350,7 +374,7 @@ def save_spike_data_to_disk(OpenEphysDataPath, tetrode_nr, waveforms=None, times
 def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels, noise_cut_off=1000, threshold=50):
     tetrode_nrs = get_tetrode_nrs(channels)
     # Load spikes
-    spike_datas = [[None] * len(tetrode_nrs)] * len(OpenEphysDataPaths)
+    spike_datas = [range(len(tetrode_nrs)) for i in range(len(OpenEphysDataPaths))]
     for n_dataset, OpenEphysDataPath in enumerate(OpenEphysDataPaths):
         print('Loading data for processing: ' + OpenEphysDataPath)
         spike_data = NWBio.load_spikes(OpenEphysDataPath, tetrode_nrs=tetrode_nrs, use_badChan=True)
@@ -371,10 +395,10 @@ def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels, nois
         elif len(spike_datas) > 1:
             # If multiple datasets included, apply KlustaKwik on combined spike_datas_tet
             spike_datas_tet = [spike_data[n_tet] for spike_data in spike_datas]
-            clusterIDs = applyKlustaKwik_to_combined_recordings(spike_datas_tet)
-            spike_datas_tet['clusterIDs'] = clusterIDs
-            for spike_data, spike_data_tet in zip(spike_datas, spike_datas_tet):
-                spike_data[n_tet] = spike_data_tet
+            spike_datas_tet = applyKlustaKwik_to_combined_recordings(spike_datas_tet)
+            # Put this tetrode from all datasets into spike_datas
+            for n_dataset, spike_data_tet in enumerate(spike_datas_tet):
+                spike_datas[n_dataset][n_tet] = spike_data_tet
         hfunct.print_progress(n_tet + 1, len(tetrode_nrs), prefix='Applying KlustaKwik:', suffix=' T: ' + str(n_tet + 1) + '/' + str(len(tetrode_nrs)))
     # Overwrite clusterIDs on disk
     for OpenEphysDataPath, spike_data in zip(OpenEphysDataPaths, spike_datas):
@@ -389,7 +413,7 @@ def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels, nois
 def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels, noise_cut_off=1000, threshold=50):
     tetrode_nrs = get_tetrode_nrs(channels)
     tooclose = 30
-    spike_datas = [[None] * len(tetrode_nrs)] * len(OpenEphysDataPaths)
+    spike_datas = [range(len(tetrode_nrs)) for i in range(len(OpenEphysDataPaths))]
     # Preload continuous data
     preloaded_datas = []
     for OpenEphysDataPath in OpenEphysDataPaths:
@@ -427,7 +451,6 @@ def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels, 
         # Put this tetrode from all datasets into spike_datas
         for n_dataset, spike_data_tet in enumerate(spike_datas_tet):
                 spike_datas[n_dataset][n_tet] = spike_data_tet
-        del spike_datas_tet
         hfunct.print_progress(n_tet + 1, len(tetrode_nrs), prefix='Extract & KlustaKwik:', suffix=' T: ' + str(n_tet + 1) + '/' + str(len(tetrode_nrs)))
     # Close pre-loaded datasets
     for preloaded_data in preloaded_datas:
@@ -445,7 +468,7 @@ def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels, 
 def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1000, threshold=5):
     KiloSortBinaryFileName = 'experiment_1.dat'
     tetrode_nrs = get_tetrode_nrs(channels)
-    spike_datas = [[None] * len(tetrode_nrs)] * len(OpenEphysDataPaths)
+    spike_datas = [range(len(tetrode_nrs)) for i in range(len(OpenEphysDataPaths))]
     # Preload continuous data
     preloaded_datas = []
     for OpenEphysDataPath in OpenEphysDataPaths:
