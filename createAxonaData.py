@@ -306,7 +306,7 @@ def createAxonaData(OpenEphysDataPath, waveform_data=None, spike_name='spikes', 
     header_eeg, keyorder_eeg = header_templates('eeg')
     # Update headers
     experiment_info = getExperimentInfo(OpenEphysDataPath)
-    trial_duration = str(int(float(len(eeg_data_dacq['eeg'])) / dacq_eeg_samplingRate))
+    trial_duration = str(int(np.ceil(pos_edges[1] - pos_edges[0])))
     header_wave['trial_date'] = experiment_info['trial_date']
     header_wave['trial_time'] = experiment_info['trial_time']
     header_wave['comments'] = experiment_info['animal']
