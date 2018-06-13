@@ -338,7 +338,8 @@ class Core(object):
             print('Error in ' + frameinfo.filename + ' line ' + str(frameinfo.lineno - 3))
             print('initFEEDER failed for feeder: ' + FEEDER_type + ' ' + ID)
             print(e)
-            self.FEEDERs[FEEDER_type][ID]['init_successful'] = False
+            with self.TaskSettings_Lock:
+                self.FEEDERs[FEEDER_type][ID]['init_successful'] = False
 
     def closeAllFEEDERs(self):
         for FEEDER_type in self.FEEDERs.keys():

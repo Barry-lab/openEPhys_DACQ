@@ -483,13 +483,15 @@ class Core(object):
                                          audioControl=True, audioFreq=audioFreq)
             with self.TaskSettings_Lock:
                 self.FEEDERs[FEEDER_type][ID]['actuator'] = actuator
+                self.FEEDERs[FEEDER_type][ID]['init_successful'] = True
         except Exception as e:
             from inspect import currentframe, getframeinfo
             frameinfo = getframeinfo(currentframe())
             print('Error in ' + frameinfo.filename + ' line ' + str(frameinfo.lineno - 3))
             print('initFEEDER failed for feeder: ' + FEEDER_type + ' ' + ID)
             print(e)
-            self.FEEDERs[FEEDER_type][ID]['init_successful'] = False
+            with self.TaskSettings_Lock:
+                self.FEEDERs[FEEDER_type][ID]['init_successful'] = False
 
     def closeAllFEEDERs(self):
         for FEEDER_type in self.FEEDERs.keys():
@@ -1121,6 +1123,10 @@ class Core(object):
         with self.lastPelletRewardLock:
             lastPelletRewardTime = self.lastPelletReward
         timeSinceLastPelletReward = time.time() - lastPelletRewardTime
+        # Compute distances to all active milk feeders
+        distances = []
+        for ID in self.activeMfeeders:
+            distances.append(euclidean(np.array(posHistory[-1][:2]), self.FEEDERs['milk'][ID]['Position']))
         # Compute all game progress variables
         game_progress = []
         game_progress_names = []
@@ -1178,13 +1184,7 @@ class Core(object):
                               'percentage': total_distance / float(self.TaskSettings['LastTravelDist'])})
         # Check if animal is far enough from milk rewards
         game_progress_names.append('distance_from_milk_feeders')
-        if len(self.activeMfeeders) > 0:
-            distances = []
-            for ID in self.activeMfeeders:
-                distances.append(euclidean(np.array(posHistory[-1][:2]), self.FEEDERs['milk'][ID]['Position']))
-            minDistance = min(distances)
-        else:
-            minDistance = 0
+        minDistance = min(distances)
         game_progress.append({'name': 'Milk Distance', 
                               'game_states': ['milk'], 
                               'target': self.TaskSettings['MilkTaskMinStartDistance'], 
@@ -1193,13 +1193,22 @@ class Core(object):
                               'percentage': minDistance / float(self.TaskSettings['MilkTaskMinStartDistance'])})
         # Check if animal is close enough to goal location
         game_progress_names.append('distance_from_goal_feeder')
-        distance = euclidean(np.array(posHistory[-1][:2]), self.FEEDERs['milk'][self.feederID_milkTrial]['Position'])
+        goal_distance = distances[self.activeMfeeders.index(self.feederID_milkTrial)]
         game_progress.append({'name': 'Goal Distance', 
                               'game_states': ['milk_trial'], 
                               'target': self.TaskSettings['MilkTaskMinGoalDistance'], 
-                              'status': int(round(distance)), 
-                              'complete': distance <= self.TaskSettings['MilkTaskMinGoalDistance'], 
-                              'percentage': 1 - (distance - self.TaskSettings['MilkTaskMinGoalDistance']) / float(self.max_distance_in_arena)})
+                              'status': int(round(goal_distance)), 
+                              'complete': goal_distance <= self.TaskSettings['MilkTaskMinGoalDistance'], 
+                              'percentage': 1 - (goal_distance - self.TaskSettings['MilkTaskMinGoalDistance']) / float(self.max_distance_in_arena)})
+        # Check if animal is too close to goal incorrect location
+        game_progress_names.append('distance_from_other_feeders')
+        other_distances = min([distances[i] for i in range(len(self.activeMfeeders)) if self.activeMfeeders[i] != self.feederID_milkTrial])
+        game_progress.append({'name': 'Other Distance', 
+                              'game_states': ['milk_trial'], 
+                              'target': self.TaskSettings['MilkTaskMinGoalDistance'], 
+                              'status': int(round(other_distances)), 
+                              'complete': other_distances <= self.TaskSettings['MilkTaskMinGoalDistance'], 
+                              'percentage': 1 - (other_distances - self.TaskSettings['MilkTaskMinGoalDistance']) / float(self.max_distance_in_arena)})
         # Check if trial has been running for too long
         game_progress_names.append('milk_trial_duration')
         trial_run_time = time.time() - self.lastMilkTrial
@@ -1280,13 +1289,14 @@ class Core(object):
         # IF IN MILK_TRIAL STATE
         elif self.game_state == 'milk_trial':
             conditions = {'distance_from_goal_feeder': game_progress[game_progress_names.index('distance_from_goal_feeder')]['complete'], 
+                          'distance_from_other_feeders': game_progress[game_progress_names.index('distance_from_other_feeders')]['complete'], 
                           'milk_trial_duration': game_progress[game_progress_names.index('milk_trial_duration')]['complete']}
             if conditions['distance_from_goal_feeder']:
                 # If subject reached goal location, stop milk trial with positive outcome
                 self.game_state = 'transition'
                 threading.Thread(target=self.stop_milkTrial, args=(True,)).start() # changes self.game_state = 'reward_in_progress'
-            elif conditions['milk_trial_duration']:
-                # If time limit for task duration has passed, stop milk trial with negative outcome
+            elif conditions['milk_trial_duration'] or conditions['distance_from_other_feeders']:
+                # If time limit for task duration has passed or subject went to incorrect location, stop milk trial with negative outcome
                 self.game_state = 'transition'
                 threading.Thread(target=self.stop_milkTrial, args=(False,)).start() # changes self.game_state = 'interval'
         # IF IN REWARD_IN_PROGRESS STATE
