@@ -461,9 +461,11 @@ class Core(object):
         pygame.init()
         # If ambient sound signals are required, create the sound
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
-            self.milkTrialSignal = createAudioSignal(self.FEEDERs['milk'][self.feederID_milkTrial]['SignalHz'], 
-                                                     self.FEEDERs['milk'][self.feederID_milkTrial]['SignalHzWidth'], 
-                                                     self.FEEDERs['milk'][self.feederID_milkTrial]['ModulHz'])
+            self.milkTrialSignal = {}
+            for ID in self.activeMfeeders:
+                self.milkTrialSignal[ID] = createAudioSignal(self.FEEDERs['milk'][ID]['SignalHz'], 
+                                                             self.FEEDERs['milk'][ID]['SignalHzWidth'], 
+                                                             self.FEEDERs['milk'][ID]['ModulHz'])
 
     def initFEEDER(self, FEEDER_type, ID):
         with self.TaskSettings_Lock:
@@ -1037,7 +1039,7 @@ class Core(object):
 
     def start_milkTrialAudioSignal(self):
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
-            self.milkTrialSignal.play(-1)
+            self.milkTrialSignal[self.feederID_milkTrial].play(-1)
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
             feedback = self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].playAudioSignal(feedback=True)
             if feedback == 'failed':
@@ -1046,7 +1048,7 @@ class Core(object):
 
     def stop_milkTrialAudioSignal(self):
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
-            self.milkTrialSignal.stop()
+            self.milkTrialSignal[self.feederID_milkTrial].stop()
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
             feedback = self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].stopAudioSignal(feedback=True)
             if feedback == 'failed':
