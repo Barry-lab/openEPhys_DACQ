@@ -542,7 +542,7 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
 
     return spike_datas
 
-def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=False, noise_cut_off=1000, threshold=50):
+def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=False, noise_cut_off=1000, threshold=50, make_AxonaData=False, axonaDataArgs=None):
     # Ensure correct format for data paths
     if isinstance(OpenEphysDataPaths, basestring):
         OpenEphysDataPaths = [OpenEphysDataPaths]
@@ -574,8 +574,22 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=False, 
         # Define Axona data subfolder name based on specific channels if requested
         subfolder = 'AxonaData_' + str(channels[0] + 1) + '-' + str(channels[-1] + 1)
         for OpenEphysDataPath, spike_data in zip(OpenEphysDataPaths, area_spike_datas[i]):
-            createAxonaData.createAxonaData(OpenEphysDataPath, spike_data, 
-                                            subfolder=subfolder, eegChan=1)
+            createAxonaData.createAxonaData(OpenEphysDataPath, spike_data, subfolder=subfolder, eegChan=1, 
+                                            pixels_per_metre=axonaDataArgs(0), 
+                                            show_output=axonaDataArgs(1))
+
+def process_data_tree(root_path):
+    # Commence directory walk
+    for dirName, subdirList, fileList in os.walk(root_path):
+        for fname in fileList:
+            if not ('Experiment' in dirName):
+                fpath = os.path.join(dirName, fname)
+                if fname == 'experiment_1.nwb':
+                    AxonaDataExists = any(['AxonaData' in subdir for subdir in subdirList])
+                    if not AxonaDataExists:
+                        main(fpath, processing_method='klustakwik', channel_map=False, 
+                            noise_cut_off=1000, threshold=50, make_AxonaData=True, 
+                            axonaDataArgs=[None, False])
 
 if __name__ == '__main__':
     # Input argument handling and help info
@@ -594,35 +608,61 @@ if __name__ == '__main__':
                         help='use KlustaKwik to cluster spike data obtained from raw data')
     parser.add_argument('--kilosort', action='store_true',
                         help='use KiloSort to cluster spike data (this uses raw data only)')
+    parser.add_argument('--noAxonaData', action='store_true',
+                        help='to skip conversion into AxonaData format after processing')
+    parser.add_argument('--ppm', type=int, nargs = 1, 
+                        help='(for AxonaData) enter pixels_per_metre to assume position data is in pixels')
+    parser.add_argument('--show_output', action='store_true', 
+                        help='(for AxonaData) to open AxonaData output folder after processing')
+    parser.add_argument('--datatree', action='store_true', 
+                        help='to process a whole data tree with default arguments in method process_data_tree')
     args = parser.parse_args()
     # Get paths to recording files
     OpenEphysDataPaths = args.paths
-    # Get chan input variable
-    if args.chan:
-        chan = [args.chan[0] - 1, args.chan[1]]
-        if np.mod(chan[1] - chan[0], 4) != 0:
-            raise ValueError('Channel range must cover full tetrodes')
-        channel_map = {'area51': {'list': range(chan[0], chan[1], 1)}}
+    # If datatree processing requested, use process_data_tree method
+    if args.datatree:
+        process_data_tree(OpenEphysDataPaths[0])
     else:
-        channel_map = False
-    # Rewrite default noisecut if specified
-    if args.noisecut:
-        noise_cut_off = args.noisecut[0]
-    else:
-        noise_cut_off = 1000
-    # Rewrite default threshold if specified
-    if args.threshold:
-        threshold = args.threshold[0]
-    else:
-        threshold = 50
-    # Specify processing_method
-    if args.klustakwik:
-        processing_method = 'klustakwik'
-    elif args.klustakwik_raw:
-        processing_method = 'klustakwik_raw'
-    elif args.kilosort:
-        processing_method = 'kilosort'
-    else:
-        processing_method = 'klustakwik'
-    # Run the script
-    main(OpenEphysDataPaths, processing_method, channel_map, noise_cut_off, threshold)
+        # Get chan input variable
+        if args.chan:
+            chan = [args.chan[0] - 1, args.chan[1]]
+            if np.mod(chan[1] - chan[0], 4) != 0:
+                raise ValueError('Channel range must cover full tetrodes')
+            channel_map = {'area51': {'list': range(chan[0], chan[1], 1)}}
+        else:
+            channel_map = False
+        # Rewrite default noisecut if specified
+        if args.noisecut:
+            noise_cut_off = args.noisecut[0]
+        else:
+            noise_cut_off = 1000
+        # Rewrite default threshold if specified
+        if args.threshold:
+            threshold = args.threshold[0]
+        else:
+            threshold = 50
+        # Specify processing_method
+        if args.klustakwik:
+            processing_method = 'klustakwik'
+        elif args.klustakwik_raw:
+            processing_method = 'klustakwik_raw'
+        elif args.kilosort:
+            processing_method = 'kilosort'
+        else:
+            processing_method = 'klustakwik'
+        # Specify axona data options
+        if args.noAxonaData:
+            make_AxonaData = False
+        else:
+            make_AxonaData = True
+        if args.ppm:
+            pixels_per_metre = args.ppm[0]
+        else:
+            pixels_per_metre = None
+        if args.show_output:
+            show_output = True
+        else:
+            show_output = False
+        axonaDataArgs = (pixels_per_metre, show_output)
+        # Run the script
+        main(OpenEphysDataPaths, processing_method, channel_map, noise_cut_off, threshold, make_AxonaData, axonaDataArgs)

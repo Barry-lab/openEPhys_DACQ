@@ -92,33 +92,56 @@ def create_DACQ_waveform_data(waveform_data, pos_edges):
 
     return waveform_data_dacq
 
-def create_DACQ_pos_data(OpenEphysDataPath):
+def AxonaData_max_pix_value():
+    return 600
+
+def convert_position_data_from_cm_to_pixels(xy_pos):
+    '''
+    Converts cm positions to pixel values in AxonaData acceptable range
+    Computes the conversion pixels_per_metre value
+    '''
+    max_pix = AxonaData_max_pix_value()
+    xy_pos = xy_pos - np.nanmin(xy_pos)
+    max_cm = np.nanmax(xy_pos)
+    pix_per_cm = float(max_pix) / float(max_cm)
+    xy_pos = xy_pos * pix_per_cm
+    pixels_per_metre = int(np.round(pix_per_cm * 100))
+
+    return xy_pos, pixels_per_metre
+
+def create_DACQ_pos_data(OpenEphysDataPath, pixels_per_metre=None):
+    '''
+    Loads ProcessedPos from NWB file and converts it into AxonaData format
+    If pixels_per_metre is entered, it is assumed that ProcessedPos data is
+    in pixel values, not centimeters.
+    '''
     posdata = NWBio.load_tracking_data(OpenEphysDataPath, subset='ProcessedPos')
     xy_pos = posdata[:,1:5].astype(np.float32)
     timestamps = posdata[:,0].astype(np.float32)
     # Realign position data start to 0
     timestamps = timestamps - timestamps[0]
     # Create DACQ data pos format
-    dacq_pos_samplingRate = 50 # Sampling rate in Hz
+    dacq_pos_samplingRate = 50.0 # Sampling rate in Hz
     dacq_pos_dtype = [('ts', '>i'), ('pos', '>8h')]
     # dacq_pos_timestamp_dtype = '>i4'
     dacq_pos_xypos_dtype = '>i2'
     dacq_pos_timestamp_dtype = '>i'
     # Interpolate position data to 50Hz
     countstamps = np.arange(np.floor(timestamps[-1] * dacq_pos_samplingRate))
-    dacq_timestamps = countstamps / dacq_pos_samplingRate
+    dacq_timestamps = np.float64(countstamps) / dacq_pos_samplingRate
     xy_pos_interp = np.zeros((countstamps.size, xy_pos.shape[1]), dtype=np.float32)
     for ncoord in range(xy_pos.shape[1]):
         xy_pos_interp[:,ncoord] = np.interp(dacq_timestamps, timestamps, xy_pos[:,ncoord])
     xy_pos = xy_pos_interp
-    # Set position data to range between 0 and 600 (upsamples data for smaller arenas)
-    # Also set NaN values to 1023
-    xy_pos = xy_pos - np.nanmin(xy_pos)
-    xy_pos = xy_pos * (600 / np.nanmax(xy_pos))
+    # If no pixels_per_metre provided, convert position data to pixel values
+    # and calculate pixels_per_metre for range 600
+    if pixels_per_metre is None:
+        xy_pos, pixels_per_metre = convert_position_data_from_cm_to_pixels(xy_pos)
+    # Set NaN values to 1023
     xy_pos[np.isnan(xy_pos)] = 1023
-    xy_pos = np.int16(np.round(xy_pos))
     # Convert datatypes to DACQ data type
     countstamps = countstamps.astype(dtype=dacq_pos_timestamp_dtype)
+    xy_pos = np.int16(np.round(xy_pos))
     xy_pos = xy_pos.astype(dtype=dacq_pos_xypos_dtype)
     # Arrange xy_pos as in the DACQ data matrix including the dot size values
     xy_pos = np.concatenate((xy_pos, 20 * np.ones((xy_pos.shape[0], 1), dtype=dacq_pos_xypos_dtype)), axis=1)
@@ -131,14 +154,17 @@ def create_DACQ_pos_data(OpenEphysDataPath):
     pos_data_dacq['ts'] = countstamps
     pos_data_dacq['pos'] = xy_pos
 
-    return pos_data_dacq
+    return pos_data_dacq, pixels_per_metre
 
-
-def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, lowpass_frequency, pos_edges, eegChan, bitVolts=0.195):
+def create_DACQ_eeg_data(fpath, pos_edges, eegChan, bitVolts=0.195):
     '''
     EEG is downsampled to dacq_eeg_samplingrate and inverted to same polarity as spikes in AxonaFormat.
     EEG is also rescaled to microvolt values.
     '''
+    # AxonaData eeg data parameters
+    OpenEphys_SamplingRate = 30000
+    dacq_eeg_samplingRate = 250
+    lowpass_frequency = 125.0
     # Load EEG data of selected channel
     continuous_data = NWBio.load_continuous(fpath)
     if not (continuous_data is None):
@@ -155,8 +181,6 @@ def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, l
         lowpass_data_filter_frequency = float([i for i in  lowpass_data['tetrode_lowpass_info'] if 'lowpass_frequency ' in i][0][18:])
         if lowpass_data_filter_frequency > lowpass_frequency:
             data = hfunct.butter_lowpass_filter(data, sampling_rate=OpenEphys_SamplingRate, lowpass_frequency=lowpass_frequency, filt_order=4)
-    # Resample data to dacq_eeg sampling rate
-    data = data[::int(np.round(OpenEphys_SamplingRate/dacq_eeg_samplingRate))]
     # Invert data
     data = -data * bitVolts
     # Crop data outside position data
@@ -164,6 +188,8 @@ def create_DACQ_eeg_data(fpath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, l
     idx_outside_pos_data = np.logical_or(idx_outside_pos_data, timestamps > pos_edges[1])
     idx_outside_pos_data = np.where(idx_outside_pos_data)[0]
     data = np.delete(data, idx_outside_pos_data, 0)
+    # Resample data to dacq_eeg sampling rate
+    data = data[::int(np.round(OpenEphys_SamplingRate/dacq_eeg_samplingRate))]
     # Adjust EEG data format and range
     data = data - np.mean(data)
     data = data / 4000 # Set data range to between 4000 microvolts
@@ -221,13 +247,13 @@ def header_templates(htype):
                   'sw_version': '1.2.2.14', 
                   'num_colours': '4', 
                   'min_x': '0', 
-                  'max_x': '600', 
+                  'max_x': str(AxonaData_max_pix_value()), 
                   'min_y': '0', 
-                  'max_y': '600', 
+                  'max_y': str(AxonaData_max_pix_value()), 
                   'window_min_x':'0', 
-                  'window_max_x': '600', 
+                  'window_max_x': str(AxonaData_max_pix_value()), 
                   'window_min_y': '0', 
-                  'window_max_y': '600', 
+                  'window_max_y': str(AxonaData_max_pix_value()), 
                   'timebase': '50 hz', 
                   'bytes_per_timestamp': '4', 
                   'sample_rate': '50.0 hz', 
@@ -238,7 +264,7 @@ def header_templates(htype):
                   'bearing_colour_4': '0', 
                   'pos_format': 't,x1,y1,x2,y2,numpix1,numpix2', 
                   'bytes_per_coord': '2', 
-                  'pixels_per_metre': '600', 
+                  'pixels_per_metre': '100', 
                   'num_pos_samples': '1'}
     elif htype == 'eeg':
         keyorder = ['trial_date', 'trial_time', 'experimenter', 'comments', \
@@ -278,7 +304,7 @@ def getExperimentInfo(fpath):
     
     return experiment_info
 
-def createAxonaData(OpenEphysDataPath, waveform_data=None, spike_name='spikes', subfolder='AxonaData', eegChan=1, open_output_folder=True):
+def createAxonaData(OpenEphysDataPath, waveform_data=None, spike_name='spikes', subfolder='AxonaData', eegChan=1, pixels_per_metre=None, show_output=True):
     if waveform_data is None:
         print('Loading waveform data from file')
         waveform_data = NWBio.load_spikes(OpenEphysDataPath, spike_name=spike_name, use_idx_keep=True, use_badChan=True)
@@ -294,17 +320,14 @@ def createAxonaData(OpenEphysDataPath, waveform_data=None, spike_name='spikes', 
     # Convert data to DACQ format
     waveform_data_dacq = create_DACQ_waveform_data(waveform_data, pos_edges)
     print('Converting position data')
-    pos_data_dacq = create_DACQ_pos_data(OpenEphysDataPath)
-    OpenEphys_SamplingRate = 30000
-    dacq_eeg_samplingRate = 250 # Sampling rate in Hz
-    lowpass_frequency = 125.0
+    pos_data_dacq, pixels_per_metre = create_DACQ_pos_data(OpenEphysDataPath, pixels_per_metre)
     print('Converting LFP to EEG data')
-    eeg_data_dacq = create_DACQ_eeg_data(OpenEphysDataPath, OpenEphys_SamplingRate, dacq_eeg_samplingRate, lowpass_frequency, pos_edges, eegChan)
+    eeg_data_dacq = create_DACQ_eeg_data(OpenEphysDataPath, pos_edges, eegChan)
     # Get headers for both datatypes
     header_wave, keyorder_wave = header_templates('waveforms')
     header_pos, keyorder_pos = header_templates('pos')
     header_eeg, keyorder_eeg = header_templates('eeg')
-    # Update headers
+    # Update header for waveforms
     experiment_info = getExperimentInfo(OpenEphysDataPath)
     trial_duration = str(int(np.ceil(pos_edges[1] - pos_edges[0])))
     header_wave['trial_date'] = experiment_info['trial_date']
@@ -314,11 +337,14 @@ def createAxonaData(OpenEphysDataPath, waveform_data=None, spike_name='spikes', 
     nspikes_tet = []
     for waves in waveform_data_dacq:
         nspikes_tet.append(str(int(len(waves) / 4)))
+    # Update header for position data
+    header_pos['pixels_per_metre'] = str(int(pixels_per_metre))
     header_pos['trial_date'] = experiment_info['trial_date']
     header_pos['trial_time'] = experiment_info['trial_time']
     header_pos['comments'] = experiment_info['animal']
     header_pos['duration'] = trial_duration
     header_pos['num_pos_samples'] = str(len(pos_data_dacq))
+    # Update header for eeg data
     header_eeg['trial_date'] = experiment_info['trial_date']
     header_eeg['trial_time'] = experiment_info['trial_time']
     header_eeg['comments'] = experiment_info['animal']
@@ -427,7 +453,7 @@ def createAxonaData(OpenEphysDataPath, waveform_data=None, spike_name='spikes', 
     with open(fname, 'wb') as file:
         file.writelines(lines)
     # Opens recording folder with Ubuntu file browser
-    if open_output_folder:
+    if show_output:
         subprocess.Popen(['xdg-open', AxonaDataPath])
 
 # The following is the default ending for a QtGui application script
@@ -442,6 +468,10 @@ if __name__ == "__main__":
                         help='enter the name of subfolder to use for AxonaData')
     parser.add_argument('--spike_name', type=str, nargs = 1, 
                         help='enter the name of spike set in NWB file to use for AxonaData')
+    parser.add_argument('--ppm', type=int, nargs = 1, 
+                        help='enter pixels_per_metre to assume position data is in pixels')
+    parser.add_argument('--show_output', action='store_true', 
+                        help='to open AxonaData output folder after processing')
     args = parser.parse_args()
     # Get paths to recording files
     OpenEphysDataPaths = args.paths
@@ -468,6 +498,14 @@ if __name__ == "__main__":
         spike_name = args.spike_name[0]
     else:
         spike_name = 'spikes'
+    if args.ppm:
+        pixels_per_metre = args.ppm[0]
+    else:
+        pixels_per_metre = None
+    if args.show_output:
+        show_output = True
+    else:
+        show_output = False
     # Run main script
     for OpenEphysDataPath in OpenEphysDataPaths:
-        createAxonaData(OpenEphysDataPath, spike_name=spike_name, subfolder=subfolder, eegChan=eegChan)
+        createAxonaData(OpenEphysDataPath, None, spike_name, subfolder, eegChan, pixels_per_metre, show_output)
