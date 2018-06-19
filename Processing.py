@@ -1,4 +1,8 @@
-import matlab.engine
+try:
+    import matlab.engine
+    matlab_available = True
+except:
+    matlab_available = False
 # To install matlab engine, go to folder /usr/local/MATLAB/R2017a/extern/engines/python
 # and run terminal command: sudo python setup.py installfrom TrackingDataProcessing import process_tracking_data
 import argparse
@@ -566,6 +570,8 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=False, 
                                                                                   noise_cut_off=noise_cut_off, 
                                                                                   threshold=threshold))
         elif processing_method == 'kilosort':
+            if not matlab_available:
+                raise Exception('Matlab not available. Can not process using KiloSort.')
             area_spike_datas.append(process_raw_data_with_kilosort(OpenEphysDataPaths, channels, 
                                                                    noise_cut_off=noise_cut_off, threshold=5))
     # Save data in Axona Format
@@ -575,8 +581,8 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=False, 
         subfolder = 'AxonaData_' + str(channels[0] + 1) + '-' + str(channels[-1] + 1)
         for OpenEphysDataPath, spike_data in zip(OpenEphysDataPaths, area_spike_datas[i]):
             createAxonaData.createAxonaData(OpenEphysDataPath, spike_data, subfolder=subfolder, eegChan=1, 
-                                            pixels_per_metre=axonaDataArgs(0), 
-                                            show_output=axonaDataArgs(1))
+                                            pixels_per_metre=axonaDataArgs[0], 
+                                            show_output=axonaDataArgs[1])
 
 def process_data_tree(root_path):
     # Commence directory walk

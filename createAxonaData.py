@@ -105,7 +105,8 @@ def convert_position_data_from_cm_to_pixels(xy_pos):
     max_cm = np.nanmax(xy_pos)
     pix_per_cm = float(max_pix) / float(max_cm)
     xy_pos = xy_pos * pix_per_cm
-    pixels_per_metre = int(np.round(pix_per_cm * 100))
+    #pixels_per_metre = int(np.round(pix_per_cm * 100))
+    pixels_per_metre = max_pix
 
     return xy_pos, pixels_per_metre
 
