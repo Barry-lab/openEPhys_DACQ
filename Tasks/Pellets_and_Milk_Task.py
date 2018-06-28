@@ -10,6 +10,7 @@ import random
 from PyQt4 import QtGui, QtCore
 from copy import deepcopy
 from audioSignalControl import createAudioSignal
+from CumulativePosPlot import angle_clockwise
 
 def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
     feeder = RewardControl(FEEDER_type, str(RPiIPBox.text()), 
@@ -128,6 +129,8 @@ def exportSettingsFromGUI(self):
                     'MilkTrialMinSeparationVariance': np.float64(str(self.settings['MilkTrialMinSeparationVariance'].text())), 
                     'MilkTaskMinStartDistance': np.int64(float(str(self.settings['MilkTaskMinStartDistance'].text()))), 
                     'MilkTaskMinGoalDistance': np.int64(float(str(self.settings['MilkTaskMinGoalDistance'].text()))), 
+                    'MilkTaskMinGoalAngularDistance': np.int64(float(str(self.settings['MilkTaskMinGoalAngularDistance'].text()))), 
+                    'MilkTaskGoalAngularDistanceTime': np.int64(float(str(self.settings['MilkTaskGoalAngularDistanceTime'].text()))), 
                     'MilkTrialMaxDuration': np.int64(float(str(self.settings['MilkTrialMaxDuration'].text())))}
     # Get radio button selection
     for key in self.settings['AudioSignalMode'].keys():
@@ -337,6 +340,16 @@ def SettingsGUI(self):
     hbox.addWidget(self.settings['MilkTaskMinGoalDistance'])
     vbox.addLayout(setDoubleHBoxStretch(hbox))
     hbox = QtGui.QHBoxLayout()
+    hbox.addWidget(QtGui.QLabel('Minimum Goal angular distance (deg)'))
+    self.settings['MilkTaskMinGoalAngularDistance'] = QtGui.QLineEdit('45')
+    hbox.addWidget(self.settings['MilkTaskMinGoalAngularDistance'])
+    vbox.addLayout(setDoubleHBoxStretch(hbox))
+    hbox = QtGui.QHBoxLayout()
+    hbox.addWidget(QtGui.QLabel('Goal angular distance time (s)'))
+    self.settings['MilkTaskGoalAngularDistanceTime'] = QtGui.QLineEdit('0.5')
+    hbox.addWidget(self.settings['MilkTaskGoalAngularDistanceTime'])
+    vbox.addLayout(setDoubleHBoxStretch(hbox))
+    hbox = QtGui.QHBoxLayout()
     hbox.addWidget(QtGui.QLabel('Maximum Trial Duration (s)'))
     self.settings['MilkTrialMaxDuration'] = QtGui.QLineEdit('9')
     hbox.addWidget(self.settings['MilkTrialMaxDuration'])
@@ -387,6 +400,43 @@ def compute_distance_travelled(posHistory, smoothing):
 
     return total_distance
 
+def unit_vector(vector):
+    """ Returns the unit vector of the vector.  """
+    return vector / np.linalg.norm(vector)
+
+def angle_between(v1, v2):
+    """ Returns the angle in radians between vectors 'v1' and 'v2'::
+
+            >>> angle_between((1, 0, 0), (0, 1, 0))
+            1.5707963267948966
+            >>> angle_between((1, 0, 0), (1, 0, 0))
+            0.0
+            >>> angle_between((1, 0, 0), (-1, 0, 0))
+            3.141592653589793
+    """
+    v1_u = unit_vector(v1)
+    v2_u = unit_vector(v2)
+    return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+
+def compute_mean_movement_vector(posHistory):
+    posHistory = np.array(posHistory)
+    posHistory = posHistory[:, :2]
+    posVectors = posHistory[1:, :] - posHistory[:-1, :]
+    posVector = np.mean(posVectors, axis=0)
+
+    return posVector
+
+def compute_movement_angular_distance_to_target(posHistory, target_location):
+    '''
+    Computes the angle in degrees of the mean movement vector across positions
+    '''
+    posVector = compute_mean_movement_vector(posHistory)
+    targetVector = target_location - posHistory[-1][:2]
+    angle_rad = angle_between(posVector, targetVector)
+    angle = np.rad2deg(angle_rad)
+
+    return angle
+
 def draw_rect_with_border(surface, fill_color, outline_color, position, border=1):
     rect = pygame.Rect(position)
     surface.fill(outline_color, rect)
@@ -400,7 +450,8 @@ class Core(object):
         self.TaskSettings = TaskSettings
         # Pre-compute variables
         self.one_second_steps = int(np.round(1 / self.TaskIO['RPIPos'].combPos_update_interval))
-        self.distance_steps = int(np.round(self.TaskSettings['LastTravelTime'])) * self.one_second_steps
+        self.distance_steps = int(np.round(self.TaskSettings['LastTravelTime'] * self.one_second_steps))
+        self.angular_distance_steps = int(np.round(self.TaskSettings['MilkTaskGoalAngularDistanceTime'] * self.one_second_steps))
         self.max_distance_in_arena = int(round(np.hypot(self.TaskSettings['arena_size'][0], self.TaskSettings['arena_size'][1])))
         # Prepare TTL pulse time list
         self.ttlTimes = []
@@ -1114,7 +1165,8 @@ class Core(object):
     def get_game_progress(self):
         # Get animal position history
         with self.TaskIO['RPIPos'].combPosHistoryLock:
-            posHistory = self.TaskIO['RPIPos'].combPosHistory[-self.distance_steps:]
+            posHistory = deepcopy(self.TaskIO['RPIPos'].combPosHistory[-self.distance_steps:])
+            posHistory_for_angularDistance = deepcopy(self.TaskIO['RPIPos'].combPosHistory[-self.angular_distance_steps:])
         if not (None in posHistory):
             self.lastKnownPos = posHistory[-1]
         else:
@@ -1193,6 +1245,16 @@ class Core(object):
                               'status': int(round(minDistance)), 
                               'complete': minDistance >= self.TaskSettings['MilkTaskMinStartDistance'], 
                               'percentage': minDistance / float(self.TaskSettings['MilkTaskMinStartDistance'])})
+        # Check if animal not moving towards goal location
+        game_progress_names.append('angular_distance_from_goal_feeder')
+        target_location = self.FEEDERs['milk'][self.feederID_milkTrial]['Position']
+        angularDistance = compute_movement_angular_distance_to_target(posHistory_for_angularDistance, target_location)
+        game_progress.append({'name': 'Milk A.Distance', 
+                              'game_states': ['milk'], 
+                              'target': self.TaskSettings['MilkTaskMinGoalAngularDistance'], 
+                              'status': int(round(angularDistance)), 
+                              'complete': angularDistance >= self.TaskSettings['MilkTaskMinGoalAngularDistance'], 
+                              'percentage': angularDistance / float(self.TaskSettings['MilkTaskMinGoalAngularDistance'])})
         # Check if animal is close enough to goal location
         game_progress_names.append('distance_from_goal_feeder')
         goal_distance = distances[self.activeMfeeders.index(self.feederID_milkTrial)]
@@ -1276,7 +1338,8 @@ class Core(object):
         elif self.game_state == 'milk':
             conditions = {'inactivity': game_progress[game_progress_names.index('inactivity')]['complete'], 
                           'mobility': game_progress[game_progress_names.index('mobility')]['complete'], 
-                          'distance_from_milk_feeders': game_progress[game_progress_names.index('distance_from_milk_feeders')]['complete']}
+                          'distance_from_milk_feeders': game_progress[game_progress_names.index('distance_from_milk_feeders')]['complete'], 
+                          'angular_distance_from_goal_feeder': game_progress[game_progress_names.index('angular_distance_from_goal_feeder')]['complete']}
             if conditions['inactivity']:
                 # If animal has been without any rewards for too long, release pellet reward
                 self.game_state = 'reward_in_progress'
@@ -1284,7 +1347,7 @@ class Core(object):
                 threading.Thread(target=self.releaseReward, 
                                  args=('pellet', ID, 'goal_inactivity', self.TaskSettings['PelletQuantity'])
                                  ).start()
-            elif conditions['distance_from_milk_feeders'] and conditions['mobility']:
+            elif conditions['distance_from_milk_feeders'] and conditions['mobility'] and conditions['angular_distance_from_goal_feeder']:
                 # If animal is far enough from milk feeders and is mobile enough, start milk trial
                 self.game_state = 'transition'
                 threading.Thread(target=self.start_milkTrial, args=('goal_milkTrialStart',)).start() # changes self.game_state = 'milk_trial'
@@ -1343,13 +1406,13 @@ class Core(object):
         self.lastKnownPos = posHistory[-1]
         # Initialize GUI elements
         self.screen_Lock = threading.Lock()
-        self.screen_size = (1300, 300)
+        self.screen_size = (1400, 300)
         self.screen_margins = 20
         self.screen_progress_bar_space_start = 0
-        self.screen_progress_bar_space_width = 700
-        self.screen_button_space_start = 700
+        self.screen_progress_bar_space_width = 800
+        self.screen_button_space_start = 800
         self.screen_button_space_width = 300
-        self.screen_text_info_space_start = 1000
+        self.screen_text_info_space_start = 1100
         self.screen_text_info_space_width = 300
         self.font = pygame.font.SysFont('Arial', 10)
         self.textColor = (255, 255, 255)
