@@ -427,7 +427,8 @@ def compute_mean_movement_vector(posHistory):
 
 def compute_movement_angular_distance_to_target(posHistory, target_location):
     '''
-    Computes the angle in degrees of the mean movement vector across positions
+    Computes angular distance between mean movement vector and direct path to target location.
+    Outputs None if norm of mean movement vector is 0.
     '''
     posVector = compute_mean_movement_vector(posHistory)
     if np.linalg.norm(posVector) > 0:
