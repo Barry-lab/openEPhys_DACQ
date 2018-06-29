@@ -10,7 +10,6 @@ import random
 from PyQt4 import QtGui, QtCore
 from copy import deepcopy
 from audioSignalControl import createAudioSignal
-from CumulativePosPlot import angle_clockwise
 
 def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
     feeder = RewardControl(FEEDER_type, str(RPiIPBox.text()), 
@@ -130,7 +129,7 @@ def exportSettingsFromGUI(self):
                     'MilkTaskMinStartDistance': np.int64(float(str(self.settings['MilkTaskMinStartDistance'].text()))), 
                     'MilkTaskMinGoalDistance': np.int64(float(str(self.settings['MilkTaskMinGoalDistance'].text()))), 
                     'MilkTaskMinGoalAngularDistance': np.int64(float(str(self.settings['MilkTaskMinGoalAngularDistance'].text()))), 
-                    'MilkTaskGoalAngularDistanceTime': np.int64(float(str(self.settings['MilkTaskGoalAngularDistanceTime'].text()))), 
+                    'MilkTaskGoalAngularDistanceTime': np.float64(float(str(self.settings['MilkTaskGoalAngularDistanceTime'].text()))), 
                     'MilkTrialMaxDuration': np.int64(float(str(self.settings['MilkTrialMaxDuration'].text())))}
     # Get radio button selection
     for key in self.settings['AudioSignalMode'].keys():
@@ -346,7 +345,7 @@ def SettingsGUI(self):
     vbox.addLayout(setDoubleHBoxStretch(hbox))
     hbox = QtGui.QHBoxLayout()
     hbox.addWidget(QtGui.QLabel('Goal angular distance time (s)'))
-    self.settings['MilkTaskGoalAngularDistanceTime'] = QtGui.QLineEdit('0.5')
+    self.settings['MilkTaskGoalAngularDistanceTime'] = QtGui.QLineEdit('2')
     hbox.addWidget(self.settings['MilkTaskGoalAngularDistanceTime'])
     vbox.addLayout(setDoubleHBoxStretch(hbox))
     hbox = QtGui.QHBoxLayout()
@@ -431,9 +430,12 @@ def compute_movement_angular_distance_to_target(posHistory, target_location):
     Computes the angle in degrees of the mean movement vector across positions
     '''
     posVector = compute_mean_movement_vector(posHistory)
-    targetVector = target_location - posHistory[-1][:2]
-    angle_rad = angle_between(posVector, targetVector)
-    angle = np.rad2deg(angle_rad)
+    if np.linalg.norm(posVector) > 0:
+        targetVector = target_location - posHistory[-1][:2]
+        angle_rad = angle_between(posVector, targetVector)
+        angle = np.rad2deg(angle_rad)
+    else:
+        angle = None
 
     return angle
 
@@ -1165,8 +1167,8 @@ class Core(object):
     def get_game_progress(self):
         # Get animal position history
         with self.TaskIO['RPIPos'].combPosHistoryLock:
-            posHistory = deepcopy(self.TaskIO['RPIPos'].combPosHistory[-self.distance_steps:])
-            posHistory_for_angularDistance = deepcopy(self.TaskIO['RPIPos'].combPosHistory[-self.angular_distance_steps:])
+            posHistory = self.TaskIO['RPIPos'].combPosHistory[-self.distance_steps:]
+            posHistory_for_angularDistance = self.TaskIO['RPIPos'].combPosHistory[-self.angular_distance_steps:]
         if not (None in posHistory):
             self.lastKnownPos = posHistory[-1]
         else:
@@ -1249,6 +1251,8 @@ class Core(object):
         game_progress_names.append('angular_distance_from_goal_feeder')
         target_location = self.FEEDERs['milk'][self.feederID_milkTrial]['Position']
         angularDistance = compute_movement_angular_distance_to_target(posHistory_for_angularDistance, target_location)
+        if angularDistance is None:
+            angularDistance = 0
         game_progress.append({'name': 'Milk A.Distance', 
                               'game_states': ['milk'], 
                               'target': self.TaskSettings['MilkTaskMinGoalAngularDistance'], 
