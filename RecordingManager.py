@@ -655,8 +655,8 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_process_data.setEnabled(False)
         self.pb_sync_server.setEnabled(False)
         time.sleep(0.1)
-        import Processing_KlustaKwik
-        Processing_KlustaKwik.main(self.Settings['General']['rec_file_path'])
+        import Processing
+        Processing.main(self.Settings['General']['rec_file_path'])
         self.pb_start_rec.setEnabled(True)
         self.pb_process_data.setEnabled(True)
         self.pb_sync_server.setEnabled(True)

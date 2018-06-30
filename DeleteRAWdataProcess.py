@@ -88,8 +88,16 @@ def downsample_and_repack(fpath, path_processor, lowpass_freq, downsampling, n_t
     nwb_raw_deleted += 1
     # Repack NWB file to recover space
     if check_if_path_exists(fpath, path_processor + '/tetrode_lowpass'):
+        # Create a repacked copy of the file
         os.system('h5repack ' + fpath + ' ' + (fpath + '.repacked'))
+        # Check that the new file is not corrupted
+        with h5py.File(fpath + '.repacked','r') as h5file:
+            _ = h5file[path_processor + '/tetrode_lowpass'].shape
+        # Replace original file with repacked file
         os.system('mv ' + (fpath + '.repacked') + ' ' + fpath)
+        # Check that the new file is not corrupted
+        with h5py.File(fpath,'r') as h5file:
+            _ = h5file[path_processor + '/tetrode_lowpass'].shape
         nwb_repacked += 1
 
     return nwb_raw_deleted, nwb_repacked
