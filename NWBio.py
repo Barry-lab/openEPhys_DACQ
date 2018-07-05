@@ -77,8 +77,12 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
 
     recordingKey = get_recordingKey(filename)
     with h5py.File(filename, 'r') as h5file:
-        # Get data file spikes folder keys and sort them into ascending order by tetrode number
-        tetrode_keys = h5file['acquisition']['timeseries'][recordingKey][spike_name].keys()
+        spike_name_path = '/acquisition/timeseries/' + recordingKey + '/' + spike_name
+        if spike_name_path in h5file:
+            # Get data file spikes folder keys and sort them into ascending order by tetrode number
+            tetrode_keys = h5file[spike_name_path].keys()
+        else:
+            return []
         if len(tetrode_keys) > 0:
             # Sort tetrode keys into ascending order
             tetrode_keys_int = []
@@ -154,6 +158,21 @@ def save_spikes(filename, tetrode_nr, data, timestamps, spike_name='spikes'):
         with h5py.File(filename, 'r+') as h5file:
             h5file[path + 'data'] = data
             h5file[path + 'timestamps'] = np.float64(timestamps).squeeze()
+
+def processing_method_and_spike_name_combinations():
+    '''
+    Outputs a list of potential processing_method and spike_name combinations
+    '''
+    processing_methods = ['klustakwik', 'klustakwik_raw', 'kilosort']
+    spike_names = ['spikes', 'spikes_raw', 'spikes_kilosort']
+
+    return processing_methods, spike_names
+
+def get_spike_name_for_processing_method(processing_method):
+    processing_methods, spike_names = processing_method_and_spike_name_combinations()
+    spike_name = spike_names[processing_methods.index(processing_method)]
+
+    return spike_name
 
 def load_events(filename):
     # Outputs a dictionary timestamps and eventIDs for TTL signals received
@@ -308,8 +327,18 @@ def load_tracking_data(filename, subset='ProcessedPos'):
         return np.array(h5file[path].value)
 
 def get_processed_tracking_data_timestamp_edges(filename):
-    data = load_tracking_data(filename, subset='ProcessedPos')
-    edges = [data[0, 0], data[-1, 0]]
+    if check_if_processed_position_data_available(filename):
+        data = load_tracking_data(filename, subset='ProcessedPos')
+        edges = [data[0, 0], data[-1, 0]]
+    else:
+        print('Warning! ProcessedPos not available. Using continuous data timestamps')
+        h5file = h5py.File(filename, 'r')
+        recordingKey = get_recordingKey(filename)
+        processorKey = get_processorKey(filename)
+        path = '/acquisition/timeseries/' + recordingKey + '/continuous/' + processorKey + '/timestamps'
+        edges = [h5file[path][0], h5file[path][-1]]
+        h5file.close()
+
     return edges
 
 def check_if_tracking_data_available(filename):

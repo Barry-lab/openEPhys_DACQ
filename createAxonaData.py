@@ -15,6 +15,7 @@ import NWBio
 import HelperFunctions as hfunct
 from datetime import datetime
 import argparse
+import copy
 
 
 def interpolate_waveforms(waves, nr_targetbins=50):
@@ -116,24 +117,32 @@ def create_DACQ_pos_data(OpenEphysDataPath, pixels_per_metre=None):
     If pixels_per_metre is entered, it is assumed that ProcessedPos data is
     in pixel values, not centimeters.
     '''
-    posdata = NWBio.load_tracking_data(OpenEphysDataPath, subset='ProcessedPos')
-    xy_pos = posdata[:,1:5].astype(np.float32)
-    timestamps = posdata[:,0].astype(np.float32)
-    # Realign position data start to 0
-    timestamps = timestamps - timestamps[0]
     # Create DACQ data pos format
     dacq_pos_samplingRate = 50.0 # Sampling rate in Hz
     dacq_pos_dtype = [('ts', '>i'), ('pos', '>8h')]
     # dacq_pos_timestamp_dtype = '>i4'
     dacq_pos_xypos_dtype = '>i2'
     dacq_pos_timestamp_dtype = '>i'
-    # Interpolate position data to 50Hz
-    countstamps = np.arange(np.floor(timestamps[-1] * dacq_pos_samplingRate))
-    dacq_timestamps = np.float64(countstamps) / dacq_pos_samplingRate
-    xy_pos_interp = np.zeros((countstamps.size, xy_pos.shape[1]), dtype=np.float32)
-    for ncoord in range(xy_pos.shape[1]):
-        xy_pos_interp[:,ncoord] = np.interp(dacq_timestamps, timestamps, xy_pos[:,ncoord])
-    xy_pos = xy_pos_interp
+    if NWBio.check_if_processed_position_data_available(OpenEphysDataPath):
+        # Load and interpolate ProcessedPos to AxonaData sampling rate
+        posdata = NWBio.load_tracking_data(OpenEphysDataPath, subset='ProcessedPos')
+        xy_pos = posdata[:,1:5].astype(np.float32)
+        timestamps = posdata[:,0].astype(np.float32)
+        # Realign position data start to 0
+        timestamps = timestamps - timestamps[0]
+        # Interpolate position data to 50Hz
+        countstamps = np.arange(np.floor(timestamps[-1] * dacq_pos_samplingRate))
+        dacq_timestamps = np.float64(countstamps) / dacq_pos_samplingRate
+        xy_pos_interp = np.zeros((dacq_timestamps.size, xy_pos.shape[1]), dtype=np.float32)
+        for ncoord in range(xy_pos.shape[1]):
+            xy_pos_interp[:,ncoord] = np.interp(dacq_timestamps, timestamps, xy_pos[:,ncoord])
+        xy_pos = xy_pos_interp
+    else:
+        print('Warning! No ProcessedPos, creating fake position data for AxonaData.')
+        pos_edges = NWBio.get_processed_tracking_data_timestamp_edges(OpenEphysDataPath)
+        countstamps = np.arange(np.floor((pos_edges[1] - pos_edges[0]) * dacq_pos_samplingRate))
+        dacq_timestamps = np.float64(countstamps) / dacq_pos_samplingRate
+        xy_pos = np.repeat(np.linspace(0, 100, dacq_timestamps.size)[:, None], 4, axis=1).astype(np.float32)
     # If no pixels_per_metre provided, convert position data to pixel values
     # and calculate pixels_per_metre for range 600
     if pixels_per_metre is None:
@@ -141,7 +150,7 @@ def create_DACQ_pos_data(OpenEphysDataPath, pixels_per_metre=None):
     # Set NaN values to 1023
     xy_pos[np.isnan(xy_pos)] = 1023
     # Convert datatypes to DACQ data type
-    countstamps = countstamps.astype(dtype=dacq_pos_timestamp_dtype)
+    dacq_timestamps = dacq_timestamps.astype(dtype=dacq_pos_timestamp_dtype)
     xy_pos = np.int16(np.round(xy_pos))
     xy_pos = xy_pos.astype(dtype=dacq_pos_xypos_dtype)
     # Arrange xy_pos as in the DACQ data matrix including the dot size values
@@ -150,22 +159,26 @@ def create_DACQ_pos_data(OpenEphysDataPath, pixels_per_metre=None):
     xy_pos = np.concatenate((xy_pos, 30 * np.ones((xy_pos.shape[0], 1), dtype=dacq_pos_xypos_dtype)), axis=1)
     xy_pos = np.concatenate((xy_pos, np.zeros((xy_pos.shape[0], 1), dtype=dacq_pos_xypos_dtype)), axis=1)
     # Create DACQ datatype structured array
-    pos_data_dacq = np.zeros(countstamps.size, dtype=dacq_pos_dtype)
+    pos_data_dacq = np.zeros(dacq_timestamps.size, dtype=dacq_pos_dtype)
     # Input timestamps and pos_xy to DACQ array
-    pos_data_dacq['ts'] = countstamps
+    pos_data_dacq['ts'] = dacq_timestamps
     pos_data_dacq['pos'] = xy_pos
 
     return pos_data_dacq, pixels_per_metre
 
-def create_DACQ_eeg_data(fpath, pos_edges, eegChan, bitVolts=0.195):
+def create_DACQ_eeg_or_egf_data(eeg_or_egf, fpath, pos_edges, eegChan, bitVolts=0.195):
     '''
     EEG is downsampled to dacq_eeg_samplingrate and inverted to same polarity as spikes in AxonaFormat.
     EEG is also rescaled to microvolt values.
     '''
     # AxonaData eeg data parameters
     OpenEphys_SamplingRate = 30000
-    dacq_eeg_samplingRate = 250
-    lowpass_frequency = 125.0
+    if eeg_or_egf == 'eeg':
+        dacq_eeg_samplingRate = 250
+        lowpass_frequency = 125.0
+    elif eeg_or_egf == 'egf':
+        dacq_eeg_samplingRate = 4800
+        lowpass_frequency = 2400
     # Load EEG data of selected channel
     continuous_data = NWBio.load_continuous(fpath)
     if not (continuous_data is None):
@@ -181,7 +194,8 @@ def create_DACQ_eeg_data(fpath, pos_edges, eegChan, bitVolts=0.195):
         OpenEphys_SamplingRate = OpenEphys_SamplingRate / lowpass_downsampling
         lowpass_data_filter_frequency = float([i for i in  lowpass_data['tetrode_lowpass_info'] if 'lowpass_frequency ' in i][0][18:])
         if lowpass_data_filter_frequency > lowpass_frequency:
-            data = hfunct.butter_lowpass_filter(data, sampling_rate=OpenEphys_SamplingRate, lowpass_frequency=lowpass_frequency, filt_order=4)
+            data = hfunct.butter_lowpass_filter(data, sampling_rate=OpenEphys_SamplingRate, 
+                                                lowpass_frequency=lowpass_frequency, filt_order=4)
     # Invert data
     data = -data * bitVolts
     # Crop data outside position data
@@ -198,14 +212,23 @@ def create_DACQ_eeg_data(fpath, pos_edges, eegChan, bitVolts=0.195):
     data[data > 127] = 127
     data[data < -127] = -127
     # Create DACQ data eeg format
-    dacq_eeg_dtype = [('eeg', '=b')]
-    dacq_eeg_data_dtype = '=b'
+    if eeg_or_egf == 'eeg':
+        dacq_eeg_dtype = [('eeg', '=b')]
+        dacq_eeg_data_dtype = '=b'
+    elif eeg_or_egf == 'egf':
+        dacq_eeg_dtype = [('eeg', np.int16)]
+        dacq_eeg_data_dtype = np.int16
     dacq_eeg = data.astype(dtype=dacq_eeg_data_dtype)
     eeg_data_dacq = np.zeros(dacq_eeg.size, dtype=dacq_eeg_dtype)
     eeg_data_dacq['eeg'] = dacq_eeg
 
     return eeg_data_dacq
 
+def create_DACQ_eeg_data(fpath, pos_edges, eegChan, bitVolts=0.195):
+    return create_DACQ_eeg_or_egf_data('eeg', fpath, pos_edges, eegChan, bitVolts=0.195)
+
+def create_DACQ_egf_data(fpath, pos_edges, eegChan, bitVolts=0.195):
+    return create_DACQ_eeg_or_egf_data('egf', fpath, pos_edges, eegChan, bitVolts=0.195)
 
 def header_templates(htype):
     # This function returns the default header necessary for the waveform and pos files
@@ -228,7 +251,8 @@ def header_templates(htype):
                   'sample_rate': '48000 hz',
                   'bytes_per_sample': '1', 
                   'spike_format': 't,ch1,t,ch2,t,ch3,t,ch4', 
-                  'num_spikes': '1'}
+                  'num_spikes': '0'}
+
     elif htype == 'pos':
         keyorder = ['trial_date', 'trial_time', 'experimenter', 'comments', \
               'duration', 'sw_version', 'num_colours', 'min_x', 'max_x', \
@@ -266,7 +290,8 @@ def header_templates(htype):
                   'pos_format': 't,x1,y1,x2,y2,numpix1,numpix2', 
                   'bytes_per_coord': '2', 
                   'pixels_per_metre': '100', 
-                  'num_pos_samples': '1'}
+                  'num_pos_samples': '0'}
+    
     elif htype == 'eeg':
         keyorder = ['trial_date', 'trial_time', 'experimenter', 'comments', \
               'duration', 'sw_version', 'num_chans', 'sample_rate', 'EEG_samples_per_position', \
@@ -282,7 +307,23 @@ def header_templates(htype):
                   'sample_rate': '250.0 hz', 
                   'EEG_samples_per_position': '5', 
                   'bytes_per_sample': '1', 
-                  'num_EEG_samples': '300250'}
+                  'num_EEG_samples': '0'}
+    
+    elif htype == 'egf':
+        keyorder = ['trial_date', 'trial_time', 'experimenter', 'comments', \
+              'duration', 'sw_version', 'num_chans', 'sample_rate', \
+              'bytes_per_sample', 'num_EGF_samples']
+
+        header = {'trial_date': 'Tuesday, 14 Dec 2010', 
+                  'trial_time': '10:44:07', 
+                  'experimenter': 'cb', 
+                  'comments': '1838', 
+                  'duration': '1201', 
+                  'sw_version': '1.0.2', 
+                  'num_chans': '1', 
+                  'sample_rate': '4800 hz', 
+                  'bytes_per_sample': '2', 
+                  'num_EGF_samples': '0'}
                   
     return header, keyorder
 
@@ -305,10 +346,67 @@ def getExperimentInfo(fpath):
     
     return experiment_info
 
+def get_first_available_spike_data(OpenEphysDataPath, use_idx_keep, use_badChan):
+    _, spike_names = NWBio.processing_method_and_spike_name_combinations()
+    spike_data_available = False
+    for spike_name in spike_names:
+        spike_data = NWBio.load_spikes(OpenEphysDataPath, spike_name=spike_name, use_idx_keep=use_idx_keep, use_badChan=use_badChan)
+        if len(spike_data) > 0:
+            spike_data_available = True
+            break
+    if not spike_data_available:
+        raise Exception('Spike data is not available in file: ' + OpenEphysDataPath + '\nChecked for following spike_name: ' + str(spike_names))
+
+    return spike_data, spike_name
+
+def write_file_in_axona_format(filename, header, header_keyorder, data):
+    '''
+    Writes data in axona format
+    '''
+    # Set data start and end tokens
+    DATA_START_TOKEN = 'data_start'
+    DATA_END_TOKEN = '\r\ndata_end\r\n'
+    with open(filename, 'wb') as f:
+        # Write header in the correct order
+        for key in header_keyorder:
+            if 'num_spikes' in key:
+                # Replicate spaces following num_spikes in original dacq files
+                stringval = header[key]
+                while len(stringval) < 10:
+                    stringval += ' '
+                f.write(key + ' ' + stringval + '\r\n')
+            elif 'num_pos_samples' in key:
+                # Replicate spaces following num_pos_samples in original dacq files
+                stringval = header[key]
+                while len(stringval) < 10:
+                    stringval += ' '
+                f.write(key + ' ' + stringval + '\r\n')
+            elif 'duration' in key:
+                # Replicate spaces following duration in original dacq files
+                stringval = header[key]
+                while len(stringval) < 10:
+                    stringval += ' '
+                f.write(key + ' ' + stringval + '\r\n')
+            else:
+                f.write(key + ' ' + header[key] + '\r\n')
+        # Write the start token string
+        f.write(DATA_START_TOKEN)
+        # Write the data into the file in binary format
+        data.tofile(f)
+        # Write the end token string
+        f.write(DATA_END_TOKEN)
+
 def createAxonaData(OpenEphysDataPath, waveform_data=None, spike_name='spikes', subfolder='AxonaData', eegChan=1, pixels_per_metre=None, show_output=True):
+    # Static variables
+    use_idx_keep = True
+    use_badChan = True
+    # Load data
     if waveform_data is None:
         print('Loading waveform data from file')
-        waveform_data = NWBio.load_spikes(OpenEphysDataPath, spike_name=spike_name, use_idx_keep=True, use_badChan=True)
+        if spike_name == 'first_available':
+            waveform_data, spike_name = get_first_available_spike_data(OpenEphysDataPath, use_idx_keep, use_badChan)
+        else:
+            waveform_data = NWBio.load_spikes(OpenEphysDataPath, spike_name=spike_name, use_idx_keep=use_idx_keep, use_badChan=use_badChan)
     else:
         # Ensure idx_keep has been applied to incoming data
         for spike_data_tet in waveform_data:
@@ -324,10 +422,13 @@ def createAxonaData(OpenEphysDataPath, waveform_data=None, spike_name='spikes', 
     pos_data_dacq, pixels_per_metre = create_DACQ_pos_data(OpenEphysDataPath, pixels_per_metre)
     print('Converting LFP to EEG data')
     eeg_data_dacq = create_DACQ_eeg_data(OpenEphysDataPath, pos_edges, eegChan)
+    print('Converting LFP to EGF data')
+    egf_data_dacq = create_DACQ_egf_data(OpenEphysDataPath, pos_edges, eegChan)
     # Get headers for both datatypes
     header_wave, keyorder_wave = header_templates('waveforms')
     header_pos, keyorder_pos = header_templates('pos')
     header_eeg, keyorder_eeg = header_templates('eeg')
+    header_egf, keyorder_egf = header_templates('egf')
     # Update header for waveforms
     experiment_info = getExperimentInfo(OpenEphysDataPath)
     trial_duration = str(int(np.ceil(pos_edges[1] - pos_edges[0])))
@@ -335,9 +436,11 @@ def createAxonaData(OpenEphysDataPath, waveform_data=None, spike_name='spikes', 
     header_wave['trial_time'] = experiment_info['trial_time']
     header_wave['comments'] = experiment_info['animal']
     header_wave['duration'] = trial_duration
-    nspikes_tet = []
+    headers_wave = []
     for waves in waveform_data_dacq:
-        nspikes_tet.append(str(int(len(waves) / 4)))
+        # Create a separate header for waveform file of each tetrode that has correct num_spikes
+        header_wave['num_spikes'] = str(int(len(waves) / 4))
+        headers_wave.append(copy.deepcopy(header_wave))
     # Update header for position data
     header_pos['pixels_per_metre'] = str(int(pixels_per_metre))
     header_pos['trial_date'] = experiment_info['trial_date']
@@ -352,11 +455,14 @@ def createAxonaData(OpenEphysDataPath, waveform_data=None, spike_name='spikes', 
     header_eeg['duration'] = trial_duration
     header_eeg['EEG_samples_per_position'] = str(int(np.round(len(eeg_data_dacq) / len(pos_data_dacq))))
     header_eeg['num_EEG_samples'] = str(len(eeg_data_dacq))
+    # Update header for egf data
+    header_egf['trial_date'] = experiment_info['trial_date']
+    header_egf['trial_time'] = experiment_info['trial_time']
+    header_egf['comments'] = experiment_info['animal']
+    header_egf['duration'] = trial_duration
+    header_egf['num_EGF_samples'] = str(len(egf_data_dacq))
     # Generate base name for files
     file_basename = 'experiment_1'
-    # Set data start and end tokens
-    DATA_START_TOKEN = 'data_start'
-    DATA_END_TOKEN = '\r\ndata_end\r\n'
     # Create subdirectory or rewrite existing
     AxonaDataPath = os.path.join(os.path.dirname(OpenEphysDataPath), subfolder)
     if not os.path.exists(AxonaDataPath):
@@ -365,74 +471,17 @@ def createAxonaData(OpenEphysDataPath, waveform_data=None, spike_name='spikes', 
     hfunct.print_progress(0, len(waveform_data_dacq), prefix = 'Writing tetrode files:', initiation=True)
     for ntet in range(len(waveform_data_dacq)):
         fname = os.path.join(AxonaDataPath, file_basename + '.' + str(waveform_data[ntet]['nr_tetrode'] + 1))
-        with open(fname, 'wb') as f:
-            # Write header in the correct order
-            for key in keyorder_wave:
-                if 'num_spikes' in key:
-                    # Replicate spaces following num_spikes in original dacq files
-                    stringval = nspikes_tet[ntet]
-                    while len(stringval) < 10:
-                        stringval += ' '
-                    f.write(key + ' ' + stringval + '\r\n')
-                elif 'duration' in key:
-                    # Replicate spaces following duration in original dacq files
-                    stringval = header_wave[key]
-                    while len(stringval) < 10:
-                        stringval += ' '
-                    f.write(key + ' ' + stringval + '\r\n')
-                else:
-                    f.write(key + ' ' + header_wave[key] + '\r\n')
-            # Write the start token string
-            f.write(DATA_START_TOKEN)
-            # Write the data into the file in binary format
-            waveform_data_dacq[ntet].tofile(f)
-            # Write the end token string
-            f.write(DATA_END_TOKEN)
+        write_file_in_axona_format(fname, headers_wave[ntet], keyorder_wave, waveform_data_dacq[ntet])
         hfunct.print_progress(ntet + 1, len(waveform_data_dacq), prefix = 'Writing tetrode files:')
     # Write POSITION data into DACQ format
     fname = os.path.join(AxonaDataPath, file_basename + '.pos')
-    with open(fname, 'wb') as f:
-        # Write header in the correct order
-        for key in keyorder_pos:
-            if 'num_pos_samples' in key:
-                # Replicate spaces following num_pos_samples in original dacq files
-                stringval = header_pos[key]
-                while len(stringval) < 10:
-                    stringval += ' '
-                f.write(key + ' ' + stringval + '\r\n')
-            elif 'duration' in key:
-                # Replicate spaces following duration in original dacq files
-                stringval = header_pos[key]
-                while len(stringval) < 10:
-                    stringval += ' '
-                f.write(key + ' ' + stringval + '\r\n')
-            else:
-                f.write(key + ' ' + header_pos[key] + '\r\n')
-        # Write the start token string
-        f.write(DATA_START_TOKEN)
-        # Write the data into the file in binary format
-        pos_data_dacq.tofile(f)
-        # Write the end token string
-        f.write(DATA_END_TOKEN)
+    write_file_in_axona_format(fname, header_pos, keyorder_pos, pos_data_dacq)
     # Write EEG data into DACQ format
     fname = os.path.join(AxonaDataPath, file_basename + '.eeg')
-    with open(fname, 'wb') as f:
-        # Write header in the correct order
-        for key in keyorder_eeg:
-            if 'duration' in key:
-                # Replicate spaces following duration in original dacq files
-                stringval = header_eeg[key]
-                while len(stringval) < 10:
-                    stringval += ' '
-                f.write(key + ' ' + stringval + '\r\n')
-            else:
-                f.write(key + ' ' + header_eeg[key] + '\r\n')
-        # Write the start token string
-        f.write(DATA_START_TOKEN)
-        # Write the data into the file in binary format
-        eeg_data_dacq.tofile(f)
-        # Write the end token string
-        f.write(DATA_END_TOKEN)
+    write_file_in_axona_format(fname, header_eeg, keyorder_eeg, eeg_data_dacq)
+    # Write EGF data into DACQ format
+    fname = os.path.join(AxonaDataPath, file_basename + '.egf')
+    write_file_in_axona_format(fname, header_egf, keyorder_egf, egf_data_dacq)
     # Write CLU files
     print('Writing CLU files')
     for ntet in range(len(waveform_data_dacq)):
@@ -498,7 +547,7 @@ if __name__ == "__main__":
     if args.spike_name:
         spike_name = args.spike_name[0]
     else:
-        spike_name = 'spikes'
+        spike_name = 'first_available'
     if args.ppm:
         pixels_per_metre = args.ppm[0]
     else:

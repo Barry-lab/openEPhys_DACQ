@@ -364,7 +364,8 @@ def split_KiloSort_output(datas_comb_clusterIDs, datas_comb_spike_indices, datas
 
     return datas_clusterIDs, datas_spike_indices
 
-def save_spike_data_to_disk(OpenEphysDataPath, tetrode_nr, waveforms=None, timestamps=None, idx_keep=None, clusterIDs=None, spike_name='spikes'):
+def save_spike_data_to_disk(OpenEphysDataPath, processing_method, tetrode_nr, waveforms=None, timestamps=None, idx_keep=None, clusterIDs=None):
+    spike_name = NWBio.get_spike_name_for_processing_method(processing_method)
     if not (waveforms is None) and not (timestamps is None):
         NWBio.save_spikes(OpenEphysDataPath, tetrode_nr, waveforms, 
                           timestamps, spike_name=spike_name)
@@ -408,9 +409,9 @@ def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels, nois
     for OpenEphysDataPath, spike_data in zip(OpenEphysDataPaths, spike_datas):
         print('Saving processing output to: ' + OpenEphysDataPath)
         for spike_data_tet in spike_data:
-            save_spike_data_to_disk(OpenEphysDataPath, spike_data_tet['nr_tetrode'], 
+            save_spike_data_to_disk(OpenEphysDataPath, 'klustakwik', spike_data_tet['nr_tetrode'], 
                                     idx_keep=spike_data_tet['idx_keep'], 
-                                    clusterIDs=spike_data_tet['clusterIDs'], spike_name='spikes')
+                                    clusterIDs=spike_data_tet['clusterIDs'])
 
     return spike_datas
 
@@ -462,10 +463,9 @@ def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels, 
     # Save spike_datas to disk
     for OpenEphysDataPath, spike_data in zip(OpenEphysDataPaths, spike_datas):
         for data_tet in spike_data:
-            save_spike_data_to_disk(OpenEphysDataPath, data_tet['nr_tetrode'], 
+            save_spike_data_to_disk(OpenEphysDataPath, 'klustakwik_raw', data_tet['nr_tetrode'], 
                                     waveforms=data_tet['waveforms'], timestamps=data_tet['timestamps'], 
-                                    idx_keep=data_tet['idx_keep'], clusterIDs=data_tet['clusterIDs'], 
-                                    spike_name='spikes_raw')
+                                    idx_keep=data_tet['idx_keep'], clusterIDs=data_tet['clusterIDs'])
 
     return spike_datas
 
@@ -539,10 +539,9 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
     # Save spike_datas to disk
     for OpenEphysDataPath, spike_data in zip(OpenEphysDataPaths, spike_datas):
         for data_tet in spike_data:
-            save_spike_data_to_disk(OpenEphysDataPath, data_tet['nr_tetrode'], 
+            save_spike_data_to_disk(OpenEphysDataPath, 'kilosort', data_tet['nr_tetrode'], 
                                     waveforms=data_tet['waveforms'], timestamps=data_tet['timestamps'], 
-                                    idx_keep=data_tet['idx_keep'], clusterIDs=data_tet['clusterIDs'], 
-                                    spike_name='spikes_kilosort')
+                                    idx_keep=data_tet['idx_keep'], clusterIDs=data_tet['clusterIDs'])
 
     return spike_datas
 
@@ -575,12 +574,14 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=False, 
             area_spike_datas.append(process_raw_data_with_kilosort(OpenEphysDataPaths, channels, 
                                                                    noise_cut_off=noise_cut_off, threshold=5))
     # Save data in Axona Format
+    spike_name = NWBio.get_spike_name_for_processing_method(processing_method)
     for i, area in enumerate(channel_map.keys()):
         channels = channel_map[area]['list']
         # Define Axona data subfolder name based on specific channels if requested
         subfolder = 'AxonaData_' + str(channels[0] + 1) + '-' + str(channels[-1] + 1)
         for OpenEphysDataPath, spike_data in zip(OpenEphysDataPaths, area_spike_datas[i]):
-            createAxonaData.createAxonaData(OpenEphysDataPath, spike_data, subfolder=subfolder, eegChan=1, 
+            createAxonaData.createAxonaData(OpenEphysDataPath, spike_data, spike_name, 
+                                            subfolder=subfolder, eegChan=1, 
                                             pixels_per_metre=axonaDataArgs[0], 
                                             show_output=axonaDataArgs[1])
 
