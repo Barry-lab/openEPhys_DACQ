@@ -287,13 +287,6 @@ def get_channel_map(OpenEphysDataPaths):
 
     return channel_map
 
-def get_tetrode_nrs(channels):
-    firstTet = hfunct.channels_tetrode(channels[0])
-    lastTet = hfunct.channels_tetrode(channels[-1])
-    tetrode_nrs = range(firstTet, lastTet + 1, 1)
-
-    return tetrode_nrs
-
 def ensure_processed_position_data_is_available(OpenEphysDataPath):
     if not NWBio.check_if_processed_position_data_available(OpenEphysDataPath):
         if NWBio.check_if_tracking_data_available(OpenEphysDataPath):
@@ -377,7 +370,7 @@ def save_spike_data_to_disk(OpenEphysDataPath, processing_method, tetrode_nr, wa
                                       spike_name=spike_name, overwrite=True)
 
 def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels, noise_cut_off=1000, threshold=50):
-    tetrode_nrs = get_tetrode_nrs(channels)
+    tetrode_nrs = hfunct.get_tetrode_nrs(channels)
     # Load spikes
     spike_datas = [range(len(tetrode_nrs)) for i in range(len(OpenEphysDataPaths))]
     for n_dataset, OpenEphysDataPath in enumerate(OpenEphysDataPaths):
@@ -416,7 +409,7 @@ def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels, nois
     return spike_datas
 
 def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels, noise_cut_off=1000, threshold=50):
-    tetrode_nrs = get_tetrode_nrs(channels)
+    tetrode_nrs = hfunct.get_tetrode_nrs(channels)
     tooclose = 30
     spike_datas = [range(len(tetrode_nrs)) for i in range(len(OpenEphysDataPaths))]
     # Preload continuous data
@@ -471,7 +464,7 @@ def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels, 
 
 def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1000, threshold=5):
     KiloSortBinaryFileName = 'experiment_1.dat'
-    tetrode_nrs = get_tetrode_nrs(channels)
+    tetrode_nrs = hfunct.get_tetrode_nrs(channels)
     spike_datas = [range(len(tetrode_nrs)) for i in range(len(OpenEphysDataPaths))]
     # Preload continuous data
     preloaded_datas = []
@@ -545,7 +538,7 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
 
     return spike_datas
 
-def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=False, noise_cut_off=1000, threshold=50, make_AxonaData=False, axonaDataArgs=None):
+def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, noise_cut_off=1000, threshold=50, make_AxonaData=False, axonaDataArgs=None):
     # Ensure correct format for data paths
     if isinstance(OpenEphysDataPaths, basestring):
         OpenEphysDataPaths = [OpenEphysDataPaths]
@@ -554,7 +547,7 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=False, 
     for OpenEphysDataPath in OpenEphysDataPaths:
         ensure_processed_position_data_is_available(OpenEphysDataPath)
     # Get channel_map if not available
-    if not channel_map:
+    if channel_map is None:
         channel_map = get_channel_map(OpenEphysDataPaths)
     # Process spikes using specified method
     area_spike_datas = []
@@ -576,12 +569,10 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=False, 
     # Save data in Axona Format
     spike_name = NWBio.get_spike_name_for_processing_method(processing_method)
     for i, area in enumerate(channel_map.keys()):
-        channels = channel_map[area]['list']
         # Define Axona data subfolder name based on specific channels if requested
-        subfolder = 'AxonaData_' + str(channels[0] + 1) + '-' + str(channels[-1] + 1)
         for OpenEphysDataPath, spike_data in zip(OpenEphysDataPaths, area_spike_datas[i]):
-            createAxonaData.createAxonaData(OpenEphysDataPath, spike_data, spike_name, 
-                                            subfolder=subfolder, eegChan=1, 
+            createAxonaData.createAxonaData(OpenEphysDataPath, spike_data, 
+                                            axona_file_name=area, eegChan=1, 
                                             pixels_per_metre=axonaDataArgs[0], 
                                             show_output=axonaDataArgs[1])
 
@@ -594,7 +585,7 @@ def process_data_tree(root_path):
                 if fname == 'experiment_1.nwb':
                     AxonaDataExists = any(['AxonaData' in subdir for subdir in subdirList])
                     if not AxonaDataExists:
-                        main(fpath, processing_method='klustakwik', channel_map=False, 
+                        main(fpath, processing_method='klustakwik', 
                             noise_cut_off=1000, threshold=50, make_AxonaData=True, 
                             axonaDataArgs=[None, False])
 
@@ -635,9 +626,10 @@ if __name__ == '__main__':
             chan = [args.chan[0] - 1, args.chan[1]]
             if np.mod(chan[1] - chan[0], 4) != 0:
                 raise ValueError('Channel range must cover full tetrodes')
-            channel_map = {'area51': {'list': range(chan[0], chan[1], 1)}}
+            area_name = 'Chan' + str(args.chan[0]) + '-' + str(args.chan[1])
+            channel_map = {area_name: {'list': range(chan[0], chan[1], 1)}}
         else:
-            channel_map = False
+            channel_map = None
         # Rewrite default noisecut if specified
         if args.noisecut:
             noise_cut_off = args.noisecut[0]

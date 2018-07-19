@@ -226,6 +226,12 @@ def tetrode_channels(ntet):
 
     return nchans
 
+def get_tetrode_nrs(channels):
+    firstTet = channels_tetrode(channels[0])
+    lastTet = channels_tetrode(channels[-1])
+    tetrode_nrs = range(firstTet, lastTet + 1, 1)
+
+    return tetrode_nrs
 
 def import_subdirectory_module(subdirectory, module_name):
     path = list(sys.path)

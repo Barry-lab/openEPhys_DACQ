@@ -8,7 +8,6 @@
 import sys
 import os
 import numpy as np
-import shutil
 from scipy import interpolate
 import subprocess
 import NWBio
@@ -30,7 +29,7 @@ def interpolate_waveforms(waves, nr_targetbins=50):
 
     return new_waves
 
-def create_DACQ_waveform_data_for_single_tetrode(tet_waveform_data, pos_edges):
+def create_DACQ_waveform_data_for_single_tetrode(spike_data_tet, pos_edges):
     # Create DACQ data tetrode format
     waveform_data_dacq = []
     dacq_waveform_dtype = [('ts', '>i'), ('waveform', '50b')]
@@ -38,9 +37,9 @@ def create_DACQ_waveform_data_for_single_tetrode(tet_waveform_data, pos_edges):
     dacq_waveform_timestamps_dtype = '>i'
     dacq_sampling_rate = 96000
     # Align timestamps to beginning of position data
-    tet_waveform_data['timestamps'] = tet_waveform_data['timestamps'] - pos_edges[0]
+    spike_data_tet['timestamps'] = spike_data_tet['timestamps'] - pos_edges[0]
     # Get waveforms
-    waves = np.array(tet_waveform_data['waveforms'], dtype=np.float32)
+    waves = np.array(spike_data_tet['waveforms'], dtype=np.float32)
     waves = -waves
     waves = np.swapaxes(waves,1,2)
     nspikes = waves.shape[0]
@@ -72,7 +71,7 @@ def create_DACQ_waveform_data_for_single_tetrode(tet_waveform_data, pos_edges):
     waveform_data_dacq['waveform'][:,:waves.shape[1]] = waves
     # Arrange timestamps into a vector where timestamp for a spike is
     # repeated for each of the 4 channels
-    timestamps = np.array(tet_waveform_data['timestamps'])
+    timestamps = np.array(spike_data_tet['timestamps'])
     timestamps = np.ravel(np.repeat(np.reshape(timestamps, (len(timestamps), 1)), 4, axis=1),'C')
     # Convert OpenEphys timestamp sampling rate to DACQ sampling rate
     timestamps = timestamps * float(dacq_sampling_rate)
@@ -82,11 +81,11 @@ def create_DACQ_waveform_data_for_single_tetrode(tet_waveform_data, pos_edges):
     
     return waveform_data_dacq
 
-def create_DACQ_waveform_data(waveform_data, pos_edges):
+def create_DACQ_waveform_data(spike_data, pos_edges):
     print('Converting Waveforms...')
     input_args = []
-    for tet_waveform_data in waveform_data:
-        input_args.append((tet_waveform_data, pos_edges))
+    for spike_data_tet in spike_data:
+        input_args.append((spike_data_tet, pos_edges))
     multiprocessor = hfunct.multiprocess()
     waveform_data_dacq = multiprocessor.map(create_DACQ_waveform_data_for_single_tetrode, input_args)
     print('Converting Waveforms Successful.')
@@ -327,6 +326,15 @@ def header_templates(htype):
                   
     return header, keyorder
 
+def update_header(header, experiment_info, new_values_dict):
+    header['trial_date'] = experiment_info['trial_date']
+    header['trial_time'] = experiment_info['trial_time']
+    header['comments'] = experiment_info['animal']
+    header['duration'] = experiment_info['duration']
+    for key in new_values_dict.keys():
+        header[key] = new_values_dict[key]
+
+    return header
 
 def getExperimentInfo(fpath):
     if NWBio.check_if_settings_available(fpath,'/General/animal/'):
@@ -346,11 +354,13 @@ def getExperimentInfo(fpath):
     
     return experiment_info
 
-def get_first_available_spike_data(OpenEphysDataPath, use_idx_keep, use_badChan):
+def get_first_available_spike_data(OpenEphysDataPath, tetrode_nrs, use_idx_keep, use_badChan):
     _, spike_names = NWBio.processing_method_and_spike_name_combinations()
     spike_data_available = False
     for spike_name in spike_names:
-        spike_data = NWBio.load_spikes(OpenEphysDataPath, spike_name=spike_name, use_idx_keep=use_idx_keep, use_badChan=use_badChan)
+        spike_data = NWBio.load_spikes(OpenEphysDataPath, tetrode_nrs=tetrode_nrs, 
+                                       spike_name=spike_name, use_idx_keep=use_idx_keep, 
+                                       use_badChan=use_badChan)
         if len(spike_data) > 0:
             spike_data_available = True
             break
@@ -358,6 +368,14 @@ def get_first_available_spike_data(OpenEphysDataPath, use_idx_keep, use_badChan)
         raise Exception('Spike data is not available in file: ' + OpenEphysDataPath + '\nChecked for following spike_name: ' + str(spike_names))
 
     return spike_data, spike_name
+
+def ensure_idx_keep_has_been_applied_to_spike_data(spike_data):
+    for spike_data_tet in spike_data:
+        if spike_data_tet['idx_keep'].size == spike_data_tet['waveforms'].shape[0]:
+            spike_data_tet['waveforms'] = spike_data_tet['waveforms'][spike_data_tet['idx_keep'], :, :]
+            spike_data_tet['timestamps'] = spike_data_tet['timestamps'][spike_data_tet['idx_keep']]
+
+    return spike_data
 
 def write_file_in_axona_format(filename, header, header_keyorder, data):
     '''
@@ -396,112 +414,130 @@ def write_file_in_axona_format(filename, header, header_keyorder, data):
         # Write the end token string
         f.write(DATA_END_TOKEN)
 
-def createAxonaData(OpenEphysDataPath, waveform_data=None, spike_name='spikes', subfolder='AxonaData', eegChan=1, pixels_per_metre=None, show_output=True):
+
+def write_clusterIDs_in_CLU_format(clusterIDs, cluFileName):
+    lines = [str(clusterIDs.size) + '\r\n']
+    for nclu in list(clusterIDs):
+        lines.append(str(nclu) + '\r\n')
+    with open(cluFileName, 'wb') as file:
+        file.writelines(lines)
+
+def write_set_file(setFileName, new_values_dict):
+    sourcefile = 'SetFileBase.set'
+    # Read in base .set file
+    with open(sourcefile, 'rb') as file:
+        lines = file.readlines()
+    # Correct lines based on new_values_dict
+    for key in new_values_dict.keys():
+        for nl, line in enumerate(lines):
+            if (key + ' ') in line:
+                lines[nl] = key + ' ' + new_values_dict[key] + '\r\n'
+                break
+    # Write the .set file with corrected lines
+    with open(setFileName, 'wb') as file:
+        file.writelines(lines)
+
+def createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name='spikes', channel_map=None, subfolder='AxonaData', eegChan=1, pixels_per_metre=None, show_output=True):
     # Static variables
     use_idx_keep = True
     use_badChan = True
-    # Load data
-    if waveform_data is None:
-        print('Loading waveform data from file')
-        if spike_name == 'first_available':
-            waveform_data, spike_name = get_first_available_spike_data(OpenEphysDataPath, use_idx_keep, use_badChan)
+    # Get channel_map for this dataset
+    if channel_map is None:
+        if NWBio.check_if_settings_available(OpenEphysDataPath,'/General/channel_map/'):
+            channel_map = NWBio.load_settings(OpenEphysDataPath,'/General/channel_map/')
         else:
-            waveform_data = NWBio.load_spikes(OpenEphysDataPath, spike_name=spike_name, use_idx_keep=use_idx_keep, use_badChan=use_badChan)
-    else:
-        # Ensure idx_keep has been applied to incoming data
-        for spike_data_tet in waveform_data:
-            if spike_data_tet['idx_keep'].size == spike_data_tet['waveforms'].shape[0]:
-                spike_data_tet['waveforms'] = spike_data_tet['waveforms'][spike_data_tet['idx_keep'], :, :]
-                spike_data_tet['timestamps'] = spike_data_tet['timestamps'][spike_data_tet['idx_keep']]
-    print('Converting data')
+            raise ValueError('Channel map could not be generated. Enter channels to process.')
+    # Create AxonaData separately for each recording area
+    for area in channel_map.keys():
+        tetrode_nrs = hfunct.get_tetrode_nrs(channel_map[area]['list'])
+        print('Loading tetrodes nr: ' +  ', '.join(map(str, tetrode_nrs)))
+        if spike_name == 'first_available':
+            spike_data, spike_name = get_first_available_spike_data(OpenEphysDataPath, tetrode_nrs, use_idx_keep, use_badChan)
+        else:
+            spike_data = NWBio.load_spikes(OpenEphysDataPath, tetrode_nrs=tetrode_nrs, 
+                                           spike_name=spike_name, use_idx_keep=use_idx_keep, 
+                                           use_badChan=use_badChan)
+        createAxonaData(OpenEphysDataPath, spike_data, subfolder=subfolder, 
+                        axona_file_name=area, eegChan=eegChan, 
+                        pixels_per_metre=pixels_per_metre, 
+                        show_output=show_output)
+
+def createAxonaData(OpenEphysDataPath, spike_data, subfolder='AxonaData', axona_file_name='datafile', eegChan=1, pixels_per_metre=None, show_output=True):
+    n_tetrodes = len(spike_data)
+    # Ensure idx_keep has been applied to incoming data
+    spike_data = ensure_idx_keep_has_been_applied_to_spike_data(spike_data)
     # Get position data start and end times
     pos_edges = NWBio.get_processed_tracking_data_timestamp_edges(OpenEphysDataPath)
     # Convert data to DACQ format
-    waveform_data_dacq = create_DACQ_waveform_data(waveform_data, pos_edges)
+    print('Converting spike data')
+    waveform_data_dacq = create_DACQ_waveform_data(spike_data, pos_edges)
     print('Converting position data')
     pos_data_dacq, pixels_per_metre = create_DACQ_pos_data(OpenEphysDataPath, pixels_per_metre)
     print('Converting LFP to EEG data')
     eeg_data_dacq = create_DACQ_eeg_data(OpenEphysDataPath, pos_edges, eegChan)
     print('Converting LFP to EGF data')
     egf_data_dacq = create_DACQ_egf_data(OpenEphysDataPath, pos_edges, eegChan)
-    # Get headers for both datatypes
-    header_wave, keyorder_wave = header_templates('waveforms')
-    header_pos, keyorder_pos = header_templates('pos')
-    header_eeg, keyorder_eeg = header_templates('eeg')
-    header_egf, keyorder_egf = header_templates('egf')
-    # Update header for waveforms
+    # Get recording specific header data for both datatypes
     experiment_info = getExperimentInfo(OpenEphysDataPath)
-    trial_duration = str(int(np.ceil(pos_edges[1] - pos_edges[0])))
-    header_wave['trial_date'] = experiment_info['trial_date']
-    header_wave['trial_time'] = experiment_info['trial_time']
-    header_wave['comments'] = experiment_info['animal']
-    header_wave['duration'] = trial_duration
+    experiment_info['duration'] = str(int(np.ceil(pos_edges[1] - pos_edges[0])))
+    nvds = {'num_spikes': []}
+    num_spikes = []
+    for ntet in range(n_tetrodes):
+        nvds['num_spikes'].append(str(int(len(waveform_data_dacq[ntet]) / 4)))
+    nvds['num_pos_samples'] = str(len(pos_data_dacq))
+    nvds['pixels_per_metre'] = str(pixels_per_metre)
+    nvds['EEG_samples_per_position'] = str(int(np.round(len(eeg_data_dacq) / len(pos_data_dacq))))
+    nvds['num_EEG_samples'] = str(len(eeg_data_dacq))
+    nvds['num_EGF_samples'] = str(len(egf_data_dacq))
+    # Get waveform file headers templates and update with recording specific data
     headers_wave = []
-    for waves in waveform_data_dacq:
-        # Create a separate header for waveform file of each tetrode that has correct num_spikes
-        header_wave['num_spikes'] = str(int(len(waves) / 4))
-        headers_wave.append(copy.deepcopy(header_wave))
-    # Update header for position data
-    header_pos['pixels_per_metre'] = str(int(pixels_per_metre))
-    header_pos['trial_date'] = experiment_info['trial_date']
-    header_pos['trial_time'] = experiment_info['trial_time']
-    header_pos['comments'] = experiment_info['animal']
-    header_pos['duration'] = trial_duration
-    header_pos['num_pos_samples'] = str(len(pos_data_dacq))
-    # Update header for eeg data
-    header_eeg['trial_date'] = experiment_info['trial_date']
-    header_eeg['trial_time'] = experiment_info['trial_time']
-    header_eeg['comments'] = experiment_info['animal']
-    header_eeg['duration'] = trial_duration
-    header_eeg['EEG_samples_per_position'] = str(int(np.round(len(eeg_data_dacq) / len(pos_data_dacq))))
-    header_eeg['num_EEG_samples'] = str(len(eeg_data_dacq))
-    # Update header for egf data
-    header_egf['trial_date'] = experiment_info['trial_date']
-    header_egf['trial_time'] = experiment_info['trial_time']
-    header_egf['comments'] = experiment_info['animal']
-    header_egf['duration'] = trial_duration
-    header_egf['num_EGF_samples'] = str(len(egf_data_dacq))
-    # Generate base name for files
-    file_basename = 'experiment_1'
+    for ntet in range(n_tetrodes):
+        header_wave, keyorder_wave = header_templates('waveforms')
+        new_values_dict = {'num_spikes': nvds['num_spikes'][ntet]}
+        header_wave = update_header(header_wave, experiment_info, new_values_dict)
+        headers_wave.append(header_wave)
+    # Get position file header templates and update with recording specific data
+    header_pos, keyorder_pos = header_templates('pos')
+    new_values_dict = {'num_pos_samples': nvds['num_pos_samples'], 'pixels_per_metre': nvds['pixels_per_metre']}
+    header_pos = update_header(header_pos, experiment_info, new_values_dict)
+    # Get EEG file header templates and update with recording specific data
+    header_eeg, keyorder_eeg = header_templates('eeg')
+    new_values_dict = {'EEG_samples_per_position': nvds['EEG_samples_per_position'], 
+                       'num_EEG_samples': nvds['num_EEG_samples']}
+    header_eeg = update_header(header_eeg, experiment_info, new_values_dict)
+    # Get EGF file header templates and update with recording specific data
+    header_egf, keyorder_egf = header_templates('egf')
+    new_values_dict = {'num_EGF_samples': nvds['num_EGF_samples']}
+    header_egf = update_header(header_egf, experiment_info, new_values_dict)
     # Create subdirectory or rewrite existing
     AxonaDataPath = os.path.join(os.path.dirname(OpenEphysDataPath), subfolder)
     if not os.path.exists(AxonaDataPath):
         os.mkdir(AxonaDataPath)
     # Write WAVEFORM data for each tetrode into DACQ format
-    hfunct.print_progress(0, len(waveform_data_dacq), prefix = 'Writing tetrode files:', initiation=True)
-    for ntet in range(len(waveform_data_dacq)):
-        fname = os.path.join(AxonaDataPath, file_basename + '.' + str(waveform_data[ntet]['nr_tetrode'] + 1))
+    hfunct.print_progress(0, n_tetrodes, prefix = 'Writing tetrode files:', initiation=True)
+    for ntet in range(n_tetrodes):
+        fname = os.path.join(AxonaDataPath, axona_file_name + '.' + str(ntet + 1))
         write_file_in_axona_format(fname, headers_wave[ntet], keyorder_wave, waveform_data_dacq[ntet])
-        hfunct.print_progress(ntet + 1, len(waveform_data_dacq), prefix = 'Writing tetrode files:')
+        hfunct.print_progress(ntet + 1, n_tetrodes, prefix = 'Writing tetrode files:')
     # Write POSITION data into DACQ format
-    fname = os.path.join(AxonaDataPath, file_basename + '.pos')
+    fname = os.path.join(AxonaDataPath, axona_file_name + '.pos')
     write_file_in_axona_format(fname, header_pos, keyorder_pos, pos_data_dacq)
     # Write EEG data into DACQ format
-    fname = os.path.join(AxonaDataPath, file_basename + '.eeg')
+    fname = os.path.join(AxonaDataPath, axona_file_name + '.eeg')
     write_file_in_axona_format(fname, header_eeg, keyorder_eeg, eeg_data_dacq)
     # Write EGF data into DACQ format
-    fname = os.path.join(AxonaDataPath, file_basename + '.egf')
+    fname = os.path.join(AxonaDataPath, axona_file_name + '.egf')
     write_file_in_axona_format(fname, header_egf, keyorder_egf, egf_data_dacq)
     # Write CLU files
     print('Writing CLU files')
-    for ntet in range(len(waveform_data_dacq)):
-        clufileName = os.path.join(AxonaDataPath, file_basename + '.clu.' + str(waveform_data[ntet]['nr_tetrode'] + 1))
-        lines = [str(waveform_data[ntet]['clusterIDs'].size) + '\r\n']
-        for nclu in list(waveform_data[ntet]['clusterIDs']):
-            lines.append(str(nclu) + '\r\n')
-        with open(clufileName, 'wb') as file:
-                file.writelines(lines)
-    print('Waveform data was generated for ' + str(len(waveform_data_dacq)) + ' tetrodes.')
-    # Make a copy of a random .set file into the converted data folder
-    sourcefile = 'SetFileBase.set'
-    fname = os.path.join(AxonaDataPath, file_basename + '.set')
-    shutil.copy(sourcefile, fname)
-    # Rewrite the .set file to correct the trial duration
-    with open(fname, 'rb') as file:
-        lines = file.readlines()
-    lines[4] = lines[4][:9] + trial_duration + lines[4][9 + len(trial_duration):]
-    with open(fname, 'wb') as file:
-        file.writelines(lines)
+    for ntet in range(n_tetrodes):
+        cluFileName = os.path.join(AxonaDataPath, axona_file_name + '.clu.' + str(ntet + 1))
+        write_clusterIDs_in_CLU_format(spike_data[ntet]['clusterIDs'], cluFileName)
+    # Write SET file
+    setFileName = os.path.join(AxonaDataPath, axona_file_name + '.set')
+    duration_string = experiment_info['duration'] + (9 - len(experiment_info['duration'])) * ' '
+    new_values_dict = {'duration': duration_string}
+    write_set_file(setFileName, new_values_dict)
     # Opens recording folder with Ubuntu file browser
     if show_output:
         subprocess.Popen(['xdg-open', AxonaDataPath])
@@ -512,6 +548,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Export data into Axona format.')
     parser.add_argument('paths', type=str, nargs='*', 
                         help='recording data folder(s) (can enter multiple paths separated by spaces to KlustaKwik simultaneously)')
+    parser.add_argument('--chan', type=int, nargs = 2, 
+                        help='list the first and last channel to process (counting starts from 1)')
     parser.add_argument('--eegChan', type=int, nargs = 1, 
                         help='enter channel number to use for creating EEG data')
     parser.add_argument('--subfolder', type=str, nargs = 1, 
@@ -535,27 +573,43 @@ if __name__ == "__main__":
                 OpenEphysDataPaths[ndata] = new_path
             else:
                 raise ValueError('The following path does not lead to a NWB data file:\n' + OpenEphysDataPath)
-    # Get optional arguemtn values
+    # Get chan input variable
+    if args.chan:
+        chan = [args.chan[0] - 1, args.chan[1]]
+        if np.mod(chan[1] - chan[0], 4) != 0:
+            raise ValueError('Channel range must cover full tetrodes')
+        area_name = 'Chan' + str(args.chan[0]) + '-' + str(args.chan[1])
+        channel_map = {area_name: {'list': range(chan[0], chan[1], 1)}}
+    else:
+        channel_map = None
+    # Get eegChan variable
     if args.eegChan:
         eegChan = args.eegChan[0]
     else:
         eegChan = 1
+    # Get subfolder variable
     if args.subfolder:
         subfolder = args.subfolder[0]
     else:
         subfolder = 'AxonaData'
+    # Get spike_name variable
     if args.spike_name:
         spike_name = args.spike_name[0]
     else:
         spike_name = 'first_available'
+    # Get ppm variable
     if args.ppm:
         pixels_per_metre = args.ppm[0]
     else:
         pixels_per_metre = None
+    # Get show_output variable
     if args.show_output:
         show_output = True
     else:
         show_output = False
     # Run main script
     for OpenEphysDataPath in OpenEphysDataPaths:
-        createAxonaData(OpenEphysDataPath, None, spike_name, subfolder, eegChan, pixels_per_metre, show_output)
+        createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name=spike_name, 
+                                    channel_map=channel_map, subfolder=subfolder, 
+                                    eegChan=eegChan, pixels_per_metre=pixels_per_metre, 
+                                    show_output=show_output)
