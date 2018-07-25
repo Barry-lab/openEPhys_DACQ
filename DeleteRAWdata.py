@@ -24,12 +24,7 @@ def parse_subprocess_output(subprocess_output):
 
     return output
 
-if __name__ == '__main__':
-    # Get directory walk root path
-    if len(sys.argv) < 2:
-        raise ValueError('Enter path to process as the first argument!')
-    else:
-        root_path = sys.argv[1]
+def main(root_path):
     # Prepare counters
     nwb_noRawData = 0
     nwb_raw_deleted = 0
@@ -101,3 +96,12 @@ if __name__ == '__main__':
     print('nwb_processing_failed ' + str(nwb_processing_failed))
     print('nwb_noSpikes ' + str(nwb_noSpikes))
     print('ioError ' + str(ioError))
+
+
+if __name__ == '__main__':
+    # Get directory walk root path
+    if len(sys.argv) < 2:
+        raise ValueError('Enter path to process as the first argument!')
+    else:
+        root_path = sys.argv[1]
+    main(root_path)

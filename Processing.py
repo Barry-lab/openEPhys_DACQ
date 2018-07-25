@@ -576,7 +576,7 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, n
                                             pixels_per_metre=axonaDataArgs[0], 
                                             show_output=axonaDataArgs[1])
 
-def process_data_tree(root_path):
+def process_data_tree(root_path, downsample=False):
     # Commence directory walk
     for dirName, subdirList, fileList in os.walk(root_path):
         for fname in fileList:
@@ -588,6 +588,9 @@ def process_data_tree(root_path):
                         main(fpath, processing_method='klustakwik', 
                             noise_cut_off=1000, threshold=50, make_AxonaData=True, 
                             axonaDataArgs=[None, False])
+    if downsample:
+        import DeleteRAWdata
+        DeleteRAWdata.main(root_path)
 
 if __name__ == '__main__':
     # Input argument handling and help info
@@ -614,12 +617,18 @@ if __name__ == '__main__':
                         help='(for AxonaData) to open AxonaData output folder after processing')
     parser.add_argument('--datatree', action='store_true', 
                         help='to process a whole data tree with default arguments in method process_data_tree')
+    parser.add_argument('--downsample', action='store_true', 
+                        help='to downsample a whole data tree after processing')
     args = parser.parse_args()
     # Get paths to recording files
     OpenEphysDataPaths = args.paths
     # If datatree processing requested, use process_data_tree method
     if args.datatree:
-        process_data_tree(OpenEphysDataPaths[0])
+        if args.downsample:
+            downsample = True
+        else:
+            downsample = False
+        process_data_tree(OpenEphysDataPaths[0], downsample)
     else:
         # Get chan input variable
         if args.chan:
