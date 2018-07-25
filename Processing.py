@@ -538,7 +538,7 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
 
     return spike_datas
 
-def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, noise_cut_off=1000, threshold=50, make_AxonaData=False, axonaDataArgs=None):
+def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, noise_cut_off=1000, threshold=50, make_AxonaData=False, axonaDataArgs=(None, False)):
     # Ensure correct format for data paths
     if isinstance(OpenEphysDataPaths, basestring):
         OpenEphysDataPaths = [OpenEphysDataPaths]
@@ -587,7 +587,7 @@ def process_data_tree(root_path, downsample=False):
                     if not AxonaDataExists:
                         main(fpath, processing_method='klustakwik', 
                             noise_cut_off=1000, threshold=50, make_AxonaData=True, 
-                            axonaDataArgs=[None, False])
+                            axonaDataArgs=(None, False))
     if downsample:
         import DeleteRAWdata
         DeleteRAWdata.main(root_path)
