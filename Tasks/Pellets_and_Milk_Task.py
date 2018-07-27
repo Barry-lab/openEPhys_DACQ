@@ -431,6 +431,13 @@ def compute_mean_movement_vector(posHistory):
 
     return posVector
 
+def compute_mean_posHistory(posHistory):
+    posHistory = np.array(posHistory)
+    posHistory = posHistory[:, :2]
+    mean_posHistory = np.mean(posHistory, axis=0)
+
+    return mean_posHistory
+
 def compute_movement_angular_distance_to_target(posHistory, target_location):
     '''
     Computes angular distance between mean movement vector and direct path to target location.
@@ -1200,6 +1207,7 @@ class Core(object):
         # Get animal position history
         with self.TaskIO['RPIPos'].combPosHistoryLock:
             posHistory = self.TaskIO['RPIPos'].combPosHistory[-self.distance_steps:]
+            posHistory_one_second_steps = self.TaskIO['RPIPos'].combPosHistory[-self.one_second_steps:]
             posHistory_for_angularDistance = self.TaskIO['RPIPos'].combPosHistory[-self.angular_distance_steps:]
         if not (None in posHistory):
             self.lastKnownPos = posHistory[-1]
@@ -1212,9 +1220,10 @@ class Core(object):
             lastPelletRewardTime = self.lastPelletReward
         timeSinceLastPelletReward = time.time() - lastPelletRewardTime
         # Compute distances to all active milk feeders
+        mean_posHistory = compute_mean_posHistory(posHistory_one_second_steps)
         distances = []
         for ID in self.activeMfeeders:
-            distances.append(euclidean(np.array(posHistory[-1][:2]), self.FEEDERs['milk'][ID]['Position']))
+            distances.append(euclidean(mean_posHistory, self.FEEDERs['milk'][ID]['Position']))
         # Compute all game progress variables
         game_progress = []
         game_progress_names = []
