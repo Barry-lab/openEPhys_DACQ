@@ -115,6 +115,7 @@ def exportSettingsFromGUI(self):
                     'Chewing_TTLchan': np.int64(float(str(self.settings['Chewing_TTLchan'].text()))), 
                     'Username': str(self.settings['Username'].text()), 
                     'Password': str(self.settings['Password'].text()), 
+                    'lightSignalIntensity': np.int64(str(self.settings['lightSignalIntensity'].text())), 
                     'InitPellets': np.int64(float(str(self.settings['InitPellets'].text()))), 
                     'PelletQuantity': np.int64(float(str(self.settings['PelletQuantity'].text()))), 
                     'PelletRewardMinSeparationMean': np.int64(float(str(self.settings['PelletRewardMinSeparationMean'].text()))), 
@@ -246,6 +247,11 @@ def SettingsGUI(self):
     hbox.addWidget(self.settings['AudioSignalMode']['ambient'])
     hbox.addWidget(self.settings['AudioSignalMode']['localised'])
     self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),3,1)
+    hbox = QtGui.QHBoxLayout()
+    hbox.addWidget(QtGui.QLabel('Light Signal intensity (0 - 100)'))
+    self.settings['lightSignalIntensity'] = QtGui.QLineEdit('100')
+    hbox.addWidget(self.settings['lightSignalIntensity'])
+    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),4,1)
     # Create Pellet task specific menu items
     vbox = QtGui.QVBoxLayout()
     font = QtGui.QFont('SansSerif', 15)
@@ -513,6 +519,11 @@ class Core(object):
         self.clock = pygame.time.Clock()
         pygame.mixer.pre_init(48000, -16, 2)  # This is necessary for sound to work
         pygame.init()
+        # Check if lightSignal will be used in the task
+        if self.TaskSettings['lightSignalIntensity'] > 0:
+            self.lightSignalOn = True
+        else:
+            self.lightSignalOn = False
         # If ambient sound signals are required, create the sound
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
             self.milkTrialSignal = {}
@@ -526,17 +537,21 @@ class Core(object):
             IP = self.FEEDERs[FEEDER_type][ID]['IP']
             username = self.TaskSettings['Username']
             password = self.TaskSettings['Password']
+            AudioSignalMode = self.TaskSettings['AudioSignalMode']
+            lightSignalIntensity = self.TaskSettings['lightSignalIntensity']
         try:
-            if FEEDER_type == 'pellet' or self.TaskSettings['AudioSignalMode'] == 'ambient':
+            if FEEDER_type == 'pellet' or AudioSignalMode == 'ambient':
                 # If pellet feeder or ambient audio signal is used, simply initialize FEEDER
-                actuator = RewardControl(FEEDER_type, IP, username, password)
-            elif self.TaskSettings['AudioSignalMode'] == 'localised' and FEEDER_type == 'milk':
+                actuator = RewardControl(FEEDER_type, IP, username, password, 
+                                         lightSignalIntensity=lightSignalIntensity)
+            elif AudioSignalMode == 'localised' and FEEDER_type == 'milk':
                 # If audio signal is localised and this is for milk feeder, activate also FEEDER's speaker
                 audioFreq = (self.FEEDERs['milk'][ID]['SignalHz'], 
                              self.FEEDERs['milk'][ID]['SignalHzWidth'], 
                              self.FEEDERs['milk'][ID]['ModulHz'])
                 actuator = RewardControl(FEEDER_type, IP, username, password, 
-                                         audioControl=True, audioFreq=audioFreq)
+                                         audioControl=True, audioFreq=audioFreq, 
+                                         lightSignalIntensity=lightSignalIntensity)
             with self.TaskSettings_Lock:
                 self.FEEDERs[FEEDER_type][ID]['actuator'] = actuator
                 self.FEEDERs[FEEDER_type][ID]['init_successful'] = True
@@ -1108,6 +1123,22 @@ class Core(object):
             if feedback == 'failed':
                 self.inactivate_feeder('milk', self.feederID_milkTrial)
 
+    def start_milkTrialLightSignal(self):
+        self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].startLightSignal()
+
+    def stop_milkTrialLightSignal(self):
+        self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].stopLightSignal()
+
+    def start_milkTrialSignals(self):
+        self.start_milkTrialAudioSignal()
+        if self.lightSignalOn:
+            self.start_milkTrialLightSignal()
+
+    def stop_milkTrialSignals(self):
+        self.stop_milkTrialAudioSignal()
+        if self.lightSignalOn:
+            self.stop_milkTrialLightSignal()
+
     def start_milkTrial(self, action='undefined'):
         # These settings put the game_logic into milkTrial mode
         self.lastMilkTrial = time.time()
@@ -1116,7 +1147,7 @@ class Core(object):
         feeder_button = self.getButton('buttonMilkTrial', self.feederID_milkTrial)
         feeder_button['button_pressed'] = True
         # Initiate tone signal
-        self.start_milkTrialAudioSignal()
+        self.start_milkTrialSignals()
         # Send timestamp to Open Ephys GUI
         OEmessage = 'milkTrialStart ' + action + ' ' + self.feederID_milkTrial
         self.TaskIO['MessageToOE'](OEmessage)
@@ -1126,7 +1157,7 @@ class Core(object):
 
     def stop_milkTrial(self, successful):
         # Stop tone signal
-        self.stop_milkTrialAudioSignal()
+        self.stop_milkTrialSignals()
         # Send timestamp to Open Ephys GUI
         OEmessage = 'milkTrialEnd Success:' + str(successful)
         self.TaskIO['MessageToOE'](OEmessage)

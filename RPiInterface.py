@@ -298,7 +298,7 @@ class onlineTrackingData(object):
 class RewardControl(object):
     # This class allows control of FEEDERs
     # FEEDER_type can be either 'milk' or 'pellet'
-    def __init__(self, FEEDER_type, RPiIP, RPiUsername, RPiPassword, audioControl=False, audioFreq=(4000, 500, 0)):
+    def __init__(self, FEEDER_type, RPiIP, RPiUsername, RPiPassword, audioControl=False, audioFreq=(4000, 500, 0), lightSignalIntensity=0):
         self.FEEDER_type = FEEDER_type
         self.RPiIP = RPiIP
         self.audioControl = audioControl
@@ -308,6 +308,13 @@ class RewardControl(object):
         # Initialize audio control script if audioControl=True
         if self.audioControl:
             self.init_audioController(RPiIP, RPiUsername, RPiPassword, audioFreq)
+        # Initialize light signal control script if lightSignalIntensity > 0
+        lightSignalIntensity = int(lightSignalIntensity)
+        if lightSignalIntensity > 0:
+            self.lightSignalOn = True
+            self.init_lightSignalController(RPiIP, RPiUsername, RPiPassword, lightSignalIntensity)
+        else:
+            self.lightSignalOn = False
 
     def init_audioController(self, RPiIP, RPiUsername, RPiPassword, audioFreq):
         '''
@@ -338,6 +345,16 @@ class RewardControl(object):
                                                        str(audioFreq[0]) + ' ' + str(audioFreq[1]) + ' ' + str(audioFreq[2]),))
                 self.T_audioControl.start()
                 audioController_init_start_time = time.time()
+
+    def init_lightSignalController(self, RPiIP, RPiUsername, RPiPassword, lightSignalIntensity):
+        '''
+        Starts lightSignalControl.py on the RPi.
+        '''
+        self.lightSignalController_messenger = paired_messenger(address=self.RPiIP, port=4187)
+        self.ssh_lightSignalControl_connection = ssh(RPiIP, RPiUsername, RPiPassword)
+        self.T_lightSignalControl = threading.Thread(target=self.ssh_lightSignalControl_connection.sendCommand, 
+                                               args=('python lightSignalControl.py ' + str(lightSignalIntensity),))
+        self.T_lightSignalControl.start()
 
     def release(self, quantity=1, wait_for_feedback=False, fail_limit=10):
         self.quantity = quantity
@@ -442,12 +459,32 @@ class RewardControl(object):
         else:
             raise ValueError('audioControl not activated!')
 
+    def startLightSignal(self):
+        if self.lightSignalOn:
+            self.lightSignalController_messenger.sendMessage('start')
+        else:
+            raise ValueError('lightSignalControl connection failed to ' + self.RPiIP)
+
+    def stopLightSignal(self):
+        if self.lightSignalOn:
+            self.lightSignalController_messenger.sendMessage('stop')
+        else:
+            raise ValueError('lightSignalControl connection failed to ' + self.RPiIP)
+
     def audioController_init_check(self, message):
         if message == 'initialization_successful':
             self.audioController_init_successful = True
 
     def close(self):
+        '''
+        Closes all opened processes correctly.
+        '''
         try:
+            if self.lightSignalOn:
+                self.lightSignalController_messenger.sendMessage('close')
+                self.T_lightSignalControl.join()
+                self.lightSignalController_messenger.close()
+                self.ssh_lightSignalControl_connection.disconnect()
             if self.audioControl:
                 self.audioController_messenger.sendMessage('close')
                 self.T_audioControl.join()
