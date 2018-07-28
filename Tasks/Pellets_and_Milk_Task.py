@@ -9,7 +9,7 @@ from scipy.spatial.distance import euclidean
 import random
 from PyQt4 import QtGui, QtCore
 from copy import deepcopy
-from audioSignalControl import createAudioSignal
+from audioSignalGenerator import createAudioSignal
 
 def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
     feeder = RewardControl(FEEDER_type, str(RPiIPBox.text()), 
@@ -1494,6 +1494,7 @@ class Core(object):
                 lastUpdatedState = time.time()
         # Quit game when out of gameOn loop
         with self.screen_Lock:
+            pygame.mixer.quit()
             pygame.quit()
 
     def run(self):
