@@ -9,14 +9,16 @@ from scipy.spatial.distance import euclidean
 import random
 from PyQt4 import QtGui, QtCore
 from copy import deepcopy
+from sshScripts import ssh
 
 def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
-    feeder = RewardControl(FEEDER_type, str(RPiIPBox.text()), 
-                           str(RPiUsernameBox.text()), str(RPiPasswordBox.text()))
-    feedback = feeder.release(float(str(quantityBox.text())))
-    if not feedback:
-        print('FEEDER ' + FEEDER_type + ' @' + str(RPiIPBox.text()) + ' activation FAILED.')
-    feeder.close()
+    ssh_connection = ssh(str(RPiIPBox.text()), str(RPiUsernameBox.text()), str(RPiPasswordBox.text()))
+    if FEEDER_type == 'milk':
+        command = 'python milkFeederController.py --openValve ' + str(float(str(quantityBox.text())))
+    elif FEEDER_type == 'pellet':
+        command = 'python pelletFeederController.py --releasePellet ' + str(int(str(quantityBox.text())))
+    ssh_connection.sendCommand(command)
+    ssh_connection.disconnect()
 
 def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
     if FEEDER_settings is None:
