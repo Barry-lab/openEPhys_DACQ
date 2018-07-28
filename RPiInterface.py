@@ -298,199 +298,156 @@ class onlineTrackingData(object):
 class RewardControl(object):
     # This class allows control of FEEDERs
     # FEEDER_type can be either 'milk' or 'pellet'
-    def __init__(self, FEEDER_type, RPiIP, RPiUsername, RPiPassword, audioControl=False, audioFreq=(4000, 500, 0), lightSignalIntensity=0):
+    def __init__(self, FEEDER_type, RPiIP, RPiUsername, RPiPassword, audioSignalParams=None, lightSignalIntensity=0):
         self.FEEDER_type = FEEDER_type
         self.RPiIP = RPiIP
-        self.audioControl = audioControl
+        self.audioSignalParams = audioSignalParams
+        self.lightSignalIntensity = lightSignalIntensity
         # Set up SSH connection
         self.ssh_connection = ssh(RPiIP, RPiUsername, RPiPassword)
         self.ssh_connection.sendCommand('sudo pkill python') # Ensure any past processes have closed
-        # Initialize audio control script if audioControl=True
-        if self.audioControl:
-            self.init_audioController(RPiIP, RPiUsername, RPiPassword, audioFreq)
-        # Initialize light signal control script if lightSignalIntensity > 0
-        lightSignalIntensity = int(lightSignalIntensity)
-        if lightSignalIntensity > 0:
-            self.lightSignalOn = True
-            self.init_lightSignalController(RPiIP, RPiUsername, RPiPassword, lightSignalIntensity)
-        else:
-            self.lightSignalOn = False
+        self.ssh_Controller_connection = ssh(RPiIP, RPiUsername, RPiPassword)
+        # Set up ZMQ connection
+        self.Controller_messenger = paired_messenger(address=self.RPiIP, port=4186)
+        self.Controller_messenger.add_callback(self.Controller_message_parser)
+        # Initialize Controller
+        init_successful = self.init_Controller_until_positive_feedback(max_attempts=4, max_init_wait_time=25)
+        # If initialization was unsuccessful, crash this script
+        if not init_successful:
+            raise Exception('Initialization was unsuccessful at: ' + RPiIP)
 
-    def init_audioController(self, RPiIP, RPiUsername, RPiPassword, audioFreq):
+    def Controller_message_parser(self, message):
+        if message == 'init_successful':
+            self.Controller_init_successful = True
+        if message == 'releaseMilk successful':
+            self.release_feedback_message_received = True
+            self.releaseMilk_successful = True
+        if message == 'release_pellets successful':
+            self.release_feedback_message_received = True
+            self.release_pellets_successful = True
+        if message == 'release_pellets failed':
+            self.release_feedback_message_received = True
+            self.release_pellets_successful = False
+        if message == 'release_pellets in_progress':
+            self.release_pellets_in_progress = True
+
+    def milkFeederController_init_command(self):
+        command = 'python milkFeederController.py'
+        command += ' ' + '--pinchValve '
+        command += ' ' + '--init_feedback'
+        if not (self.audioSignalParams is None):
+            command += ' ' + '--audioSignal ' + ' '.join(map(str, self.audioSignalParams))
+        if self.lightSignalIntensity > 0:
+            command += ' ' + '--lightSignal ' + str(self.lightSignalIntensity)
+
+        return command
+
+    def pelletFeederController_init_command(self):
+        command = 'python pelletFeederController.py'
+        command += ' ' + '--init_feedback'
+
+        return command
+
+    def init_Controller_and_wait_for_feedback(self, max_init_wait_time=25):
         '''
-        Starts audioSignalControl.py on the RPi and checks if initialization successful.
-            If no message is received of a successful initialization within 20 seconds, 
-            the process is killed and initialization is attempted again.
-            It is unclear, what causes the unsuccessful initializations.
+        Attempts to initialize the Controller class on the FEEDER
         '''
-        self.audioController_init_successful = False
-        self.audioController_messenger = paired_messenger(address=self.RPiIP, port=4186)
-        self.audioController_messenger.add_callback(self.audioController_init_check)
-        self.ssh_audioControl_connection = ssh(RPiIP, RPiUsername, RPiPassword)
-        self.ssh_audioControl_connection.sendCommand('amixer sset PCM,0 99%', verbose=False)
-        self.T_audioControl = threading.Thread(target=self.ssh_audioControl_connection.sendCommand, 
-                                               args=('python audioSignalControl.py ' + \
-                                               str(audioFreq[0]) + ' ' + str(audioFreq[1]) + ' ' + str(audioFreq[2]),))
-        self.T_audioControl.start()
-        audioController_init_start_time = time.time()
-        while not self.audioController_init_successful:
-            if time.time() - audioController_init_start_time < 20:
-                time.sleep(0.25)
+        self.Controller_init_successful = False
+        # Acquire the correct command for the FEEDER type
+        if self.FEEDER_type == 'milk':
+            command = self.milkFeederController_init_command()
+        elif self.FEEDER_type == 'pellet':
+            command = self.pelletFeederController_init_command()
+        # Initiate process on the RPi over SSH
+        self.T_Controller = threading.Thread(target=self.ssh_Controller_connection.sendCommand, 
+                                             args=(command, max_init_wait_time, False)) # Set timeout to max_init_wait_time and verbosity to False
+        self.T_Controller.start()
+        # Wait until positive initialization feedback or timer runs out
+        start_time = time.time()
+        while not self.Controller_init_successful and (time.time() - start_time) < max_init_wait_time:
+            time.sleep(0.1)
+
+        return self.Controller_init_successful
+
+    def init_Controller_until_positive_feedback(self, max_attempts=4, max_init_wait_time=25):
+        '''
+        Attempts to initialize Controller class on the FEEDER multiple times
+        '''
+        for n in range(max_attempts):
+            Controller_init_successful = self.init_Controller_and_wait_for_feedback(max_init_wait_time=25)
+            if Controller_init_successful:
+                break
             else:
-                print('FAILURE: audioController.py initialisation failed @' + self.RPiIP + ' Re-initializing...')
-                self.ssh_audioControl_connection.sendCommand('sudo pkill python')
-                self.T_audioControl.join()
-                self.T_audioControl = threading.Thread(target=self.ssh_audioControl_connection.sendCommand, 
-                                                       args=('python audioSignalControl.py ' + \
-                                                       str(audioFreq[0]) + ' ' + str(audioFreq[1]) + ' ' + str(audioFreq[2]),))
-                self.T_audioControl.start()
-                audioController_init_start_time = time.time()
+                print('Controller activation failed at ' + self.RPiIP + ' Re-initializing ...')
+                # If initiation is unsuccessful, start again after killing existing processes
+                self.ssh_connection.sendCommand('sudo pkill python') # Ensure any past processes have closed
+                self.T_Controller.join()
 
-    def init_lightSignalController(self, RPiIP, RPiUsername, RPiPassword, lightSignalIntensity):
-        '''
-        Starts lightSignalControl.py on the RPi.
-        '''
-        self.lightSignalController_messenger = paired_messenger(address=self.RPiIP, port=4187)
-        self.ssh_lightSignalControl_connection = ssh(RPiIP, RPiUsername, RPiPassword)
-        self.T_lightSignalControl = threading.Thread(target=self.ssh_lightSignalControl_connection.sendCommand, 
-                                               args=('python lightSignalControl.py ' + str(lightSignalIntensity),))
-        self.T_lightSignalControl.start()
+        return Controller_init_successful
 
-    def release(self, quantity=1, wait_for_feedback=False, fail_limit=10):
-        self.quantity = quantity
-        self.success_count = 0
-        self.fail_limit = fail_limit
-        self.fail_count = 0
-        self.FEEDER_Busy = True
-        # Set input to feeder to include feedback command if requested
-        if wait_for_feedback:
-            feedback_string = ' feedback '
-            # Set up listening for reward confirmation
-            self.responses_incoming = False
-            FEEDERmessages = paired_messenger(address=self.RPiIP, port=1232)
-            FEEDERmessages.add_callback(self.feederMessageParser)
-        else:
-            feedback_string = ''
-        # Send correct command to the feeder
-        try:
-            if self.FEEDER_type == 'pellet':
-                self.ssh_connection.sendCommand('nohup python releasePellet.py ' + \
-                                                str(int(quantity)) + feedback_string + ' &', 
-                                                timeout=5)
-            elif self.FEEDER_type == 'milk':
-                self.ssh_connection.sendCommand('nohup python openPinchValve.py ' + \
-                                                str(quantity) + feedback_string + ' &', 
-                                                timeout=5)
-        except Exception as e:
-            from inspect import currentframe, getframeinfo
-            frameinfo = getframeinfo(currentframe())
-            print('Error in ' + frameinfo.filename + ' line ' + str(frameinfo.lineno - 3))
-            print(e)
-        # If feedback requested, 
-        if wait_for_feedback:
-            if self.FEEDER_type == 'pellet':
-                max_wait_time = 4 # This allows enough time for the pellet feeder to send the first message
+    def release(self, quantity=1, max_attempts=10):
+        '''
+        Releases the specified quantity of reward.
+        Returns True or False, depending if action was successful.
+        '''
+        # Reset feedback message detector
+        self.release_feedback_message_received = False
+        self.release_pellets_in_progress = False
+        # Compute maximum time to wait for feedback depending on FEEDER type
+        if self.FEEDER_type == 'milk':
+            max_wait_time = quantity + 4
+        elif self.FEEDER_type == 'pellet':
+            max_wait_time = 5 * max_attempts
+        # Send ZMQ command depending on FEEDER type
+        if self.FEEDER_type == 'milk':
+            command = 'releaseMilk ' + str(quantity) + ' True'
+        elif self.FEEDER_type == 'pellet':
+            command = 'release_pellets ' + str(quantity) + ' True'
+        self.Controller_messenger.sendMessage(command)
+        # Wait for feedback message
+        start_time = time.time()
+        while not self.release_feedback_message_received and (time.time() - start_time) < max_wait_time:
+            time.sleep(0.1)
+            # The following allows reseting start_time between pellets
+            if self.release_pellets_in_progress:
+                self.release_pellets_in_progress = False
+                start_time = time.time()
+        # Return True or False if message successful/failure or False if no message received in time.
+        if self.release_feedback_message_received:
             if self.FEEDER_type == 'milk':
-                max_wait_time = quantity + 4 # This allows enough time for the milk feeder
-            waiting_started = time.time()
-            # Make sure not to wait too long
-            while not self.responses_incoming and time.time() - waiting_started < max_wait_time:
-                time.sleep(0.1)
-            # If any messages received in time given, wait for feederMessageParser to set FEEDER_Busy to False
-            if self.responses_incoming:
-                while self.FEEDER_Busy:
-                    time.sleep(0.1)
-            # Stop listening messages
-            FEEDERmessages.close()
-            # If feedback failed, stop feeder and return failed message
-            if self.FEEDER_Busy:
-                self.ssh_connection.sendCommand('sudo pkill python') # Stop the feeder
-                return 'failed'
-            else:
-                # If feedback successful, send the feedback
-                return self.message
+                return self.releaseMilk_successful
+            elif self.FEEDER_type == 'pellet':
+                return self.release_pellets_successful
         else:
-            self.FEEDER_Busy = False
+            return False
 
-    def feederMessageParser(self, message):
-        '''
-        Checks the feedback message. If successful, sets FEEDER_Busy to False.
-        Counts failed attempts and stops feeder when fail_limit reached.
-        If multiple pellets requested, fail_count is reset after each successful pellet.
-        '''
-        self.responses_incoming = True
-        if message == 'failed':
-            self.fail_count += 1
-            if self.fail_count > self.fail_limit:
-                self.ssh_connection.sendCommand('sudo pkill python') # Stop the feeder
-                self.message = 'failed'
-                self.FEEDER_Busy = False
-        elif message == 'successful':
-            self.success_count += 1
-            if self.FEEDER_type == 'milk' or (self.FEEDER_type == 'pellet' and self.success_count >= self.quantity):
-                self.message = 'successful'
-                self.FEEDER_Busy = False
-            else:
-                self.fail_count = 0
-        else:
-            self.ssh_connection.sendCommand('sudo pkill python') # Stop the feeder
-            self.message = 'failed'
-            self.FEEDER_Busy = False
+    def playAudioSignal(self):
+        self.Controller_messenger.sendMessage('startPlayingAudioSignal')
 
-    def playAudioSignal(self, feedback=False):
-        if self.audioControl:
-            if self.ssh_audioControl_connection.testConnection():
-                self.audioController_messenger.sendMessage('play')
-                if feedback:
-                    return 'successful'
-            elif feedback:
-                return 'failed'
-        else:
-            raise ValueError('audioControl not activated!')
-
-    def stopAudioSignal(self, feedback=False):
-        if self.audioControl:
-            if self.ssh_audioControl_connection.testConnection():
-                self.audioController_messenger.sendMessage('stop')
-                if feedback:
-                    return 'successful'
-            elif feedback:
-                return 'failed'
-        else:
-            raise ValueError('audioControl not activated!')
+    def stopAudioSignal(self):
+        self.Controller_messenger.sendMessage('stopPlayingAudioSignal')
 
     def startLightSignal(self):
-        if self.lightSignalOn:
-            self.lightSignalController_messenger.sendMessage('start')
-        else:
-            raise ValueError('lightSignalControl connection failed to ' + self.RPiIP)
+        self.Controller_messenger.sendMessage('startLightSignal')
 
     def stopLightSignal(self):
-        if self.lightSignalOn:
-            self.lightSignalController_messenger.sendMessage('stop')
-        else:
-            raise ValueError('lightSignalControl connection failed to ' + self.RPiIP)
+        self.Controller_messenger.sendMessage('stopLightSignal')
 
-    def audioController_init_check(self, message):
-        if message == 'initialization_successful':
-            self.audioController_init_successful = True
+    def startAllSignals(self):
+        self.Controller_messenger.sendMessage('startAllSignals')
+
+    def stopAllSignals(self):
+        self.Controller_messenger.sendMessage('stopAllSignals')
 
     def close(self):
         '''
         Closes all opened processes correctly.
         '''
         try:
-            if self.lightSignalOn:
-                self.lightSignalController_messenger.sendMessage('close')
-                self.T_lightSignalControl.join()
-                self.lightSignalController_messenger.close()
-                self.ssh_lightSignalControl_connection.disconnect()
-            if self.audioControl:
-                self.audioController_messenger.sendMessage('close')
-                self.T_audioControl.join()
-                self.audioController_messenger.close()
-                self.ssh_audioControl_connection.disconnect()
-            self.ssh_connection.sendCommand('sudo pkill python')
+            self.Controller_messenger.sendMessage('close')
+            self.T_Controller.join()
+            self.Controller_messenger.close()
+            self.ssh_Controller_connection.disconnect()
             self.ssh_connection.disconnect()
         except Exception as e:
             from inspect import currentframe, getframeinfo

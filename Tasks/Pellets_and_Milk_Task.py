@@ -14,8 +14,8 @@ from audioSignalControl import createAudioSignal
 def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
     feeder = RewardControl(FEEDER_type, str(RPiIPBox.text()), 
                            str(RPiUsernameBox.text()), str(RPiPasswordBox.text()))
-    feedback = feeder.release(float(str(quantityBox.text())), wait_for_feedback=True)
-    if feedback == 'failed':
+    feedback = feeder.release(float(str(quantityBox.text())))
+    if not feedback:
         print('FEEDER ' + FEEDER_type + ' @' + str(RPiIPBox.text()) + ' activation FAILED.')
     feeder.close()
 
@@ -548,17 +548,14 @@ class Core(object):
             lightSignalIntensity = self.TaskSettings['lightSignalIntensity']
         try:
             if FEEDER_type == 'pellet' or AudioSignalMode == 'ambient':
-                # If pellet feeder or ambient audio signal is used, simply initialize FEEDER
-                actuator = RewardControl(FEEDER_type, IP, username, password, 
-                                         lightSignalIntensity=lightSignalIntensity)
+                audioSignalParams = None
             elif AudioSignalMode == 'localised' and FEEDER_type == 'milk':
-                # If audio signal is localised and this is for milk feeder, activate also FEEDER's speaker
-                audioFreq = (self.FEEDERs['milk'][ID]['SignalHz'], 
-                             self.FEEDERs['milk'][ID]['SignalHzWidth'], 
-                             self.FEEDERs['milk'][ID]['ModulHz'])
-                actuator = RewardControl(FEEDER_type, IP, username, password, 
-                                         audioControl=True, audioFreq=audioFreq, 
-                                         lightSignalIntensity=lightSignalIntensity)
+                audioSignalParams = (self.FEEDERs['milk'][ID]['SignalHz'], 
+                                     self.FEEDERs['milk'][ID]['SignalHzWidth'], 
+                                     self.FEEDERs['milk'][ID]['ModulHz'])
+            actuator = RewardControl(FEEDER_type, IP, username, password, 
+                                     audioSignalParams=audioSignalParams, 
+                                     lightSignalIntensity=lightSignalIntensity)
             with self.TaskSettings_Lock:
                 self.FEEDERs[FEEDER_type][ID]['actuator'] = actuator
                 self.FEEDERs[FEEDER_type][ID]['init_successful'] = True
@@ -651,9 +648,8 @@ class Core(object):
                 idx = self.game_counters['Pellets']['ID'].index(ID)
                 self.game_counters['Pellets']['count'][idx] += 1
             # Send command to release reward and wait for positive feedback
-            feedback = self.FEEDERs[FEEDER_type][ID]['actuator'].release(quantity, wait_for_feedback=True, 
-                                                                         fail_limit=10)
-            if feedback == 'successful':
+            feedback = self.FEEDERs[FEEDER_type][ID]['actuator'].release(quantity)
+            if feedback:
                 # Send message to Open Ephys GUI
                 OEmessage = 'Reward ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
                 self.TaskIO['MessageToOE'](OEmessage)
@@ -665,7 +661,7 @@ class Core(object):
                 if 'pellet' == FEEDER_type:
                     with self.lastPelletRewardLock:
                         self.lastPelletReward = time.time()
-            elif feedback == 'failed':
+            else:
                 # Send message to Open Ephys GUI
                 OEmessage = 'Feeder Failure: ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
                 self.TaskIO['MessageToOE'](OEmessage)
@@ -1117,18 +1113,13 @@ class Core(object):
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
             self.milkTrialSignal[self.feederID_milkTrial].play(-1)
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
-            feedback = self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].playAudioSignal(feedback=True)
-            if feedback == 'failed':
-                self.game_state = 'interval'
-                self.inactivate_feeder('milk', self.feederID_milkTrial)
+            self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].playAudioSignal()
 
     def stop_milkTrialAudioSignal(self):
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
             self.milkTrialSignal[self.feederID_milkTrial].stop()
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
-            feedback = self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].stopAudioSignal(feedback=True)
-            if feedback == 'failed':
-                self.inactivate_feeder('milk', self.feederID_milkTrial)
+            self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].stopAudioSignal()
 
     def start_milkTrialLightSignal(self):
         self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].startLightSignal()

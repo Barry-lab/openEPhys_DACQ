@@ -13,8 +13,8 @@ from copy import deepcopy
 def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
     feeder = RewardControl(FEEDER_type, str(RPiIPBox.text()), 
                            str(RPiUsernameBox.text()), str(RPiPasswordBox.text()))
-    feedback = feeder.release(float(str(quantityBox.text())), wait_for_feedback=True)
-    if feedback == 'failed':
+    feedback = feeder.release(float(str(quantityBox.text())))
+    if not feedback:
         print('FEEDER ' + FEEDER_type + ' @' + str(RPiIPBox.text()) + ' activation FAILED.')
     feeder.close()
 
@@ -413,9 +413,8 @@ class Core(object):
                 idx = self.game_counters['Pellets']['ID'].index(ID)
                 self.game_counters['Pellets']['count'][idx] += 1
             # Send command to release reward and wait for positive feedback
-            feedback = self.FEEDERs[FEEDER_type][ID]['actuator'].release(quantity, wait_for_feedback=True, 
-                                                                         fail_limit=10)
-            if feedback == 'successful':
+            feedback = self.FEEDERs[FEEDER_type][ID]['actuator'].release(quantity)
+            if feedback:
                 # Send message to Open Ephys GUI
                 OEmessage = 'Reward ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
                 self.TaskIO['MessageToOE'](OEmessage)
@@ -427,7 +426,7 @@ class Core(object):
                 if 'pellet' == FEEDER_type:
                     with self.lastPelletRewardLock:
                         self.lastPelletReward = time.time()
-            elif feedback == 'failed':
+            else:
                 # Send message to Open Ephys GUI
                 OEmessage = 'Feeder Failure: ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
                 self.TaskIO['MessageToOE'](OEmessage)

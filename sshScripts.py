@@ -22,16 +22,15 @@ class ssh:
         if(self.client):
             try:
                 stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
-                while not stdout.channel.exit_status_ready():
-                    # Print data when available
-                    if stdout.channel.recv_ready():
-                        alldata = stdout.channel.recv(1024)
-                        prevdata = b"1"
-                        while prevdata:
-                            prevdata = stdout.channel.recv(1024)
-                            alldata += prevdata
-
-                        if verbose:
+                if verbose:
+                    while not stdout.channel.exit_status_ready():
+                        # Print data when available
+                        if stdout.channel.recv_ready():
+                            alldata = stdout.channel.recv(1024)
+                            prevdata = b"1"
+                            while prevdata:
+                                prevdata = stdout.channel.recv(1024)
+                                alldata += prevdata
                             print(str(alldata))
             except SSHException as e:
                 if e.__str__() == 'Timeout opening channel.':
