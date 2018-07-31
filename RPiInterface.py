@@ -18,66 +18,64 @@ class TrackingControl(object):
     def __init__(self, TrackingSettings):
         # Load infromation on all RPis
         self.TrackingSettings = TrackingSettings
-        # Initialize SSH connection with all RPis
-        self.RPiSSH = [None] * len(self.TrackingSettings['use_RPi_nrs'])
-        self.RPiSSH_Lock = threading.Lock()
-        T_initRPiSSH = []
+        self.number_of_RPis = len(self.TrackingSettings['use_RPi_nrs'])
+        # Initialize ZMQ connection with all RPis
+        self.Controller_messenger = range(self.number_of_RPis)
+        T_initRPiMessenber = []
         for nRPi, n_rpi in enumerate(self.TrackingSettings['use_RPi_nrs']):
-            T_initRPiSSH.append(threading.Thread(target=self.initRPiSSH, args=[n_rpi, nRPi]))
-            T_initRPiSSH[nRPi].start()
-        for T in T_initRPiSSH:
+            T_initRPiMessenber.append(threading.Thread(target=self.initController_messenger, args=[n_rpi, nRPi]))
+            T_initRPiMessenber[nRPi].start()
+        for T in T_initRPiMessenber:
             T.join()
+        # Initialize RPiController with all RPis
+        self.RPi_init_Successful = [False for x in range(self.number_of_RPis)]
+        self.RPiSSH = range(self.number_of_RPis)
+        self.T_initRPiController = []
+        for nRPi, n_rpi in enumerate(self.TrackingSettings['use_RPi_nrs']):
+            self.T_initRPiController.append(threading.Thread(target=self.initRPiController, args=[n_rpi, nRPi]))
+            self.T_initRPiController[nRPi].start()
+        # Wait until all RPis have confirmed to be ready
+        all_RPi_ready = False
+        while not all_RPi_ready:
+            time.sleep(0.1)
+            all_RPi_ready = all(self.RPi_init_Successful)
 
-    def initRPiSSH(self, n_rpi, nRPi):
-        connection = ssh(self.TrackingSettings['RPiInfo'][str(n_rpi)]['IP'], self.TrackingSettings['username'], self.TrackingSettings['password'])
-        connection.sendCommand('sudo pkill python') # Ensure any past processes have closed
-        with self.RPiSSH_Lock:
-            self.RPiSSH[nRPi] = connection
+    def initController_messenger(self, n_rpi, nRPi):
+        # Set up ZMQ connection
+        messenger = paired_messenger(address=self.TrackingSettings['RPiInfo'][str(n_rpi)]['IP'], 
+                                     port=int(self.TrackingSettings['stop_port']))
+        messenger.add_callback((self.Controller_message_parser, nRPi))
+        time.sleep(1)
+        self.Controller_messenger[nRPi] = messenger
+
+    def initRPiController(self, n_rpi, nRPi):
+        self.RPiSSH[nRPi] = ssh(self.TrackingSettings['RPiInfo'][str(n_rpi)]['IP'], self.TrackingSettings['username'], self.TrackingSettings['password'])
+        self.RPiSSH[nRPi].sendCommand('sudo pkill python') # Ensure any past processes have closed
+        command = 'cd ' + self.TrackingSettings['tracking_folder'] + ' && python tracking.py --remote'
+        self.RPiSSH[nRPi].sendCommand(command)
+
+    def Controller_message_parser(self, message, nRPi):
+        if message == 'init_successful':
+            self.RPi_init_Successful[nRPi] = True
 
     def start(self):
-        for connection in self.RPiSSH:
-            command = 'cd ' + self.TrackingSettings['tracking_folder'] + ' && python tracking.py &'
-            connection.sendCommand(command)
+        for messenger in self.Controller_messenger:
+            messenger.sendMessage('start')
 
     def stop(self):
-        # Sends 'stop' message until no more position data is received from RPis
-        LocalIP = self.TrackingSettings['centralIP']
-        PosPort = self.TrackingSettings['pos_port']
-        StopPort = self.TrackingSettings['stop_port']
-        RPiIPs = []
-        for n_rpi in self.TrackingSettings['use_RPi_nrs']:
-            RPiIPs.append(self.TrackingSettings['RPiInfo'][str(n_rpi)]['IP'])
-        # Set Stop message Publishing ZeroMQ
-        contextPUB = zmq.Context()
-        sockPUB = contextPUB.socket(zmq.PUB)
-        sockPUB.bind('tcp://' + LocalIP + ':' + StopPort)
-        command = 'stop'
-        time.sleep(0.1) # Pause script for 100ms for sockets to be bound before messages are sent.
-        # Send first Stop message
-        sockPUB.send(command)
-        # Set ZeroMQ socket to listen on incoming position data from all RPis
-        contextSUB = zmq.Context()
-        sockSUB = contextSUB.socket(zmq.SUB)
-        sockSUB.setsockopt(zmq.SUBSCRIBE, '')
-        sockSUB.RCVTIMEO = 250 # maximum duration to wait for data (in milliseconds)
-        for nRPi in range(len(RPiIPs)):
-            sockSUB.connect('tcp://' + RPiIPs[nRPi] + ':' + PosPort)
-        # Send Stop command until no more Position data is received
-        ReceivingPos = True
-        while ReceivingPos:
-            sockPUB.send(command)
-            try:
-                message = sockSUB.recv()
-            except:
-                message = 'no message'
-            if message == 'no message':
-                ReceivingPos = False
+        for messenger in self.Controller_messenger:
+            messenger.sendMessage('stop')
+        self.close()
+
+    def close(self):
         # Close SSH connections
         for connection in self.RPiSSH:
             connection.disconnect()
-        # Close Sockets
-        sockSUB.close()
-        sockPUB.close()
+        for T in self.T_initRPiController:
+            T.join()
+        # Close ZMQ messengers
+        for messenger in self.Controller_messenger:
+            messenger.close()
 
 
 class onlineTrackingData(object):

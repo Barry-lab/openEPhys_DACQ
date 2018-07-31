@@ -11,7 +11,7 @@ import os
 import RPiInterface as rpiI
 import cPickle as pickle
 import subprocess
-from shutil import copyfile, copytree, rmtree
+from shutil import copyfile, copytree, rmtree, move
 import csv
 import time
 from CumulativePosPlot import PosPlot
@@ -130,6 +130,12 @@ def update_specific_camera(TrackingSettings, n_rpi, tmpFolder):
               TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
               TrackingSettings['tracking_folder'] + ' --delete'
     _ = os.system(callstr)
+    # Copy over ZMQcomms.py
+    src_file = 'ZMQcomms.py'
+    dst_file = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
+               TrackingSettings['tracking_folder']
+    callstr = 'scp -q ' + src_file + ' ' + dst_file
+    _ = os.system(callstr)
 
 def update_tracking_camera_files(TrackingSettings):
     # Updates settings and scripts on all tracking cameras in use (based on settings)
@@ -183,6 +189,18 @@ def retrieve_specific_camera_tracking_data(n_rpi, TrackingSettings, RPiTempFolde
     tmp_data = process_single_tracking_data(n_rpi, dst_file, data_events)
     with TrackingDataLock:
         TrackingData[str(n_rpi)] = tmp_data
+    if TrackingSettings['save_frames']:
+        src = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
+              TrackingSettings['tracking_folder'] + '/frames'
+        dst = os.path.join(RPiTempFolder, 'frames_' + str(n_rpi))
+        callstr = 'scp -q -r ' + src + ' ' + dst
+        _ = os.system(callstr)
+
+def store_frames_to_recording_folder(TrackingSettings, rec_file_path, RPiTempFolder):
+    for n_rpi in TrackingSettings['use_RPi_nrs']:
+        src = os.path.join(RPiTempFolder, 'frames_' + str(n_rpi))
+        dst = os.path.join(os.path.dirname(rec_file_path), 'frames_' + str(n_rpi))
+        move(src, dst)
 
 def store_tracking_data_to_recording_file(TrackingSettings, rec_file_path):
     data_events = NWBio.load_events(rec_file_path)
@@ -198,6 +216,8 @@ def store_tracking_data_to_recording_file(TrackingSettings, rec_file_path):
         T_retrievePosLogsRPi.append(T)
     for T in T_retrievePosLogsRPi:
         T.join()
+    if TrackingSettings['save_frames']:
+        store_frames_to_recording_folder(TrackingSettings, rec_file_path, RPiTempFolder)
     rmtree(RPiTempFolder)
     # Save position data from all sources to recording file
     NWBio.save_tracking_data(rec_file_path, TrackingData)
@@ -508,7 +528,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Test devices and display results in dialog box
         check_if_devices_available(address_list, device_names, output='d')
 
-    def start_rec(self):
+    def init_rec(self):
         # Load settings
         self.Settings['General'] = self.get_RecordingGUI_settings()
         if self.Settings['General']['Tracking']:
@@ -535,10 +555,10 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             print('Connecting to tracking RPis Successful')
             # Initialize onlineTrackingData class
             print('Initializing Online Tracking Data...')
-            histogramParameters = {'margins': 10, # histogram data margins in centimeters
-                                   'binSize': 2, # histogram binSize in centimeters
-                                   'speedLimit': 10}# centimeters of distance in last second to be included
-            self.RPIpos = rpiI.onlineTrackingData(self.Settings['TrackingSettings'], HistogramParameters=deepcopy(histogramParameters), SynthData=False)
+            self.histogramParameters = {'margins': 10, # histogram data margins in centimeters
+                                        'binSize': 2, # histogram binSize in centimeters
+                                        'speedLimit': 10}# centimeters of distance in last second to be included
+            self.RPIpos = rpiI.onlineTrackingData(self.Settings['TrackingSettings'], HistogramParameters=deepcopy(self.histogramParameters), SynthData=False)
             print('Initializing Online Tracking Data Successful')
         # Initialize listening to Open Ephys GUI messages
         print('Connecting to Open Ephys GUI via ZMQ...')
@@ -554,7 +574,10 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
                       'MessageToOE': SendOpenEphysSingleMessage}
             TaskModule = hfunct.import_subdirectory_module('Tasks', self.Settings['TaskSettings']['name'])
             self.current_task = TaskModule.Core(deepcopy(self.Settings['TaskSettings']), TaskIO)
-            print('Initializing Task Successful')
+            print('Initializing Task Successful')        
+
+    def start_rec(self):
+        self.init_rec()
         # Start Open Ephys GUI recording
         print('Starting Open Ephys GUI Recording...')
         recording_folder_root = os.path.join(self.Settings['General']['root_folder'], str(self.pt_animal.toPlainText()))
@@ -583,16 +606,16 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_process_data.setEnabled(False)
         self.pb_sync_server.setEnabled(False)
         self.pb_open_rec_folder.setEnabled(True)
+        # Start cumulative plot
+        if self.Settings['General']['Tracking']:
+            print('Starting Position Plot...')
+            self.PosPlot = PosPlot(self.Settings['TrackingSettings'], self.RPIpos, deepcopy(self.histogramParameters))
+            print('Starting Position Plot Successful')
         # Start task
         if self.Settings['General']['TaskActive']:
             print('Starting Task...')
             self.current_task.run()
             print('Starting Task Successful')
-        # Start cumulative plot
-        if self.Settings['General']['Tracking']:
-            print('Starting Position Plot...')
-            self.PosPlot = PosPlot(self.Settings['TrackingSettings'], self.RPIpos, deepcopy(histogramParameters))
-            print('Starting Position Plot Successful')
 
     def stop_rec(self):# Stop Task
         if self.Settings['General']['TaskActive']:
@@ -623,6 +646,9 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             SendOpenEphysSingleMessage('StopRecord')
             time.sleep(0.1)
         print('Stopping Open Ephys GUI Recording Successful')
+        self.compile_recording_data()
+
+    def compile_recording_data(self):
         if self.Settings['General']['Tracking']:
             # Store tracking  data in recording file
             print('Copying over tracking data to Recording File...')

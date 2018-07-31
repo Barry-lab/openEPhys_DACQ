@@ -109,6 +109,8 @@ If you have assembled the RPi Zero with Picon Zero, you are able to test if ever
 Finally, you need to put the scripts for controlling the feeders onto the RPi Zero. You could copy them over with a USB stick, download them from github or transfer them later using the ``scp`` command. In any case, you need to put the following files from the openEphys_DACQ github to the RPi home directory at ``/home/pi/``:
 
 - openPinchValve.py
+- audioSignalControl.py
+- lightSignalControl.py
 - releasePellet.py
 - ZMQcomms.py
 
