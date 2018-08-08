@@ -4,7 +4,7 @@ import pygame
 import numpy as np
 import threading
 from RPiInterface import RewardControl
-import time
+from time import asctime, time, sleep
 from scipy.spatial.distance import euclidean
 import random
 from PyQt4 import QtGui, QtCore
@@ -118,6 +118,7 @@ def exportSettingsFromGUI(self):
                     'Username': str(self.settings['Username'].text()), 
                     'Password': str(self.settings['Password'].text()), 
                     'lightSignalIntensity': np.int64(str(self.settings['lightSignalIntensity'].text())), 
+                    'lightSignalDelay': np.float64(str(self.settings['lightSignalDelay'].text())), 
                     'InitPellets': np.int64(float(str(self.settings['InitPellets'].text()))), 
                     'PelletQuantity': np.int64(float(str(self.settings['PelletQuantity'].text()))), 
                     'PelletRewardMinSeparationMean': np.int64(float(str(self.settings['PelletRewardMinSeparationMean'].text()))), 
@@ -230,17 +231,17 @@ def SettingsGUI(self):
     hbox.addWidget(QtGui.QLabel('Chewing TTL channel'))
     self.settings['Chewing_TTLchan'] = QtGui.QLineEdit('5')
     hbox.addWidget(self.settings['Chewing_TTLchan'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),0,1)
+    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),4,0)
     hbox = QtGui.QHBoxLayout()
     hbox.addWidget(QtGui.QLabel('Raspberry Pi usernames'))
     self.settings['Username'] = QtGui.QLineEdit('pi')
     hbox.addWidget(self.settings['Username'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),1,1)
+    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),0,1)
     hbox = QtGui.QHBoxLayout()
     hbox.addWidget(QtGui.QLabel('Raspberry Pi passwords'))
     self.settings['Password'] = QtGui.QLineEdit('raspberry')
     hbox.addWidget(self.settings['Password'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),2,1)
+    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),1,1)
     hbox = QtGui.QHBoxLayout()
     hbox.addWidget(QtGui.QLabel('Audio Signal Mode'))
     self.settings['AudioSignalMode'] = {'ambient': QtGui.QRadioButton('Ambient'), 
@@ -248,11 +249,16 @@ def SettingsGUI(self):
     self.settings['AudioSignalMode']['ambient'].setChecked(True)
     hbox.addWidget(self.settings['AudioSignalMode']['ambient'])
     hbox.addWidget(self.settings['AudioSignalMode']['localised'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),3,1)
+    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),2,1)
     hbox = QtGui.QHBoxLayout()
     hbox.addWidget(QtGui.QLabel('Light Signal intensity (0 - 100)'))
     self.settings['lightSignalIntensity'] = QtGui.QLineEdit('100')
     hbox.addWidget(self.settings['lightSignalIntensity'])
+    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),3,1)
+    hbox = QtGui.QHBoxLayout()
+    hbox.addWidget(QtGui.QLabel('Light Signal delay (s)'))
+    self.settings['lightSignalDelay'] = QtGui.QLineEdit('0')
+    hbox.addWidget(self.settings['lightSignalDelay'])
     self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),4,1)
     # Create Pellet task specific menu items
     vbox = QtGui.QVBoxLayout()
@@ -481,16 +487,16 @@ class Core(object):
             if self.FEEDERs['pellet'][ID]['Active']:
                 self.activePfeeders.append(ID)
         self.lastPelletRewardLock = threading.Lock()
-        self.lastPelletReward = time.time()
+        self.lastPelletReward = time()
         self.updatePelletMinSepratation()
         # Set up Milk Rewards
         self.activeMfeeders = []
         for ID in sorted(self.FEEDERs['milk'].keys(), key=int):
             if self.FEEDERs['milk'][ID]['Active']:
                 self.activeMfeeders.append(ID)
-        self.lastMilkTrial = time.time()
+        self.lastMilkTrial = time()
         self.updateMilkTrialMinSepratation()
-        self.milkTrialFailTime = time.time() - self.TaskSettings['MilkTrialFailPenalty']
+        self.milkTrialFailTime = time() - self.TaskSettings['MilkTrialFailPenalty']
         # Initialize FEEDERs
         print('Initializing FEEDERs...')
         T_initFEEDER = []
@@ -519,7 +525,7 @@ class Core(object):
         # Initialize game
         self.feederID_milkTrial = self.chooseMilkTrialFeeder()
         self.lastRewardLock = threading.Lock()
-        self.lastReward = time.time()
+        self.lastReward = time()
         self.rewardInProgressLock = threading.Lock()
         self.rewardInProgress = []
         self.gameOn = False
@@ -586,7 +592,7 @@ class Core(object):
         parts = message.split()
         if parts[2] == str(self.TaskSettings['Chewing_TTLchan']) and parts[3] == str(1):
             with self.ttlTimesLock:
-                self.ttlTimes.append(time.time())
+                self.ttlTimes.append(time())
 
     def number_of_chewings(self, lastReward):
         with self.ttlTimesLock:
@@ -659,10 +665,10 @@ class Core(object):
                 feeder_button['button_pressed'] = False
                 # Reset last reward timer
                 with self.lastRewardLock:
-                    self.lastReward = time.time()
+                    self.lastReward = time()
                 if 'pellet' == FEEDER_type:
                     with self.lastPelletRewardLock:
-                        self.lastPelletReward = time.time()
+                        self.lastPelletReward = time()
             else:
                 # Send message to Open Ephys GUI
                 OEmessage = 'Feeder Failure: ' + FEEDER_type + ' ' + ID + ' ' + action + ' ' + str(quantity)
@@ -725,21 +731,21 @@ class Core(object):
                 self.releaseReward(FEEDER_type, ID, 'user', self.TaskSettings['MilkQuantity'])
         else:
             button['enabled'] = False
-            time.sleep(0.5)
+            sleep(0.5)
             button['enabled'] = True
 
     def buttonManualPellet_callback(self, button):
         button['button_pressed'] = True
         # Update last reward time
         with self.lastPelletRewardLock:
-            self.lastPelletReward = time.time()
+            self.lastPelletReward = time()
         with self.lastRewardLock:
-            self.lastReward = time.time()
+            self.lastReward = time()
         # Send message to Open Ephys GUI
         OEmessage = 'Reward pelletManual'
         self.TaskIO['MessageToOE'](OEmessage)
         # Keep button toggled for another 0.5 seconds
-        time.sleep(0.5)
+        sleep(0.5)
         button['button_pressed'] = False
 
     def buttonMilkTrial_callback(self, button):
@@ -747,10 +753,10 @@ class Core(object):
             self.game_state = 'transition'
             # Starts the trial with specific feeder as goal
             self.feederID_milkTrial = button['callargs'][0]
-            self.start_milkTrial(action='user')
+            threading.Thread(target=self.start_milkTrial, args=('user',)).start()
         else:
             button['enabled'] = False
-            time.sleep(0.5)
+            sleep(0.5)
             button['enabled'] = True
 
     def getButton(self, button_name, FEEDER_ID=None):
@@ -1132,7 +1138,10 @@ class Core(object):
     def start_milkTrialSignals(self):
         self.start_milkTrialAudioSignal()
         if self.lightSignalOn:
-            self.start_milkTrialLightSignal()
+            sleep(min([self.TaskSettings['lightSignalDelay'], self.TaskSettings['MilkTrialMaxDuration']]))
+            if self.game_state == 'milk_trial':
+                # This command is only given if milk trial has not yet ended.
+                self.start_milkTrialLightSignal()
 
     def stop_milkTrialSignals(self):
         self.stop_milkTrialAudioSignal()
@@ -1141,13 +1150,13 @@ class Core(object):
 
     def start_milkTrial(self, action='undefined'):
         # These settings put the game_logic into milkTrial mode
-        self.lastMilkTrial = time.time()
+        self.lastMilkTrial = time()
         self.game_state = 'milk_trial'
         # Make process visible on GUI
         feeder_button = self.getButton('buttonMilkTrial', self.feederID_milkTrial)
         feeder_button['button_pressed'] = True
-        # Initiate tone signal
-        self.start_milkTrialSignals()
+        # Initiate signals
+        threading.Thread(target=self.start_milkTrialSignals).start()
         # Send timestamp to Open Ephys GUI
         OEmessage = 'milkTrialStart ' + action + ' ' + self.feederID_milkTrial
         self.TaskIO['MessageToOE'](OEmessage)
@@ -1156,14 +1165,6 @@ class Core(object):
         self.game_counters['Milk trials']['count'][idx] += 1
 
     def stop_milkTrial(self, successful):
-        # Stop tone signal
-        self.stop_milkTrialSignals()
-        # Send timestamp to Open Ephys GUI
-        OEmessage = 'milkTrialEnd Success:' + str(successful)
-        self.TaskIO['MessageToOE'](OEmessage)
-        # Reset GUI signal of trial process
-        feeder_button = self.getButton('buttonMilkTrial', self.feederID_milkTrial)
-        feeder_button['button_pressed'] = False
         # Release reward if successful and update counter
         if successful:
             self.game_state = 'reward_in_progress'
@@ -1175,8 +1176,16 @@ class Core(object):
             idx = self.game_counters['Successful']['ID'].index(self.feederID_milkTrial)
             self.game_counters['Successful']['count'][idx] += 1
         else:
-            self.milkTrialFailTime = time.time()
+            self.milkTrialFailTime = time()
             self.game_state = 'interval'
+        # Stop signals
+        self.stop_milkTrialSignals()
+        # Send timestamp to Open Ephys GUI
+        OEmessage = 'milkTrialEnd Success:' + str(successful)
+        self.TaskIO['MessageToOE'](OEmessage)
+        # Reset GUI signal of trial process
+        feeder_button = self.getButton('buttonMilkTrial', self.feederID_milkTrial)
+        feeder_button['button_pressed'] = False
 
     def check_if_reward_in_progress(self):
         '''
@@ -1208,10 +1217,10 @@ class Core(object):
             posHistory = [self.lastKnownPos] * self.distance_steps
         # Load variables in thread safe way
         with self.lastRewardLock:
-            timeSinceLastReward = time.time() - self.lastReward
+            timeSinceLastReward = time() - self.lastReward
         with self.lastPelletRewardLock:
             lastPelletRewardTime = self.lastPelletReward
-        timeSinceLastPelletReward = time.time() - lastPelletRewardTime
+        timeSinceLastPelletReward = time() - lastPelletRewardTime
         # Compute distances to all active milk feeders
         mean_posHistory = compute_mean_posHistory(posHistory_one_second_steps)
         distances = []
@@ -1247,7 +1256,7 @@ class Core(object):
                               'percentage': timeSinceLastPelletReward / float(self.TaskSettings['PelletRewardMinSeparation'])})
         # Check if milk trial penalty still applies
         game_progress_names.append('fail_penalty')
-        timeSinceLastMilkFailedTrial = time.time() - self.milkTrialFailTime
+        timeSinceLastMilkFailedTrial = time() - self.milkTrialFailTime
         game_progress.append({'name': 'Fail Penalty', 
                               'game_states': ['interval'], 
                               'target': self.TaskSettings['MilkTrialFailPenalty'], 
@@ -1256,7 +1265,7 @@ class Core(object):
                               'percentage': timeSinceLastMilkFailedTrial / float(self.TaskSettings['MilkTrialFailPenalty'])})
         # Check if enough time as passed since last milk trial
         game_progress_names.append('time_since_last_milk_trial')
-        timeSinceLastMilkTrial = time.time() - self.lastMilkTrial
+        timeSinceLastMilkTrial = time() - self.lastMilkTrial
         game_progress.append({'name': 'Since Trial', 
                               'game_states': ['interval'], 
                               'target': self.TaskSettings['MilkTrialMinSeparation'], 
@@ -1313,7 +1322,7 @@ class Core(object):
                               'percentage': 1 - (other_distances - self.TaskSettings['MilkTaskMinGoalDistance']) / float(self.max_distance_in_arena)})
         # Check if trial has been running for too long
         game_progress_names.append('milk_trial_duration')
-        trial_run_time = time.time() - self.lastMilkTrial
+        trial_run_time = time() - self.lastMilkTrial
         game_progress.append({'name': 'Trial Duration', 
                               'game_states': ['milk_trial'], 
                               'target': self.TaskSettings['MilkTrialMaxDuration'], 
@@ -1438,7 +1447,7 @@ class Core(object):
         # Ensure that Position data is available
         posHistory = []
         while len(posHistory) < self.distance_steps and not (None in posHistory):
-            time.sleep(0.1)
+            sleep(0.1)
             with self.TaskIO['RPIPos'].combPosHistoryLock:
                 posHistory = self.TaskIO['RPIPos'].combPosHistory
         self.lastKnownPos = posHistory[-1]
@@ -1487,13 +1496,13 @@ class Core(object):
                                     if subbutton['Rect'].collidepoint(event.pos) and subbutton['enabled']:
                                         threading.Thread(target=subbutton['callback'], args=(subbutton,)).start()
             # Update the game state and display if enough time has passed since last update
-            if lastUpdatedState < (time.time() - 1 / float(self.gameRate)):
+            if lastUpdatedState < (time() - 1 / float(self.gameRate)):
                 if T_update_states.is_alive():
-                    print('Game State Processing thread pileup! ' + time.asctime())
+                    print('Game State Processing thread pileup! ' + asctime())
                 T_update_states.join() # Ensure the previous state update thread has finished
                 T_update_states = threading.Thread(target=self.update_states)
                 T_update_states.start()
-                lastUpdatedState = time.time()
+                lastUpdatedState = time()
         # Quit game when out of gameOn loop
         with self.screen_Lock:
             pygame.mixer.quit()
@@ -1507,7 +1516,7 @@ class Core(object):
         # Make sure reward delivery is finished before closing game processes
         while self.game_state == 'reward_in_progress':
             print('Waiting for reward_in_progress to finish...')
-            time.sleep(1)
+            sleep(1)
         # Stop main game loop
         self.mainLoopActive = False
         # Send message to Open Ephys

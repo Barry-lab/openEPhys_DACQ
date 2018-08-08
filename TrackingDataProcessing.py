@@ -174,7 +174,7 @@ def process_tracking_data(filename, save_to_file=False):
     else:
         # In case of single camera being used, just use data from that camera
         posdata = posdatas[0]
-    posdata = remove_tracking_data_outside_boundaries(posdata, TrackingSettings['arena_size'], max_error=20)
+    posdata = remove_tracking_data_outside_boundaries(posdata, TrackingSettings['arena_size'], max_error=1)
     posdata = posdata.astype(np.float64)
     if save_to_file:
         # Save corrected data to file
