@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>835</width>
-    <height>610</height>
+    <height>651</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -32,7 +32,7 @@
          <x>0</x>
          <y>0</y>
          <width>537</width>
-         <height>543</height>
+         <height>584</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout">
@@ -859,9 +859,19 @@
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="pb_start_rec">
+        <widget class="QPushButton" name="pb_init_devices">
          <property name="enabled">
           <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>Initialize Devices</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="pb_start_rec">
+         <property name="enabled">
+          <bool>false</bool>
          </property>
          <property name="text">
           <string>Start Recording</string>
@@ -881,7 +891,7 @@
        <item>
         <widget class="QPushButton" name="pb_process_data">
          <property name="enabled">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
          <property name="text">
           <string>Process Data</string>
@@ -891,7 +901,7 @@
        <item>
         <widget class="QPushButton" name="pb_sync_server">
          <property name="enabled">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
          <property name="text">
           <string>Synch with QNAP</string>
@@ -901,7 +911,7 @@
        <item>
         <widget class="QPushButton" name="pb_open_rec_folder">
          <property name="enabled">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
          <property name="text">
           <string>Open Recording Folder</string>

@@ -4,6 +4,7 @@
 ### By Sander Tanni, May 2017, UCL
 
 from PyQt4 import QtGui
+from PyQt4.QtCore import QThread, pyqtSignal
 import RecordingManagerDesign
 import sys
 from datetime import datetime
@@ -336,6 +337,47 @@ def check_if_devices_available(address_list, device_names=[], output='r'):
         return disconnected_devices
 
 
+class QThread_with_completion_callback(QThread):
+    finishedSignal = pyqtSignal()
+    '''
+    Allows calling funcitons in separate threads with a callback function executed at completion.
+
+    Note! Make sure QThread_with_completion_callback instance does not go out of scope during execution.
+    '''
+    def __init__(self, callback_function, function, *args, **kwargs):
+        '''
+        The callback_function is called when function has finished.
+        The function is called with any input arguments that follow it.
+        '''
+        super(QThread_with_completion_callback, self).__init__()
+        self.finishedSignal.connect(callback_function)
+        self.function = function
+        self.args = args
+        self.kwargs = kwargs
+        self.start()
+
+    def run(self):
+        self.function(*self.args, **self.kwargs)
+        self.finishedSignal.emit()
+
+class QThread_thread(QThread):
+    '''
+    Allows initating a function in a QThread.
+    '''
+    def __init__(self, function, *args, **kwargs):
+        '''
+        The function is called with any input arguments that follow it.
+        '''
+        super(QThread_thread, self).__init__()
+        self.function = function
+        self.args = args
+        self.kwargs = kwargs
+        self.start()
+
+    def run(self):
+        self.function(*self.args, **self.kwargs)
+
+
 class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
 
     def __init__(self, parent=None):
@@ -358,15 +400,16 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_cam_set.clicked.connect(lambda:self.camera_settings())
         self.pb_task_set.clicked.connect(lambda:self.task_settings())
         self.pb_test_devices.clicked.connect(lambda:self.test_devices())
-        self.pb_start_rec.clicked.connect(lambda:self.start_rec())
-        self.pb_stop_rec.clicked.connect(lambda:self.stop_rec())
-        self.pb_process_data.clicked.connect(lambda:self.process_data())
+        self.pb_init_devices.clicked.connect(lambda:self.pb_init_devices_callback())
+        self.pb_start_rec.clicked.connect(lambda:self.pb_start_rec_callback())
+        self.pb_stop_rec.clicked.connect(lambda:self.pb_stop_rec_callback())
+        self.pb_process_data.clicked.connect(lambda:self.pb_process_data_callback())
         self.pb_sync_server.clicked.connect(lambda:self.sync_server())
         self.pb_open_rec_folder.clicked.connect(lambda:self.open_rec_folder())
         # Store original stylesheets for later use
-        self.original_stylesheets = {}
-        self.original_stylesheets['pb_start_rec'] = self.pb_start_rec.styleSheet()# Keep copy of default button color
-        self.original_stylesheets['pb_stop_rec'] = self.pb_stop_rec.styleSheet() # Save Stop button default
+        self.original_stylesheets = {'pb_init_devices': self.pb_init_devices.styleSheet(), 
+                                     'pb_start_rec': self.pb_start_rec.styleSheet(), 
+                                     'pb_stop_rec': self.pb_stop_rec.styleSheet()}
 
     def openFolderDialog(self, caption='Select folder'):
         # Pops up a GUI to select a folder
@@ -528,7 +571,22 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Test devices and display results in dialog box
         check_if_devices_available(address_list, device_names, output='d')
 
-    def init_rec(self):
+    def pb_init_devices_callback(self):
+        # Change Init_devices button style to red and disable the button
+        self.pb_init_devices.setStyleSheet('background-color: red') # Change button to red
+        self.pb_init_devices.setEnabled(False)
+        # Disable data handling buttons
+        self.pb_process_data.setEnabled(False)
+        self.pb_sync_server.setEnabled(False)
+        # Do background work
+        self.main_worker = QThread_with_completion_callback(self.init_devices_completed, self.init_devices)
+
+    def init_devices_completed(self):
+        # Change Init_devices button style to green and enable start_rec button
+        self.pb_init_devices.setStyleSheet('background-color: green') # Change button to red
+        self.pb_start_rec.setEnabled(True)
+
+    def init_devices(self):
         # Load settings
         self.Settings['General'] = self.get_RecordingGUI_settings()
         if self.Settings['General']['Tracking']:
@@ -574,10 +632,19 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
                       'MessageToOE': SendOpenEphysSingleMessage}
             TaskModule = hfunct.import_subdirectory_module('Tasks', self.Settings['TaskSettings']['name'])
             self.current_task = TaskModule.Core(deepcopy(self.Settings['TaskSettings']), TaskIO)
-            print('Initializing Task Successful')        
+            print('Initializing Task Successful')  
+
+    def pb_start_rec_callback(self):
+        # Change Start button style to red and init_devices button back to default
+        self.pb_start_rec.setStyleSheet('background-color: red') # Change button to red
+        self.pb_init_devices.setStyleSheet(self.original_stylesheets['pb_init_devices'])
+        # Disable and Enable Start and Stop buttons, respectively
+        self.pb_start_rec.setEnabled(False)
+        self.pb_stop_rec.setEnabled(True)
+        # Do background work
+        self.start_rec()
 
     def start_rec(self):
-        self.init_rec()
         # Start Open Ephys GUI recording
         print('Starting Open Ephys GUI Recording...')
         recording_folder_root = os.path.join(self.Settings['General']['root_folder'], str(self.pt_animal.toPlainText()))
@@ -598,14 +665,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             print('Starting tracking RPis...')
             self.trackingControl.start()
             print('Starting tracking RPis Successful')
-        # Change Start button style
-        self.pb_start_rec.setStyleSheet('background-color: red') # Change button to red
-        # Disable and Enable Start and Stop buttons, respectively
-        self.pb_start_rec.setEnabled(False)
-        self.pb_stop_rec.setEnabled(True)
-        self.pb_process_data.setEnabled(False)
-        self.pb_sync_server.setEnabled(False)
-        self.pb_open_rec_folder.setEnabled(True)
         # Start cumulative plot
         if self.Settings['General']['Tracking']:
             print('Starting Position Plot...')
@@ -616,6 +675,40 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             print('Starting Task...')
             self.current_task.run()
             print('Starting Task Successful')
+
+    def pb_stop_rec_callback(self):
+        # Disable Stop button
+        self.pb_stop_rec.setEnabled(False)
+        # Do background work
+        self.main_worker = QThread_with_completion_callback(self.stop_rec_completed, self.stop_rec)
+
+    def stop_rec_completed(self):
+        # Change start button colors
+        self.pb_start_rec.setStyleSheet(self.original_stylesheets['pb_start_rec']) # Start button to default
+        # Enable other buttons
+        self.pb_init_devices.setEnabled(True)
+        self.pb_process_data.setEnabled(True)
+        self.pb_sync_server.setEnabled(True)
+
+    def compile_recording_data(self):
+        if self.Settings['General']['Tracking']:
+            # Store tracking  data in recording file
+            print('Copying over tracking data to Recording File...')
+            store_tracking_data_to_recording_file(self.Settings['TrackingSettings'], self.Settings['General']['rec_file_path'])
+            print('Copying over tracking data to Recording File Successful')
+        # Store recording settings to recording file
+        self.save_settings(filename=self.Settings['General']['rec_file_path'])
+        print('Settings saved to Recording File')
+        # Store settings for RecordingManager history reference
+        RecordingManagerSettingsPath = os.path.join(self.Settings['General']['root_folder'], 
+                                                    self.RecordingManagerSettingsFolder)
+        if not os.path.isdir(RecordingManagerSettingsPath):
+            os.mkdir(RecordingManagerSettingsPath)
+        RecordingFolderName = os.path.basename(os.path.dirname(self.Settings['General']['rec_file_path']))
+        RecordingManagerSettingsFilePath = os.path.join(RecordingManagerSettingsPath, 
+                                                        RecordingFolderName + '.settings.nwb')
+        self.save_settings(filename=RecordingManagerSettingsFilePath)
+        print('Settings saved to Recording Manager Settings Folder')
 
     def stop_rec(self):# Stop Task
         if self.Settings['General']['TaskActive']:
@@ -648,48 +741,26 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         print('Stopping Open Ephys GUI Recording Successful')
         self.compile_recording_data()
 
-    def compile_recording_data(self):
-        if self.Settings['General']['Tracking']:
-            # Store tracking  data in recording file
-            print('Copying over tracking data to Recording File...')
-            store_tracking_data_to_recording_file(self.Settings['TrackingSettings'], self.Settings['General']['rec_file_path'])
-            print('Copying over tracking data to Recording File Successful')
-        # Store recording settings to recording file
-        self.save_settings(filename=self.Settings['General']['rec_file_path'])
-        print('Settings saved to Recording File')
-        # Store settings for RecordingManager history reference
-        RecordingManagerSettingsPath = os.path.join(self.Settings['General']['root_folder'], 
-                                                    self.RecordingManagerSettingsFolder)
-        if not os.path.isdir(RecordingManagerSettingsPath):
-            os.mkdir(RecordingManagerSettingsPath)
-        RecordingFolderName = os.path.basename(os.path.dirname(self.Settings['General']['rec_file_path']))
-        RecordingManagerSettingsFilePath = os.path.join(RecordingManagerSettingsPath, 
-                                                        RecordingFolderName + '.settings.nwb')
-        self.save_settings(filename=RecordingManagerSettingsFilePath)
-        print('Settings saved to Recording Manager Settings Folder')
-        # Change start button colors
-        self.pb_start_rec.setStyleSheet(self.original_stylesheets['pb_start_rec']) # Start button to default
-        # Disable Stop button and Enable other buttons
-        self.pb_start_rec.setEnabled(True)
-        self.pb_stop_rec.setEnabled(False)
+    def pb_process_data_callback(self):
+        self.pb_init_devices.setEnabled(False)
+        self.pb_process_data.setEnabled(False)
+        self.pb_sync_server.setEnabled(False)
+        # Do background work
+        self.main_worker = QThread_with_completion_callback(self.process_data_completed, self.process_data)
+    
+    def process_data_completed(self):
+        self.pb_init_devices.setEnabled(True)
         self.pb_process_data.setEnabled(True)
         self.pb_sync_server.setEnabled(True)
 
     def process_data(self):
         # Applies KlustaKwik tetrode-wise to recorded data
-        self.pb_start_rec.setEnabled(False)
-        self.pb_process_data.setEnabled(False)
-        self.pb_sync_server.setEnabled(False)
-        time.sleep(0.1)
         import Processing
         Processing.main(self.Settings['General']['rec_file_path'])
-        self.pb_start_rec.setEnabled(True)
-        self.pb_process_data.setEnabled(True)
-        self.pb_sync_server.setEnabled(True)
 
     def sync_server(self):
         # Change button colors
-        print('Needs fixing!')
+        raise NotImplementedError
         # self.original_stylesheets['pb_sync_server'] = self.pb_sync_server.styleSheet() # Save button color
         # self.pb_sync_server.setStyleSheet('background-color: red') # Change button to red
         # # Extract directory tree from root folder to data to append to server folder
@@ -708,11 +779,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
 
     def open_rec_folder(self):
         # Opens recording folder with Ubuntu file browser
-        recording_folder_root = os.path.join(self.Settings['General']['root_folder'], 
-                                             str(self.pt_animal.toPlainText()))
-        RecordingFolderName = os.path.basename(os.path.dirname(self.Settings['General']['rec_file_path']))
-        RecordingFolderPath = os.path.join(recording_folder_root, RecordingFolderName)
-        subprocess.Popen(['xdg-open', RecordingFolderPath])
+        subprocess.Popen(['xdg-open', os.path.dirname(self.Settings['General']['rec_file_path'])])
 
 
 # The following is the default ending for a QtGui application script
