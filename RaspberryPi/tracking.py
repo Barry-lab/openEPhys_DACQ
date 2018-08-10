@@ -13,27 +13,12 @@ from scipy.spatial.distance import euclidean
 import sys
 from multiprocessing import Process, RawArray, RawValue, Lock, Pipe
 from ctypes import c_uint8, c_uint64
-from copy import copy
+from copy import copy, deepcopy
 from Queue import Queue
 from threading import Thread
 from ZMQcomms import paired_messenger
 import argparse
 from shutil import rmtree
-
-#DEBUG
-from subprocess import PIPE, Popen
-
-def get_cpu_temperature():
-    """get cpu temperature using vcgencmd"""
-    process = Popen(['vcgencmd', 'measure_temp'], stdout=PIPE)
-    output, _error = process.communicate()
-    return float(output[output.index('=') + 1:output.rindex("'")])
-
-def get_throttling():
-    process = Popen(['vcgencmd', 'get_throttled'], stdout=PIPE)
-    output, _error = process.communicate()
-    return str(output)
-#DEBUG
 
 # # Write output to a log file
 # orig_stdout = sys.stdout
@@ -255,14 +240,14 @@ class online_tracker(process_with_queue):
             'smoothing_radius' - int
             'calibrationTmatrix' - array
             'doubleLED' - bool
-            'LED_radius_pix' - int
-            'LED_max_distance' - float
+            'LED_separation_pix' - int
             'resolution' - tuple - (frame_width,frame_height)
         '''
         super(online_tracker, self).__init__()
         self.RPi_number = params['RPi_number']
         self.init_ZMQpublisher(params['RPiIP'], params['pos_port'])
         self.init_logfile_writer()
+        params['cutout'] = self.create_circular_cutout(params)
         self.init_multiprocess_function(params)
 
     def init_ZMQpublisher(self, RPiIP, pos_port):
@@ -286,6 +271,119 @@ class online_tracker(process_with_queue):
         self.logwriter = csv.writer(self.logfile)
 
     @staticmethod
+    def transform_pix_to_cm(pos_pix, calibrationTmatrix):
+        '''
+        Transforms position on image from pixels to centimeters in real world coordinates,
+        based on transformation matrix.
+        Coordinate values in C-major order relative to the grayscale image.
+        '''
+        # Use transformation matrix to map pixel values to position in real world
+        led_pix_4PT = np.reshape(np.array(pos_pix[::-1]),(1,1,2)).astype(np.float32)
+        pos_cm_fromPT = cv2.perspectiveTransform(led_pix_4PT, calibrationTmatrix).astype('float')
+        pos_cm = pos_cm_fromPT.squeeze()
+
+        return pos_cm
+
+
+    @staticmethod
+    def detect_first_led(gray, calibrationTmatrix):
+        '''
+        Finds the highest luminance in the grayscale image and transforms pix location to real world coordinates.
+        Coordinate values in C-major order relative to the grayscale image.
+        '''
+        (_1, lum, _2, led_pix) = cv2.minMaxLoc(gray) # Find coordinates of pixel with highest value
+        led_pix = led_pix[::-1]
+        xy_cm = online_tracker.transform_pix_to_cm(led_pix, calibrationTmatrix)
+
+        return led_pix, xy_cm, lum
+
+    @staticmethod
+    def create_circular_cutout(params):
+        '''
+        Creates a blank array and indexing arrays to fill it with values from image
+        '''
+        # Extract necessary values from params
+        cutout_radius = params['LED_separation_pix'] * 2
+        img_shape = (params['resolution'][1], params['resolution'][0])
+        # Create array blank array for search area
+        cutout_shape = (cutout_radius * 2 + 1, cutout_radius * 2 + 1)
+        blank = np.zeros(cutout_shape, dtype=np.uint8)
+        # Find indices in array at correct distance from center
+        all_indices = np.unravel_index(range(blank.size),blank.shape, order='F')
+        center_ind = [cutout_radius, cutout_radius]
+        ind_1 = np.array([], dtype=np.int16)
+        ind_2 = np.array([], dtype=np.int16)
+        for a,b in zip(*all_indices):
+            if euclidean(center_ind, [a, b]) <= cutout_radius:
+                ind_1 = np.append(ind_1, a)
+                ind_2 = np.append(ind_2, b)
+        # Create extraction indices
+        ind_1_extr = ind_1 - cutout_radius
+        ind_2_extr = ind_2 - cutout_radius
+        # Combine info into a dictionary
+        cutout = {'blank': blank, 'ind_1': ind_1, 'ind_2': ind_2, 
+                  'ind_1_extr': ind_1_extr, 'ind_2_extr': ind_2_extr, 
+                  'img_shape': img_shape, 'cutout_radius': cutout_radius}
+
+        return cutout
+
+    @staticmethod
+    def center_and_crop_cutout(cutout, center_pix):
+        '''
+        Shifts the cutout indexing arrays to center_pix and removes indices outside frame.
+        '''
+        new_cutout = copy(cutout)
+        # Create extraction indices centered at center_pix
+        new_cutout['ind_1_extr'] = new_cutout['ind_1_extr'] + center_pix[0]
+        new_cutout['ind_2_extr'] = new_cutout['ind_2_extr'] + center_pix[1]
+        # Keep only indices that are in img_shape
+        ind_1_inside = np.logical_and(0 <= new_cutout['ind_1_extr'], 
+                                      new_cutout['ind_1_extr'] < new_cutout['img_shape'][0])
+        ind_2_inside = np.logical_and(0 <= new_cutout['ind_2_extr'], 
+                                      new_cutout['ind_2_extr'] < new_cutout['img_shape'][1])
+        ind_inside = np.logical_and(ind_1_inside, ind_2_inside)
+        if np.sum(ind_inside) < new_cutout['ind_1_extr'].size:
+            new_cutout['ind_1_extr'] = new_cutout['ind_1_extr'][ind_inside]
+            new_cutout['ind_2_extr'] = new_cutout['ind_2_extr'][ind_inside]
+            new_cutout['ind_1'] = new_cutout['ind_1'][ind_inside]
+            new_cutout['ind_2'] = new_cutout['ind_2'][ind_inside]
+
+        return new_cutout
+
+    @staticmethod
+    def detect_max_luminance_in_circular_area(img, center_pix, cutout):
+        '''
+        Return coordinates and value of maximum pixel in range of center_pix.
+        Coordinate values in C-major order relative to the grayscale image.
+        '''
+        shifted_cutout = online_tracker.center_and_crop_cutout(cutout, center_pix)
+        # Extract pixel values from img and put into blank cutout array
+        pix_vals = img[shifted_cutout['ind_1_extr'], shifted_cutout['ind_2_extr']]
+        img_cutout = shifted_cutout['blank']
+        img_cutout[shifted_cutout['ind_1'], shifted_cutout['ind_2']] = pix_vals
+        # Find maximum value in img_cutout and convert to correct coordinates in img
+        (_1, lum, _2, led_pix_cutout) = cv2.minMaxLoc(img_cutout)
+        led_pix_cutout = led_pix_cutout[::-1]
+        led_pix = np.array(led_pix_cutout) - shifted_cutout['cutout_radius'] + center_pix
+        led_pix = tuple(led_pix)
+
+        return led_pix, lum
+
+    @staticmethod
+    def detect_second_led(gray, calibrationTmatrix, led_pix_1, LED_separation_pix, cutout):
+        '''
+        Returns coordinates of second LED in centimeters.
+        led_pix_1 location in image is masked in range of LED_separation_pix / 2.0 and
+        second LED is the brightest luminance within LED_separation_pix * 2 of led_pix_1.
+        Coordinate values in C-major order relative to the grayscale image.
+        '''
+        gray = cv2.circle(gray, tuple(led_pix_1[::-1]), int(round(LED_separation_pix / 2.0)), 0, -1)
+        led_pix, lum = online_tracker.detect_max_luminance_in_circular_area(gray, led_pix_1, cutout)
+        xy_cm = online_tracker.transform_pix_to_cm(led_pix, calibrationTmatrix)
+
+        return led_pix, xy_cm, lum
+
+    @staticmethod
     def detect_leds(frame_RawArray, frame_shape, params):
         '''
         Detects brightest point on grayscaled data after smoothing.
@@ -303,25 +401,14 @@ class online_tracker(process_with_queue):
         frame = np.frombuffer(frame_RawArray, dtype=c_uint8).reshape(frame_shape)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) # Convert BGR data to grayscale
         gray = cv2.GaussianBlur(gray, (params['smoothing_radius'], params['smoothing_radius']), 0) # Smooth the image
-        (_1, maxVal_1, _2, maxLoc_1) = cv2.minMaxLoc(gray) # Find coordinates of pixel with highest value
-        maxLoc_1 = np.reshape(np.array([[maxLoc_1[0], maxLoc_1[1]]]),(1,1,2))
-        XYcoord_1 = cv2.perspectiveTransform(maxLoc_1.astype(np.float32), params['calibrationTmatrix']).astype('float') # Use transformation matrix to map pixel values to position in real world
+        led_pix_1, led_cm_1, lum_1 = online_tracker.detect_first_led(gray, params['calibrationTmatrix'])
         if params['doubleLED']:
-            # Find the location of second brightest point
-            gray = cv2.circle(gray, (maxLoc_1[0,0,0], maxLoc_1[0,0,1]), params['LED_radius_pix'], 0, -1) # Make are at bright LED dark
-            (_1, maxVal_2, _2, maxLoc_2) = cv2.minMaxLoc(gray) # Find coordinates of pixel with highest value
-            maxLoc_2 = np.reshape(np.array([[maxLoc_2[0], maxLoc_2[1]]]),(1,1,2))
-            XYcoord_2 = cv2.perspectiveTransform(maxLoc_2.astype(np.float32), params['calibrationTmatrix']).astype('float') # Use transformation matrix to map pixel values to position in real world
-            distance = euclidean(np.array([XYcoord_1[0,0,0], XYcoord_1[0,0,1]]), 
-                                 np.array([XYcoord_2[0,0,0], XYcoord_2[0,0,1]]))
-            if distance < params['LED_max_distance']: # If 2nd LED is detected close enough
-                # Set data into compact format
-                linedata = [XYcoord_1[0,0,0], XYcoord_1[0,0,1], XYcoord_2[0,0,0], XYcoord_2[0,0,1], maxVal_1, maxVal_2]
-            else: # If second LED is too far away to be real, move bright LED to primary position
-                linedata = [XYcoord_1[0,0,0], XYcoord_1[0,0,1], None, None, maxVal_1, None]
+            led_pix_2, led_cm_2, lum_2 = online_tracker.detect_second_led(gray, params['calibrationTmatrix'], 
+                                                                          led_pix_1, params['LED_separation_pix'], 
+                                                                          params['cutout'])
+            linedata = [led_cm_1[0], led_cm_1[1], led_cm_2[0], led_cm_2[1], lum_1, lum_2]
         else:
-            # Set data into compact format
-            linedata = [XYcoord_1[0,0,0], XYcoord_1[0,0,1], None, None, maxVal_1, None]
+            linedata = [led_cm_1[0], led_cm_1[1], None, None, lum_1, None]
 
         return linedata
 
@@ -391,9 +478,6 @@ class Frame_Handler(process_with_queue):
         self.online_tracker = online_tracker(params)
         if self.save_frames:
             self.frame_writer = frame_writer(params['resolution'])
-        #DEBUG
-        self.DEBUGlogfile = open('queueLength', 'a')
-        self.DEBUGlogwriter = csv.writer(self.DEBUGlogfile)
 
     def process(self, frame, currenttime, frametime):
         '''
@@ -402,13 +486,6 @@ class Frame_Handler(process_with_queue):
         self.online_tracker.add_to_queue(copy(frame), copy(currenttime), copy(frametime))
         if self.save_frames:
             self.frame_writer.add_to_queue(copy(frame), copy(frametime))
-            #DEBUG
-            l2 = self.frame_writer.queue.qsize()
-        l1 = self.online_tracker.queue.qsize()
-        l = [l1]
-        if self.save_frames:
-            l.append(l2)
-        self.DEBUGlogwriter.writerow([time()] + l)
 
     def close(self):
         '''
@@ -418,8 +495,6 @@ class Frame_Handler(process_with_queue):
         self.online_tracker.close()
         if self.save_frames:
             self.frame_writer.close()
-        #DEBUG
-        self.DEBUGlogfile.close()
 
 
 class PiCameraOutput(picamera.array.PiRGBAnalysis):
@@ -442,10 +517,6 @@ class PiCameraOutput(picamera.array.PiRGBAnalysis):
         self.init_TTL_signalling()
         self.Use_PiCamera_Stream = False
         self.analyse_method_active = False
-        #DEBUG
-        self.DEBUGlogfile_speed = open('outputSpeed', 'a')
-        self.DEBUGlogfile_speedwriter = csv.writer(self.DEBUGlogfile_speed)
-        self.firstSaved = False
 
     def init_TTL_signalling(self, ttlPin=11):
         '''
@@ -469,9 +540,6 @@ class PiCameraOutput(picamera.array.PiRGBAnalysis):
         '''
         Grabs camera GPU timestamps and passes each frame to Frame_Handler queue.
         '''
-        #DEBUG
-        st = time()
-        #DEBUG
         if self.Use_PiCamera_Stream:
             self.analyse_method_active = True
             # Each time a frame is catpured, this function is called on that frame
@@ -480,9 +548,6 @@ class PiCameraOutput(picamera.array.PiRGBAnalysis):
             frametime = copy(self.camera.frame.timestamp) # Get timestamp of frame capture (PTS) in RPi camera time
             self.frame_handler.add_to_queue(frame, currenttime, frametime)
             self.analyse_method_active = False
-            #DEBUG
-            t = time() - st
-            self.DEBUGlogfile_speedwriter.writerow([st, t])
 
     def start(self):
         '''
@@ -500,8 +565,6 @@ class PiCameraOutput(picamera.array.PiRGBAnalysis):
             sleep(0.01)
         self.frame_handler.close()
         GPIO.cleanup(self.ttlPin)
-        #DEBUG
-        self.DEBUGlogfile_speed.close()
 
 
 def RPiNumber():
@@ -549,7 +612,6 @@ class CameraController(object):
             with open('TrackingSettings.p','rb') as file:
                 TrackingSettings = pickle.load(file)
         self.remoteControl = remoteControl
-        self.RPiNumber = RPiNumber()
         # Set start and end triggers
         if self.remoteControl:
             self.start_image_acquisition = False
@@ -562,7 +624,7 @@ class CameraController(object):
         self.shutter_speed = TrackingSettings['shutter_speed']
         self.exposure_setting = TrackingSettings['exposure_setting']
         self.resolution = TrackingSettings['resolution']
-        self.Frame_Handler_Params = self.prepare_Frame_Handler_Params(TrackingSettings)
+        self.Frame_Handler_Params = self.prepare_Frame_Handler_Params(RPiNumber(), TrackingSettings)
         # Specify framerate based on how fast Frame_Handler processes a single frame
         if self.Frame_Handler_Params['save_frames']:
             self.framerate = 25
@@ -585,15 +647,16 @@ class CameraController(object):
         args = message.split(' ')[1:]
         getattr(self, method_name)(*args)
 
-    def prepare_Frame_Handler_Params(self, TrackingSettings):
+    @staticmethod
+    def prepare_Frame_Handler_Params(RPi_Nr, TrackingSettings):
         '''
         Parses TrackingSettings to produce specific parameters required by Frame_Handler.
         '''
         Frame_Handler_Params = {}
-        Frame_Handler_Params['RPi_number'] = self.RPiNumber
+        Frame_Handler_Params['RPi_number'] = RPi_Nr
         # Load the Calibration Matrix
-        if str(self.RPiNumber) in TrackingSettings['calibrationData'].keys():
-            calibrationTmatrix = TrackingSettings['calibrationData'][str(self.RPiNumber)]['calibrationTmatrix']
+        if str(RPi_Nr) in TrackingSettings['calibrationData'].keys():
+            calibrationTmatrix = TrackingSettings['calibrationData'][str(RPi_Nr)]['calibrationTmatrix']
         else:
             raise ValueError('Calibration data does not exist for this RPi.')
         Frame_Handler_Params['calibrationTmatrix'] = calibrationTmatrix
@@ -603,43 +666,18 @@ class CameraController(object):
         elif TrackingSettings['LEDmode'] == 'single':
             Frame_Handler_Params['doubleLED'] = False
         # Find values for distances between LED
-        LED_separation = TrackingSettings['LED_separation']
-        Frame_Handler_Params['LED_max_distance'] = LED_separation * 2
-        LED_radius_pix = convert_centimeters_to_pixel_distance(LED_separation / 2.0, 
-                                                               Frame_Handler_Params['calibrationTmatrix'], 
-                                                               self.resolution)
-        Frame_Handler_Params['LED_radius_pix'] = LED_radius_pix
+        LED_separation_pix = convert_centimeters_to_pixel_distance(TrackingSettings['LED_separation'], 
+                                                                   Frame_Handler_Params['calibrationTmatrix'], 
+                                                                   TrackingSettings['resolution'])
+        Frame_Handler_Params['LED_separation_pix'] = LED_separation_pix
         # Other parameters
         Frame_Handler_Params['resolution'] = TrackingSettings['resolution']
         Frame_Handler_Params['save_frames'] = TrackingSettings['save_frames']
         Frame_Handler_Params['smoothing_radius'] = TrackingSettings['smoothing_radius']
         Frame_Handler_Params['pos_port'] = TrackingSettings['pos_port']
-        Frame_Handler_Params['RPiIP'] = TrackingSettings['RPiInfo'][str(self.RPiNumber)]['IP']
+        Frame_Handler_Params['RPiIP'] = TrackingSettings['RPiInfo'][str(RPi_Nr)]['IP']
 
         return Frame_Handler_Params
-
-        #DEBUG
-    def init_debug(self):
-        self.debug_ON = True
-        self.DEBUGlogfile = open('temperature', 'a')
-        self.DEBUGlogwriter = csv.writer(self.DEBUGlogfile)
-        self.T_debug = Thread(target=self.debug_data_process)
-        self.T_debug.start()
-        #DEBUG
-
-        #DEBUG
-    def debug_data_process(self):
-        while self.debug_ON:
-            self.DEBUGlogwriter.writerow([time(), get_cpu_temperature(), get_throttling()])
-            sleep(0.1)
-        #DEBUG
-
-        #DEBUG
-    def stop_debug(self):
-        self.debug_ON = False
-        self.T_debug.join()
-        self.DEBUGlogfile.close()
-        #DEBUG
 
     def start(self):
         self.start_image_acquisition = True
@@ -654,7 +692,7 @@ class CameraController(object):
         Otherwise, with user pressing Enter.
         '''
         with picamera.PiCamera(clock_mode='raw', framerate=self.framerate) as camera: # Initializes the RPi camera module
-            camera.resolution = (self.resolution[0], self.resolution[1]) # Set frame capture resolution
+            camera.resolution = tuple(self.resolution) # Set frame capture resolution
             camera.exposure_mode = self.exposure_setting
             camera.iso = self.camera_iso # Set Camera ISO value (sensitivity to light)
             camera.shutter_speed = self.shutter_speed # Set camera shutter speed
@@ -667,9 +705,6 @@ class CameraController(object):
                         sleep(0.01)
                 else:
                     _ = raw_input('Press enter to start image acquisition: ')
-                #DEBUG
-                self.init_debug()
-                #DEBUG
                 output.start()
                 # Wait for stop command
                 if self.remoteControl:
@@ -677,9 +712,6 @@ class CameraController(object):
                         sleep(0.1)
                 else:
                     _ = raw_input('Press enter to stop image acquisition: ')
-                #DEBUG
-                self.stop_debug()
-                #DEBUG
                 camera.stop_recording() # Stop recording
         # Close ZMQ messenger
         if self.remoteControl:
