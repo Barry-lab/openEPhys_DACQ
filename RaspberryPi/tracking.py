@@ -696,8 +696,16 @@ class CameraController(object):
             camera.exposure_mode = self.exposure_setting
             camera.iso = self.camera_iso # Set Camera ISO value (sensitivity to light)
             camera.shutter_speed = self.shutter_speed # Set camera shutter speed
+            camera.awb_mode = 'auto'
             with PiCameraOutput(self.Frame_Handler_Params, camera) as output: # Initializes the PiCameraOutput class
                 camera.start_recording(output, format='bgr') # Initializes the camera
+                sleep(2) # Let the camera warm up
+                # Fix gains
+                gains = camera.awb_gains
+                camera.awb_mode = 'off'
+                camera.awb_gains = gains
+                camera.shutter_speed = camera.exposure_speed
+                camera.exposure_mode = 'off'
                 # Wait for starting command
                 if self.remoteControl:
                     self.ZMQmessenger.sendMessage('init_successful')
