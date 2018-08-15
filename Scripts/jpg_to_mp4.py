@@ -29,7 +29,7 @@ def convert(folder_path, outfile_path, framerate=25):
     # Initialize save_video
     SV = save_video(outfile_path, frame_width, frame_height, framerate)
     # Loop through jpg files and write video
-    for n, filename in enumerate(filenames[:3000]):
+    for n, filename in enumerate(filenames):
         frame = cv2.imread(os.path.join(folder_path, filename))
         SV.write_frame(frame)
         if n % 1000 == 0:
