@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>FEEDER setup &mdash; Recording PC Setup 0.1 documentation</title>
+  <title>FEEDER setup &mdash; Recording PC Setup 0.75 documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
 
   
-    <link rel="top" title="Recording PC Setup 0.1 documentation" href="index.html"/>
+    <link rel="top" title="Recording PC Setup 0.75 documentation" href="index.html"/>
         <link rel="prev" title="Tutorial for using Open Ephys Scripts" href="howToUseTheseScripts.html"/> 
 
   
@@ -59,7 +59,7 @@
             
             
               <div class="version">
-                0.1
+                0.75
               </div>
             
           
@@ -86,9 +86,10 @@
 <li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="howToUseTheseScripts.html">Tutorial for using Open Ephys Scripts</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="">FEEDER setup</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#setting-up-raspberry-pi-zero-software-for-milk-and-pellet-feeders">Setting up Raspberry Pi Zero software for Milk and Pellet FEEDERs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#setting-up-raspberry-pi-zero-software">Setting up Raspberry Pi Zero software</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#installing-raspberry-pi-os-raspbian">Installing Raspberry Pi OS: Raspbian</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#install-necessary-software-on-rpi-zero">Install necessary software on RPi Zero</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#setting-up-raspberry-pi-zero-interface-with-picon-zero-on-milk-feeder-only">Setting up Raspberry Pi Zero interface with Picon Zero on Milk FEEDER only</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#setting-up-raspberry-pi-zero-networking-with-recording-pc">Setting up Raspberry Pi Zero networking with Recording PC</a><ul>
@@ -98,7 +99,18 @@
 <li class="toctree-l3"><a class="reference internal" href="#configuring-ssh-on-rpi-zero">Configuring SSH on RPi Zero</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#assembling-all-parts-of-wireless-reward-module">Assembling all parts of Wireless Reward Module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#production-and-assembly-of-pellet-feeder">Production and assembly of Pellet FEEDER</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#commerically-available-materials-needed">Commerically available materials needed</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#d-printed-elements-to-produce">3D printed elements to produce</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#assembly-of-pellet-feeder">Assembly of Pellet FEEDER</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#use-and-maintenance-of-pellet-feeder">Use and Maintenance of Pellet FEEDER</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#use-of-pellet-feeder">Use of Pellet FEEDER</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#maintenance-of-pellet-feeder">Maintenance of Pellet FEEDER</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#production-and-assembly-of-milk-feeder">Production and assembly of Milk FEEDER</a></li>
 </ul>
 </li>
 </ul>
@@ -149,11 +161,11 @@
 <span id="wirelessrewardsetup"></span><h1>FEEDER setup<a class="headerlink" href="#feeder-setup" title="Permalink to this headline">¶</a></h1>
 <p>FEEDER - Food Ejector Executing Directions Established via Radio
 or Wireless Reward Module.</p>
-<p>The software and networking setup described below is identical for Milk FEEDER and Pellet FEEDER. The actual setup of the mechanical elements are described separately for Milk and Pellet FEEDERs.</p>
-<div class="section" id="setting-up-raspberry-pi-zero-software-for-milk-and-pellet-feeders">
-<h2>Setting up Raspberry Pi Zero software for Milk and Pellet FEEDERs<a class="headerlink" href="#setting-up-raspberry-pi-zero-software-for-milk-and-pellet-feeders" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="setting-up-raspberry-pi-zero-software">
+<h2>Setting up Raspberry Pi Zero software<a class="headerlink" href="#setting-up-raspberry-pi-zero-software" title="Permalink to this headline">¶</a></h2>
+<p>The software and networking setup described below is identical for Milk FEEDER and Pellet FEEDER, except for sections where said otherwise.</p>
 <p>It is advisable to follow through this part first, before assembling the FEEDER. This way it is more convenient to plug the RPi Zero to the power socket, keyboard, mouse and monitor for working through the following steps.</p>
-<p>This tutorial is based on setting up <a class="reference external" href="https://www.raspberrypi.org/products/raspberry-pi-zero-w/">Raspberry Pi Zero W</a> with Recording PC that has a wireless networking adapter and a Wi-Fi router.</p>
+<p>This tutorial is based on setting up <a class="reference external" href="https://www.raspberrypi.org/products/raspberry-pi-zero-w/">Raspberry Pi Zero W</a> with Recording PC that is connected to the same WiFi router as the FEEDERs.</p>
 <p>If you are setting up multiple Pi Zeros, you can make copies after you have set up the software and networking on the first one. To make copies of a configured RPi Zero, use this guide: <a class="reference internal" href="trackingRPiSetup.html#duplicatingrpis"><span>Making copies of Raspberry Pis</span></a>. Ensure to change the static IP information on each new copy and test the SSH connection for each one, as instructed in the guide.</p>
 <div class="section" id="installing-raspberry-pi-os-raspbian">
 <h3>Installing Raspberry Pi OS: Raspbian<a class="headerlink" href="#installing-raspberry-pi-os-raspbian" title="Permalink to this headline">¶</a></h3>
@@ -163,7 +175,7 @@ or Wireless Reward Module.</p>
 </div>
 <div class="section" id="install-necessary-software-on-rpi-zero">
 <h3>Install necessary software on RPi Zero<a class="headerlink" href="#install-necessary-software-on-rpi-zero" title="Permalink to this headline">¶</a></h3>
-<p>Connect your Raspberry Pi Zero W with a keyboard, monitor and power socket. Note, RPi Zero has no regular USB output, therefore you will need to use an adaptor to connect the keyboard and mouse. You will also need a mini HDMI to HDMI adaptor to connect your monitor.</p>
+<p>Connect your Raspberry Pi Zero W with a keyboard, monitor and power socket. Note, RPi Zero has no regular USB output, therefore you will need to use an adaptor to connect the keyboard. You will also need a mini HDMI to HDMI adaptor to connect your monitor.</p>
 <p>The default account on a freshly installed Raspbian OS is username <code class="docutils literal"><span class="pre">pi</span></code> with password <code class="docutils literal"><span class="pre">raspberry</span></code>.</p>
 <p>You need to connect your RPi Zero to the internet to install the necessary software. This can be done using a Wi-Fi connection, for example, a Wi-Fi hotspot created by your laptop or smartphone.</p>
 <p>Raspbian Lite version has only command line interface and no ethernet cable port. Therefore you will need to manually edit <code class="docutils literal"><span class="pre">/etc/wpa_supplicant/wpa_supplicant.conf</span></code> using the command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">nano</span> <span class="pre">/etc/wpa_supplicant/wpa_supplicant.conf</span></code>. Enter your WiFi details such that the <code class="docutils literal"><span class="pre">wpa_supplicant.conf</span></code> file would look something like this:</p>
@@ -207,10 +219,36 @@ sudo pip install pyzmq
 cd ~/
 </pre></div>
 </div>
+<p>Finally, you need to put the scripts for controlling the feeders onto the RPi Zero. You could copy them over with a USB stick, download them from github or transfer them later using the <code class="docutils literal"><span class="pre">scp</span></code> command. In any case, you need to put the following files from the openEphys_DACQ github to the RPi home directory at <code class="docutils literal"><span class="pre">/home/pi/</span></code>:</p>
+<ul>
+<li><dl class="first docutils">
+<dt>Pellet FEEDER</dt>
+<dd><ul class="first last simple">
+<li>ZMQcomms.py</li>
+<li>pelletFeederController.py</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>Milk FEEDER</dt>
+<dd><ul class="first last simple">
+<li>ZMQcomms.py</li>
+<li>audioSignalGenerator.py</li>
+<li>milkFeederController.py</li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</div>
+<div class="section" id="setting-up-raspberry-pi-zero-interface-with-picon-zero-on-milk-feeder-only">
+<h3>Setting up Raspberry Pi Zero interface with Picon Zero on Milk FEEDER only<a class="headerlink" href="#setting-up-raspberry-pi-zero-interface-with-picon-zero-on-milk-feeder-only" title="Permalink to this headline">¶</a></h3>
 <p>I2C module needs to be enabled in RPi settings for use of Picon Zero in the Milk FEEDER. You can do this by accessing RPi settings via terminal command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">raspi-config</span></code> and choosing <em>Interfacing Options</em> with arrow keys and pressing Enter. Select <em>I2C</em> option and choose to <em>Enable</em> it. Reboot the RPi.</p>
 <p>Install the necessary libraries for working with the Picon Zero controller with the following terminal commands:</p>
 <div class="highlight-none"><div class="highlight"><pre>sudo apt-get install python-smbus python3-smbus python-dev python3-dev
 wget -q http://4tronix.co.uk/piconzero/piconzero.py -O piconzero.py
+# Ensure piconzero.py remains in Pi root directory ``/home/pi/`` as it is used by controller scripts.
 </pre></div>
 </div>
 <p>You will need to edit the file <code class="docutils literal"><span class="pre">/boot/config.txt</span></code>. Do this with terminal command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">nano</span> <span class="pre">/boot/config.txt</span></code> and add the following lines to the end of this file:</p>
@@ -220,14 +258,6 @@ dtparam=i2c_arm=on
 </div>
 <p>Save the file and reboot the RPi Zero.</p>
 <p>If you have assembled the RPi Zero with Picon Zero, you are able to test if everything is running smoothly by entering terminal command <code class="docutils literal"><span class="pre">i2cdetect</span> <span class="pre">-y</span> <span class="pre">1</span></code>. You should see an output table with empty values everywhere but one element, which should say <code class="docutils literal"><span class="pre">22</span></code>.</p>
-<p>Finally, you need to put the scripts for controlling the feeders onto the RPi Zero. You could copy them over with a USB stick, download them from github or transfer them later using the <code class="docutils literal"><span class="pre">scp</span></code> command. In any case, you need to put the following files from the openEphys_DACQ github to the RPi home directory at <code class="docutils literal"><span class="pre">/home/pi/</span></code>:</p>
-<ul class="simple">
-<li>openPinchValve.py</li>
-<li>audioSignalControl.py</li>
-<li>lightSignalControl.py</li>
-<li>releasePellet.py</li>
-<li>ZMQcomms.py</li>
-</ul>
 </div>
 </div>
 <div class="section" id="setting-up-raspberry-pi-zero-networking-with-recording-pc">
@@ -278,8 +308,155 @@ static domain_name_servers=192.168.0.1
 <p>Now the RPi Zero software and networking is fully configured and after assembling the FEEDER, it will be ready to use with the Recording PC.</p>
 </div>
 </div>
-<div class="section" id="assembling-all-parts-of-wireless-reward-module">
-<h2>Assembling all parts of Wireless Reward Module<a class="headerlink" href="#assembling-all-parts-of-wireless-reward-module" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="production-and-assembly-of-pellet-feeder">
+<h2>Production and assembly of Pellet FEEDER<a class="headerlink" href="#production-and-assembly-of-pellet-feeder" title="Permalink to this headline">¶</a></h2>
+<p>This guide describes the commercial and 3D printed parts needed as well as the assembly of the Pellet FEEDER. See below for illustrative images.</p>
+<p>The working principle of the Pellet FEEDER is that it only ever picks up at most a single pellet to drop, as no more fit into the transfer mechanism. Occasionally no pellet is caught, in which case the IR detector does not detect a pellet and the FEEDER tries again.</p>
+<p>The functioning of the Pellet FEEDER with this exact design is dependent on using dry pellets of specific size, that produce minimal dust. We have been using Dustless Precision Pellets®, Rodent, Purified, 20mg from <a class="reference external" href="http://www.bio-serv.com/product/DPP_RP.html">Bio-Serv</a>. The design of the holes in feeder elements (<strong>RotatingElement</strong> and <strong>Detector</strong>) is based on fitting exactly one pellet at a time. If pellet size is changed, these elements need to be redesigned.</p>
+<img alt="_images/PelletFeederFig1.jpg" src="_images/PelletFeederFig1.jpg" />
+<div class="section" id="commerically-available-materials-needed">
+<h3>Commerically available materials needed<a class="headerlink" href="#commerically-available-materials-needed" title="Permalink to this headline">¶</a></h3>
+<ul>
+<li><dl class="first docutils">
+<dt><a class="reference external" href="https://www.raspberrypi.org/products/raspberry-pi-zero-w/">Raspberry Pi Zero W</a></dt>
+<dd><ul class="first last simple">
+<li>microSD card to use with the Pi Zero</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p class="first"><a class="reference external" href="https://shop.pimoroni.com/products/pibow-zero-w">Raspberry Pi Zero Case</a></p>
+</li>
+<li><p class="first"><a class="reference external" href="https://shop.pimoroni.com/products/ir-break-beam-sensor-5mm-leds">IR Break Beam Sensor (5mm LEDs)</a></p>
+</li>
+<li><dl class="first docutils">
+<dt><a class="reference external" href="https://www.robotbirds.co.uk/default/towerpro-sg5010-standard-size-servos.html">TowerPro 44g SG-5010 Analogue Servo</a></dt>
+<dd><ul class="first last simple">
+<li>Digital Servo of the same type and slightly different versions may work as well, however it this specific servo comes with output discs that fit the 3D print designs perfectly.</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p class="first">Standard wires and soldering kit</p>
+</li>
+<li><p class="first">Thick adhesive, such as dental cement or epoxy.</p>
+</li>
+<li><p class="first">Superglue</p>
+</li>
+<li><p class="first">Power drill</p>
+</li>
+<li><p class="first">Dustless Precision Pellets®, Rodent, Purified, 20mg from <a class="reference external" href="http://www.bio-serv.com/product/DPP_RP.html">Bio-Serv</a></p>
+</li>
+</ul>
+</div>
+<div class="section" id="d-printed-elements-to-produce">
+<h3>3D printed elements to produce<a class="headerlink" href="#d-printed-elements-to-produce" title="Permalink to this headline">¶</a></h3>
+<p>The following files are provided in <code class="docutils literal"><span class="pre">3D_Printing_Models</span></code> subfolder <code class="docutils literal"><span class="pre">Pellet_FEEDER</span></code> in both SKP (SketchUp 3D) and STL (generic) formats. Here is a list of items necessary to be printed and their recommended priting settings on Ultimaker 2.</p>
+<ul>
+<li><dl class="first docutils">
+<dt>Elements essential for assemply of the FEEDER</dt>
+<dd><ul class="first last simple">
+<li><strong>TopElement</strong> - Layer Height 0.1 mm, Infill Density 30%</li>
+<li><strong>RotatingElement</strong> - Layer Height 0.1 mm, Infill Density 100%</li>
+<li><strong>BottomElement</strong> - Layer Height 0.1 mm, Infill Density 30%</li>
+<li><strong>Detector</strong> - Layer Height 0.1 mm, Infill Density 50%</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="first docutils">
+<dt>Additional optional elements for combining FEEDER with specific experimental environment</dt>
+<dd><ul class="first last simple">
+<li><strong>Holders</strong> - Layer Height 0.1 mm, Infill Density 30%</li>
+<li><strong>Guides</strong> - Layer Height 0.1 mm, Infill Density 30%</li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+<p>The essential elements and how they are to be assembled relative to each other is illustrated in the image below.</p>
+<img alt="_images/PelletFeederFig2.jpg" src="_images/PelletFeederFig2.jpg" />
+</div>
+<div class="section" id="assembly-of-pellet-feeder">
+<h3>Assembly of Pellet FEEDER<a class="headerlink" href="#assembly-of-pellet-feeder" title="Permalink to this headline">¶</a></h3>
+<p>First step would be to wire together all the electronics. This could be made easier with a Raspberry Pi GPIO header, such as <a class="reference external" href="https://shop.pimoroni.com/products/gpio-hammer-header?variant=35643241098">this</a> and some jumper wires. But teh wires can just be soldered directly to the Pi&#8217;s GPIO contacts.</p>
+<p>The below table describes the wiring using <a class="reference external" href="https://pinout.xyz/">Physical Numbering of RPi GPIO contacts</a>.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="39%" />
+<col width="18%" />
+<col width="44%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Element</th>
+<th class="head">Wire type</th>
+<th class="head">Raspberry Pi Physical Pin</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td rowspan="3">TowerPro SG-5010 wires</td>
+<td>ground</td>
+<td>6</td>
+</tr>
+<tr class="row-odd"><td>power</td>
+<td>2</td>
+</tr>
+<tr class="row-even"><td>signal</td>
+<td>12</td>
+</tr>
+<tr class="row-odd"><td rowspan="2"><p class="first">IR Break Beam Sensor</p>
+<p class="last">Emitter</p>
+</td>
+<td>ground</td>
+<td>9</td>
+</tr>
+<tr class="row-even"><td>power</td>
+<td>4</td>
+</tr>
+<tr class="row-odd"><td rowspan="3"><p class="first">IR Break Beam Sensor</p>
+<p class="last">Detector</p>
+</td>
+<td>ground</td>
+<td>9</td>
+</tr>
+<tr class="row-even"><td>power</td>
+<td>4</td>
+</tr>
+<tr class="row-odd"><td>signal</td>
+<td>15</td>
+</tr>
+</tbody>
+</table>
+<p>This wiring could be changed, but if the GPIO pins of signal wires are changed, corresponding changes would need to be made in <code class="docutils literal"><span class="pre">pelletFeederController.py</span></code>.</p>
+<p>At this stage it is recommended to test if everything is working as expected using the <code class="docutils literal"><span class="pre">detect_pellet</span></code> and <code class="docutils literal"><span class="pre">servo_controller</span></code> classes in <code class="docutils literal"><span class="pre">pelletFeederController.py</span></code>.</p>
+<p>To assemble the 3D printed elements, first glue (with superglue or thin layer of epoxy) to the bottom of the <strong>RotatingElement</strong> the output disc of the servo motor that fits there perfectly. If there is any wiggle room, make sure the disc is in the center of the <strong>RotatingElement</strong>.</p>
+<p>Then glue (with superglue or thin layer of epoxy) the <strong>BottomElement</strong> to the top of the servo motor. Make sure to get the location of the pellet drop opening correct based on the illustrations above. The pellet drop opening (largest gap on the perimeter of <strong>BottomElement</strong>, to which <strong>Detector</strong> can be attached) should be as far away from the servo motor as possible. To assist with the glueing the <strong>RotatingElement</strong> can be attached firmly to the servo motor with the rotating disc.</p>
+<p>It is important that there is almost no space between the <strong>RotatingElement</strong> and <strong>BottomElement</strong>, as seen through the hole in the <strong>RotatingElement</strong>.</p>
+<p>Once the <strong>BottomElement</strong> glue has hardened, attach the <strong>RotatingElement</strong> to the servo motor such that the when the <code class="docutils literal"><span class="pre">servo_controller</span></code> class in <code class="docutils literal"><span class="pre">pelletFeederController.py</span></code> sets the angle to <code class="docutils literal"><span class="pre">ReleaseAngle</span></code> (default is 90), then the hole in the <strong>RotatingElement</strong> would be aligned with the pellet drop opening on the <strong>BottomElement</strong>. Then place the <strong>TopElement</strong> on top of the <strong>RotatingElement</strong> inside the <strong>BottomElement</strong> such that when <code class="docutils literal"><span class="pre">servo_controller</span></code> class in <code class="docutils literal"><span class="pre">pelletFeederController.py</span></code> sets the angle to <code class="docutils literal"><span class="pre">LoadingAngle</span></code> (default is 30), the hole in the <strong>RotatingElement</strong> is aligned with the gap in the bottom of the <strong>TopElement</strong>. If this is done correctly, the relative positions of all elements should match those on the illustrations.</p>
+<p>Once everything is aligned, remember the position of the <strong>TopElement</strong>. Use <code class="docutils literal"><span class="pre">servo_controller</span></code> class in <code class="docutils literal"><span class="pre">pelletFeederController.py</span></code> to set the angle of <strong>RotatingElement</strong> such that its hole is between the gaps of <strong>TopElement</strong> and <strong>BottomElement</strong> (usually the value of the angle is around 45). Place a single pellet in the hole of <strong>RotatingElement</strong>, oriented such that its would be as high in the hole as possible (the pellets are not perfectly spherical). Then put a small piece of paper over the hole with the pellet, such that when you put the <strong>TopElement</strong> back to its correct position, the piece of paper is accessible and can be removed via the gap in the bottom of the <strong>TopElement</strong>. This ensures that there is some minimal gap between the pellet and the <strong>TopElement</strong>, in a situation when pellet is taking most space between the <strong>BottomElement</strong> and <strong>TopElement</strong>. Now glue the <strong>TopElement</strong> to the <strong>BottomElement</strong> using a viscuous adhesive between the top edge of the <strong>BottomElement</strong>, taking care not to let any glue get to the inside of the <strong>BottomElement</strong>, where it may glue stuck the <strong>RotatingElement</strong>.</p>
+<p>Now it is recommended to test the functioning of the Pellet FEEDER using the <code class="docutils literal"><span class="pre">release_pellet</span></code> function in <code class="docutils literal"><span class="pre">pelletFeederController.py</span></code>, which does not use the IR beams to check for false positives. The Pellet FEEDER without the IR beams should release pellets with around 90% success rate. In some cases, the <strong>TopElement</strong> may need to be re-attached to provide a tighter or looser fit on the <strong>RotatingElement</strong>.</p>
+<p>The last thing to assemble is the <strong>Detector</strong> and the IR Break Beam Sensor. On the sides of the 3D printed <strong>Detector</strong>, where the IR beam emitter and sensor are supposed to go (see images above), there are indentations with a small hole in the middle. First use a small drill bit, about 1 mm diameter, to drill through the small holes all the way through the <strong>Detector</strong> element. There should be a clear straight hole from one side to the other, going orthogonally through center of the pellet drop hole in the middle of the <strong>Detector</strong>. The IR Break Beam Sensor is going to pass a light through this small hole just made, which is interrupted by a pellet going through. Now use a larger drill bit to make the indentation on the side of the <strong>Detector</strong> deeper, such that it would perfectly fit the emitter and sensor parts of the IR Break Beam Sensor (see images above for how they should fit). The smaller hole carrying the IR beam through the <strong>Detector</strong> may need clearing up afterwards. Then place the IR Break Beam Sensor&#8217;s emitter and sensor to either side of the <strong>Detector</strong> (does not matter which one is which side) and glue them in place with a strong adhesive.</p>
+<p>The <strong>Detector</strong> can be pushed onto the <strong>BottomElement</strong> and it should simply snap in place.</p>
+<p>The Pellet FEEDER is now fully assembled. Make sure to test it.</p>
+<p>Any custom holder and pellet guide can be used as long as it can support the FEEDER from the servo motor, allow attaching the Raspberry Pi Zero and provides clear passage from any pellets dropping out from the bottom of the <strong>Detector</strong>. The designs for <strong>Holders</strong> and <strong>Guides</strong> used in our lab are provided. We have glued a rubber tube to the bottom of the <strong>Detector</strong> that guides the pellets as necessary.</p>
+</div>
+</div>
+<div class="section" id="use-and-maintenance-of-pellet-feeder">
+<h2>Use and Maintenance of Pellet FEEDER<a class="headerlink" href="#use-and-maintenance-of-pellet-feeder" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="use-of-pellet-feeder">
+<h3>Use of Pellet FEEDER<a class="headerlink" href="#use-of-pellet-feeder" title="Permalink to this headline">¶</a></h3>
+<p>The Pellet FEEDER is controller with <code class="docutils literal"><span class="pre">pelletFeederController.py</span></code>. Simplest command is to SSH into the Raspberry Pi of the FEEDER and give command <code class="docutils literal"><span class="pre">python</span> <span class="pre">pelletFeederController.py</span> <span class="pre">--releasePellet</span> <span class="pre">1</span></code>, which instructs it to release exactly one pellet as detected by the IR Break Beam Sensor.</p>
+<p>For faster contol the script should be started without the <code class="docutils literal"><span class="pre">--releasePellet</span></code> flag, in which case the <code class="docutils literal"><span class="pre">Controller</span></code> is activated. This expect signals over ZMQ protocol. See <code class="docutils literal"><span class="pre">Controller</span></code> class for more information.</p>
+</div>
+<div class="section" id="maintenance-of-pellet-feeder">
+<h3>Maintenance of Pellet FEEDER<a class="headerlink" href="#maintenance-of-pellet-feeder" title="Permalink to this headline">¶</a></h3>
+<p>The Pellet FEEDER with the correct pellets is very reliable and should release around 500-1000 pellets without jamming. The <code class="docutils literal"><span class="pre">max_attempts</span></code> variable in <code class="docutils literal"><span class="pre">pelletFeederController.py</span></code> is used to stop the pellet in case of too many failed attempts, which is an indicator of jamming.</p>
+<p>The jamming is usually caused by the inside of the <strong>Detector</strong> getting too dusty and/or moist. This can stop a dropping pellet, which then causes more to get stuck. In case of a jam, just detach the <strong>Detector</strong> from the <strong>BottomElement</strong> and clear out pellets. Use an air duster to clean off any collected dust. If this is done regularly, no jams may occur.</p>
+<p>At the time of writing the most used Pellet FEEDERs have dropped around 5000 pellets and still function as good as new.</p>
+</div>
+</div>
+<div class="section" id="production-and-assembly-of-milk-feeder">
+<h2>Production and assembly of Milk FEEDER<a class="headerlink" href="#production-and-assembly-of-milk-feeder" title="Permalink to this headline">¶</a></h2>
 <p>The materials you need for the FEEDER:</p>
 <p>Raspberry Pi Zero
 Picon Zero
@@ -329,7 +506,7 @@ Solenoid Pinch Valve</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'./',
-            VERSION:'0.1',
+            VERSION:'0.75',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'.html',
             HAS_SOURCE:  true
