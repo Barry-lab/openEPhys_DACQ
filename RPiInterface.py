@@ -101,7 +101,7 @@ class onlineTrackingData(object):
         self.HistogramParameters = HistogramParameters
         self.KeepGettingData = True # Set True for endless while loop of updating latest data
         self.TrackingSettings = TrackingSettings
-        self.posDatas = [None] * len(self.TrackingSettings['use_RPi_nrs'])
+        self.posDatas = [None for i in range(len(self.TrackingSettings['use_RPi_nrs']))]
         self.combPosHistory = []
         self.setupSocket() # Set up listening of position data
         # Initialize Locks to avoid errors
@@ -188,12 +188,12 @@ class onlineTrackingData(object):
             # Convert posDatas for use in combineCamerasData function
             cameraPos = []
             for posData in posDatas:
-                cameraPos.append(np.array(posData[3:7], dtype=np.float32))
+                cameraPos.append(np.array(posData[2:6], dtype=np.float32))
             # Combine data from cameras
             lastCombPos = combineCamerasData(cameraPos, previousCombPos, self.TrackingSettings)
         else:
             # If only a single camera is used, extract position data from posData into numpy array
-            lastCombPos = np.array(posDatas[0][3:7], dtype=np.float32)
+            lastCombPos = np.array(posDatas[0][2:6], dtype=np.float32)
 
         return lastCombPos
 
@@ -453,3 +453,48 @@ class RewardControl(object):
             print('Error in ' + frameinfo.filename + ' line ' + str(frameinfo.lineno - 3))
             print('Failed to close connection: ' + str(self.RPiIP))
             print(e)
+
+class GlobalClockControl(object):
+
+    def __init__(self, TrackingSettings):
+        self.TrackingSettings = TrackingSettings
+        self.initController_messenger()
+        self.T_initRPiController = threading.Thread(target=self.initRPiController)
+        self.T_initRPiController.start()
+        # Wait until all RPis have confirmed to be ready
+        self.RPi_init_Successful = False
+        while not self.RPi_init_Successful:
+            time.sleep(0.1)
+
+    def initController_messenger(self):
+        # Set up ZMQ connection
+        self.Controller_messenger = paired_messenger(address=self.TrackingSettings['global_clock_ip'], 
+                                                     port=int(self.TrackingSettings['global_clock_port']))
+        self.Controller_messenger.add_callback(self.Controller_message_parser)
+        time.sleep(1)
+
+    def initRPiController(self):
+        self.RPiSSH = ssh(self.TrackingSettings['global_clock_ip'], self.TrackingSettings['username'], 
+                          self.TrackingSettings['password'])
+        self.RPiSSH.sendCommand('sudo pkill python') # Ensure any past processes have closed
+        command = 'python GlobalClock.py --remote'
+        self.RPiSSH.sendCommand(command)
+
+    def Controller_message_parser(self, message):
+        if message == 'init_successful':
+            self.RPi_init_Successful = True
+
+    def start(self):
+        self.Controller_messenger.sendMessage('start')
+
+    def stop(self):
+        self.Controller_messenger.sendMessage('stop')
+
+    def close(self):
+        self.stop()
+        self.Controller_messenger.sendMessage('close')
+        # Close SSH connections
+        self.RPiSSH.disconnect()
+        self.T_initRPiController.join()
+        # Close ZMQ messengers
+        self.Controller_messenger.close()

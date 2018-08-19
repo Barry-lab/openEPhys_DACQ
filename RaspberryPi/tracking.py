@@ -6,7 +6,7 @@ import cv2
 import csv
 import zmq
 import json
-from RPi import GPIO
+import pigpio
 import os
 import cPickle as pickle
 from scipy.spatial.distance import euclidean
@@ -438,14 +438,14 @@ class online_tracker(process_with_queue):
         '''
         self.logwriter.writerow(linedata)
 
-    def process(self, frame, currenttime, frametime):
+    def process(self, frame, frametime):
         '''
         Passes data to multiprocess_function for running detect_leds() method.
         Passes output from detect_leds() to be sent via ZMQ and writtend to CSV file.
         '''
         np.copyto(self.frame_RawArray_Numpy_Wrapper, frame)
         linedata = self.multiprocess_function.run()
-        linedata = [self.RPi_number, currenttime, frametime] + linedata
+        linedata = [self.RPi_number, frametime] + linedata
         self.send_data_with_ZMQpublisher(linedata)
         self.write_to_logfile(linedata)
 
@@ -479,11 +479,11 @@ class Frame_Handler(process_with_queue):
         if self.save_frames:
             self.frame_writer = frame_writer(params['resolution'])
 
-    def process(self, frame, currenttime, frametime):
+    def process(self, frame, frametime):
         '''
         Makes copies of incoming data and passes them to online_tracker and frame_writer.
         '''
-        self.online_tracker.add_to_queue(copy(frame), copy(currenttime), copy(frametime))
+        self.online_tracker.add_to_queue(copy(frame), copy(frametime))
         if self.save_frames:
             self.frame_writer.add_to_queue(copy(frame), copy(frametime))
 
@@ -514,27 +514,8 @@ class PiCameraOutput(picamera.array.PiRGBAnalysis):
         '''
         super(PiCameraOutput, self).__init__(*args, **kwargs)
         self.frame_handler = Frame_Handler(Frame_Handler_Params)
-        self.init_TTL_signalling()
         self.Use_PiCamera_Stream = False
         self.analyse_method_active = False
-
-    def init_TTL_signalling(self, ttlPin=11):
-        '''
-        Initializes RPi GPIO pin for sendingn TTL pulses.
-        '''
-        self.ttlPin = ttlPin
-        # Set up GPIO system for TTL pulse signalling
-        GPIO.setmode(GPIO.BOARD) # Use the mapping based on physical bin numbering
-        GPIO.setup(self.ttlPin, GPIO.OUT, initial=GPIO.LOW)
-        GPIO.output(self.ttlPin, False)
-
-    def send_TTL_signal(self):
-        '''
-        Sends 1 millisecond long TTL pulse.
-        '''
-        GPIO.output(self.ttlPin, True)
-        sleep(0.001)
-        GPIO.output(self.ttlPin, False)
 
     def analyse(self, frame):
         '''
@@ -543,10 +524,8 @@ class PiCameraOutput(picamera.array.PiRGBAnalysis):
         if self.Use_PiCamera_Stream:
             self.analyse_method_active = True
             # Each time a frame is catpured, this function is called on that frame
-            self.send_TTL_signal() # Send TTL pulse
-            currenttime = copy(self.camera.timestamp) # Get timestamp of the RPi camera
             frametime = copy(self.camera.frame.timestamp) # Get timestamp of frame capture (PTS) in RPi camera time
-            self.frame_handler.add_to_queue(frame, currenttime, frametime)
+            self.frame_handler.add_to_queue(frame, frametime)
             self.analyse_method_active = False
 
     def start(self):
@@ -564,7 +543,65 @@ class PiCameraOutput(picamera.array.PiRGBAnalysis):
         while self.analyse_method_active: # Ensures all frames in analyse have been passed to self.frame_handler
             sleep(0.01)
         self.frame_handler.close()
-        GPIO.cleanup(self.ttlPin)
+
+
+class TTLpulse_CameraTime_Writer(object):
+    '''
+    Writes camera current timestamps to csv file whenever TLL pulse rising edge detected.
+    '''
+    def __init__(self, camera, ttlPin=18, filename='TTLpulse_CameraTime.csv'):
+        '''
+        camera - picamera.PiCamera instance
+        ttlPin - BCM numbering pin for detecting TTL pulses
+        filename - CSV logfile name
+        '''
+        self.camera = camera
+        self.ttlPin = ttlPin
+        self.init_logfile_writer(filename)
+        # Initialize TTL edge detection
+        self.piGPIO = pigpio.pi()
+        self.piGPIOCallback = self.piGPIO.callback(self.ttlPin, pigpio.RISING_EDGE, self.write_time)
+
+    def init_logfile_writer(self, filename):
+        '''
+        Sets up CSV file writer.
+        '''
+        if os.path.exists(filename):
+            os.remove(filename)
+        self.logfile = open(filename, 'a')
+        self.logwriter = csv.writer(self.logfile)
+
+    def write_time(self, gpio, level, tick):
+        '''
+        Retrieves camera timestamp and writes it to the file.
+        '''
+        currenttime = copy(self.camera.timestamp)
+        self.logwriter.writerow([currenttime])
+
+    def close(self):
+        self.piGPIOCallback.cancel()
+        self.piGPIO.stop()
+        self.logfile.close()
+
+
+class PiCamera_with_timestamps(picamera.PiCamera):
+    '''
+    This is a subclass of picamera.PiCamera to provide accurate timestamps for each frame.
+    '''
+    def __init__(self, *args, **kwargs):
+        '''
+        If TTLpulse_CameraTime_Writer=True, TTLpulse_CameraTime_Writer class
+        is used to write the camera timestamp at each detected TTL pulse.
+        '''
+        Start_TTLpulse_CameraTime_Writer = kwargs.pop('TTLpulse_CameraTime_Writer', False)
+        super(PiCamera_with_timestamps, self).__init__(*args, **kwargs)
+        if Start_TTLpulse_CameraTime_Writer:
+            self.TTLpulse_CameraTime_Writer = TTLpulse_CameraTime_Writer(self)
+
+    def stop_recording(self, *args, **kwargs):
+        if hasattr(self, 'TTLpulse_CameraTime_Writer'):
+            self.TTLpulse_CameraTime_Writer.close()
+        super(PiCamera_with_timestamps, self).stop_recording(*args, **kwargs)
 
 
 def RPiNumber():
@@ -691,7 +728,7 @@ class CameraController(object):
         If remoteControl is True, camera feed capture and processing is started and stopped with ZMQ messages.
         Otherwise, with user pressing Enter.
         '''
-        with picamera.PiCamera(clock_mode='raw', framerate=self.framerate) as camera: # Initializes the RPi camera module
+        with PiCamera_with_timestamps(clock_mode='raw', framerate=self.framerate, TTLpulse_CameraTime_Writer=True) as camera: # Initializes the RPi camera module
             camera.resolution = tuple(self.resolution) # Set frame capture resolution
             camera.exposure_mode = self.exposure_setting
             camera.iso = self.camera_iso # Set Camera ISO value (sensitivity to light)
@@ -720,7 +757,8 @@ class CameraController(object):
                         sleep(0.1)
                 else:
                     _ = raw_input('Press enter to stop image acquisition: ')
-                camera.stop_recording() # Stop recording
+                # Stop recording
+                camera.stop_recording()
         # Close ZMQ messenger
         if self.remoteControl:
             self.ZMQmessenger.close()

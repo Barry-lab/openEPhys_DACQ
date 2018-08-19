@@ -150,6 +150,8 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
                             'smoothing_radius': np.int64(str(self.pt_smooth_r.toPlainText())), 
                             'resolution': np.array(map(int, str(self.pt_resolution.toPlainText()).split(',')), dtype=np.int64), 
                             'centralIP': str(self.pt_local_ip.toPlainText()), 
+                            'global_clock_ip': str(self.pt_global_clock_ip.toPlainText()), 
+                            'global_clock_port': str(self.pt_global_clock_port.toPlainText()), 
                             'password': str(self.pt_rpi_password.toPlainText()), 
                             'username': str(self.pt_rpi_username.toPlainText()), 
                             'pos_port': str(self.pt_posport.toPlainText()), 
@@ -195,6 +197,9 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         CamResStr = str(CamRes[0]) + ', ' + str(CamRes[1])
         self.pt_resolution.setPlainText(CamResStr)
         self.pt_local_ip.setPlainText(TrackingSettings['centralIP'])
+        if 'global_clock_ip' in TrackingSettings:
+            self.pt_global_clock_ip.setPlainText(TrackingSettings['global_clock_ip'])
+            self.pt_global_clock_port.setPlainText(TrackingSettings['global_clock_port'])
         self.pt_rpi_password.setPlainText(TrackingSettings['password'])
         self.pt_rpi_username.setPlainText(TrackingSettings['username'])
         self.pt_posport.setPlainText(TrackingSettings['pos_port'])

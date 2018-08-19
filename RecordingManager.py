@@ -152,42 +152,64 @@ def update_tracking_camera_files(TrackingSettings):
         T.join()
     rmtree(RPiTempFolder)
 
-def process_single_tracking_data(n_rpi, filename, data_events):
+def get_RPi_frame_timestamps_in_OEtimes(OEtimes, RPtimes, RPFtimes):
+    # Find closest RPi GlobalClock timestamp to each RPi frame timestamp
+    RPtimes_idx = []
+    for RPFtime in RPFtimes:
+        RPtimes_idx.append(np.argmin(np.abs(RPtimes - RPFtime)))
+    # Compute difference from the GlobalClock timestamps for each frame
+    RPtimes_full = RPtimes[RPtimes_idx]
+    RPF_RP_times_delta = RPFtimes - RPtimes_full
+    # Convert this difference to seconds as Open Ephys timestamps
+    RPF_RP_times_delta_in_seconds = RPF_RP_times_delta / float(10 ** 6)
+    # Use frame and GlobalClock timestamp diffence to estimate OpenEphys timepoints
+    OEtimes_full = OEtimes[RPtimes_idx]
+    RPFinOEtimes = OEtimes_full + RPF_RP_times_delta_in_seconds
+
+    return RPFinOEtimes
+
+def process_single_tracking_data(n_rpi, TrackingLog_File, TTLpulse_CameraTime_File, data_events):
     '''
     This function processes TrackingLog*.csv files.
     Offset between actual frame time and TTL pulses are corrected.
     If TrackingLog*.csv has more datapoints than TTL pulses recorded, the TrackingLog datapoints from the end are dropped.
     '''
+    GlobalClock_TTL_Channel = 1
     RPiTime2Sec = 10 ** 6 # This values is used to convert RPi times to seconds
-    # Read position data for this camera
-    trackingData = np.genfromtxt(filename, delimiter=',')
-    # Read OpenEphys frame times for this camera in seconds
-    OEtimes = data_events['timestamps'][np.array(data_events['eventID']) == n_rpi + 1] # Use the timestamps where RPi sent pulse to OE board
-    if OEtimes.size != trackingData.shape[0]: # If TrackingLog*.csv has more datapoints than TTL pulses recorded 
-        # Realign frame times between OpenEphys and RPi by dropping the extra datapoints in TrackingLog data
-        offset = trackingData.shape[0] - OEtimes.size
-        trackingData = trackingData[:OEtimes.size,:]
-        print('WARNING! Camera ' + str(n_rpi) + ' Pos data longer than TTL pulses recorded by ' + str(offset) + '\n' + \
-              'Assuming that OpenEphysGUI was stopped before cameras stopped.' + '\n' + \
-              str(offset) + ' datapoints deleted from the end of position data.')
-    # Get trackingData TTL times and frametimes in seconds
-    camera_TTLtimes = np.float64(trackingData[:,1]) / RPiTime2Sec
-    camera_frametimes = np.float64(trackingData[:,2]) / RPiTime2Sec
-    # Use pos_frametimes and camera_TTLtimes differences to correct OEtimes
-    frame_TTL_latency = camera_TTLtimes - camera_frametimes
-    times = OEtimes - frame_TTL_latency
+    # Read position data from this camera
+    trackingData = np.genfromtxt(TrackingLog_File, delimiter=',')
+    # Read GlobalClock TTL pulse times from this camera
+    RPi_GC_times = np.genfromtxt(TTLpulse_CameraTime_File, delimiter=',')
+    # Read OpenEphys timestamps of GlobalClock TTL pulses (in seconds)
+    OE_GC_times = data_events['timestamps'][np.array(data_events['eventID']) == GlobalClock_TTL_Channel]
+    # Notify when data incorrect length
+    if OE_GC_times.size > RPi_GC_times.size:
+        OE_GC_times = OE_GC_times[:RPi_GC_times.size]
+        print('[ Warning ] OpenEphys recorded more GlobalClock TTL pulses than RPi ' + str(n_rpi) + '.\n' + 
+              'Dumping extra timestamps from the end.')
+    elif OE_GC_times.size < RPi_GC_times.size:
+        RPi_GC_times = RPi_GC_times[:OE_GC_times.size]
+        print('[ Warning ] RPi ' + str(n_rpi) + ' recorded more GlobalClock TTL pulses than Open Ephys.\n' + 
+              'Dumping extra timestamps from the end.')
+    # Get RPi frame timestamps in Open Ephys time
+    times = get_RPi_frame_timestamps_in_OEtimes(OE_GC_times, RPi_GC_times, trackingData[:,1])
     # Combine corrected timestamps with position data
-    TrackingData = np.concatenate((np.expand_dims(times, axis=1), trackingData[:,3:]), axis=1).astype(np.float64)
+    TrackingData = np.concatenate((np.expand_dims(times, axis=1), trackingData[:,2:]), axis=1).astype(np.float64)
 
     return TrackingData
 
 def retrieve_specific_camera_tracking_data(n_rpi, TrackingSettings, RPiTempFolder, data_events, TrackingData, TrackingDataLock):
     src_file = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
                TrackingSettings['tracking_folder'] + '/logfile.csv'
-    dst_file = os.path.join(RPiTempFolder, 'TrackingLog' + str(n_rpi) + '.csv')
-    callstr = 'scp -q ' + src_file + ' ' + dst_file
+    TrackingLog_File = os.path.join(RPiTempFolder, 'TrackingLog' + str(n_rpi) + '.csv')
+    callstr = 'scp -q ' + src_file + ' ' + TrackingLog_File
     _ = os.system(callstr)
-    tmp_data = process_single_tracking_data(n_rpi, dst_file, data_events)
+    src_file = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
+               TrackingSettings['tracking_folder'] + '/TTLpulse_CameraTime.csv'
+    TTLpulse_CameraTime_File = os.path.join(RPiTempFolder, 'TTLpulse_CameraTime' + str(n_rpi) + '.csv')
+    callstr = 'scp -q ' + src_file + ' ' + TTLpulse_CameraTime_File
+    _ = os.system(callstr)
+    tmp_data = process_single_tracking_data(n_rpi, TrackingLog_File, TTLpulse_CameraTime_File, data_events)
     with TrackingDataLock:
         TrackingData[str(n_rpi)] = tmp_data
     if TrackingSettings['save_frames']:
@@ -618,6 +640,9 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
                                         'speedLimit': 10}# centimeters of distance in last second to be included
             self.RPIpos = rpiI.onlineTrackingData(self.Settings['TrackingSettings'], HistogramParameters=deepcopy(self.histogramParameters), SynthData=False)
             print('Initializing Online Tracking Data Successful')
+            print('Connecting to GlobalClock RPi...')
+            self.GlobalClockControl = rpiI.GlobalClockControl(self.Settings['TrackingSettings'])
+            print('Connecting to GlobalClock RPi Successful')
         # Initialize listening to Open Ephys GUI messages
         print('Connecting to Open Ephys GUI via ZMQ...')
         self.OEmessages = SubscribeToOpenEphys(verbose=False)
@@ -665,6 +690,9 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             print('Starting tracking RPis...')
             self.trackingControl.start()
             print('Starting tracking RPis Successful')
+            print('Starting GlobalClock RPi...')
+            self.GlobalClockControl.start()
+            print('Starting GlobalClock RPi Successful')
         # Start cumulative plot
         if self.Settings['General']['Tracking']:
             print('Starting Position Plot...')
@@ -725,6 +753,10 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             print('Closing Online Tracking Data...')
             self.RPIpos.close()
             print('Closing Online Tracking Data Successful')
+            print('Closing GlobalClock Controller...')
+            self.GlobalClockControl.stop()
+            self.GlobalClockControl.close()
+            print('Closing GlobalClock Controller Successful')
             # Stop tracking
             print('Stopping tracking RPis...')
             self.trackingControl.stop()
