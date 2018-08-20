@@ -152,53 +152,8 @@ def update_tracking_camera_files(TrackingSettings):
         T.join()
     rmtree(RPiTempFolder)
 
-def get_RPi_frame_timestamps_in_OEtimes(OEtimes, RPtimes, RPFtimes):
-    # Find closest RPi GlobalClock timestamp to each RPi frame timestamp
-    RPtimes_idx = []
-    for RPFtime in RPFtimes:
-        RPtimes_idx.append(np.argmin(np.abs(RPtimes - RPFtime)))
-    # Compute difference from the GlobalClock timestamps for each frame
-    RPtimes_full = RPtimes[RPtimes_idx]
-    RPF_RP_times_delta = RPFtimes - RPtimes_full
-    # Convert this difference to seconds as Open Ephys timestamps
-    RPF_RP_times_delta_in_seconds = RPF_RP_times_delta / float(10 ** 6)
-    # Use frame and GlobalClock timestamp diffence to estimate OpenEphys timepoints
-    OEtimes_full = OEtimes[RPtimes_idx]
-    RPFinOEtimes = OEtimes_full + RPF_RP_times_delta_in_seconds
-
-    return RPFinOEtimes
-
-def process_single_tracking_data(n_rpi, TrackingLog_File, TTLpulse_CameraTime_File, data_events):
-    '''
-    This function processes TrackingLog*.csv files.
-    Offset between actual frame time and TTL pulses are corrected.
-    If TrackingLog*.csv has more datapoints than TTL pulses recorded, the TrackingLog datapoints from the end are dropped.
-    '''
-    GlobalClock_TTL_Channel = 1
-    RPiTime2Sec = 10 ** 6 # This values is used to convert RPi times to seconds
-    # Read position data from this camera
-    trackingData = np.genfromtxt(TrackingLog_File, delimiter=',')
-    # Read GlobalClock TTL pulse times from this camera
-    RPi_GC_times = np.genfromtxt(TTLpulse_CameraTime_File, delimiter=',')
-    # Read OpenEphys timestamps of GlobalClock TTL pulses (in seconds)
-    OE_GC_times = data_events['timestamps'][np.array(data_events['eventID']) == GlobalClock_TTL_Channel]
-    # Notify when data incorrect length
-    if OE_GC_times.size > RPi_GC_times.size:
-        OE_GC_times = OE_GC_times[:RPi_GC_times.size]
-        print('[ Warning ] OpenEphys recorded more GlobalClock TTL pulses than RPi ' + str(n_rpi) + '.\n' + 
-              'Dumping extra timestamps from the end.')
-    elif OE_GC_times.size < RPi_GC_times.size:
-        RPi_GC_times = RPi_GC_times[:OE_GC_times.size]
-        print('[ Warning ] RPi ' + str(n_rpi) + ' recorded more GlobalClock TTL pulses than Open Ephys.\n' + 
-              'Dumping extra timestamps from the end.')
-    # Get RPi frame timestamps in Open Ephys time
-    times = get_RPi_frame_timestamps_in_OEtimes(OE_GC_times, RPi_GC_times, trackingData[:,1])
-    # Combine corrected timestamps with position data
-    TrackingData = np.concatenate((np.expand_dims(times, axis=1), trackingData[:,2:]), axis=1).astype(np.float64)
-
-    return TrackingData
-
 def retrieve_specific_camera_tracking_data(n_rpi, TrackingSettings, RPiTempFolder, data_events, TrackingData, TrackingDataLock):
+    # Copy over tracking data from RPis
     src_file = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
                TrackingSettings['tracking_folder'] + '/logfile.csv'
     TrackingLog_File = os.path.join(RPiTempFolder, 'TrackingLog' + str(n_rpi) + '.csv')
@@ -209,9 +164,16 @@ def retrieve_specific_camera_tracking_data(n_rpi, TrackingSettings, RPiTempFolde
     TTLpulse_CameraTime_File = os.path.join(RPiTempFolder, 'TTLpulse_CameraTime' + str(n_rpi) + '.csv')
     callstr = 'scp -q ' + src_file + ' ' + TTLpulse_CameraTime_File
     _ = os.system(callstr)
-    tmp_data = process_single_tracking_data(n_rpi, TrackingLog_File, TTLpulse_CameraTime_File, data_events)
+    # Read tracking data from this RPi
+    RPi_frame_times = np.genfromtxt(TrackingLog_File, delimiter=',', dtype=int, usecols=(1,))
+    trackingData = np.genfromtxt(TrackingLog_File, delimiter=',', dtype=float, usecols=(2,3,4,5,6,7))
+    # Read GlobalClock TTL pulse times from this RPi
+    RPi_GC_times = np.genfromtxt(TTLpulse_CameraTime_File, delimiter=',', dtype=int)
     with TrackingDataLock:
-        TrackingData[str(n_rpi)] = tmp_data
+        TrackingData[str(n_rpi) + '_TrackingData'] = trackingData
+        TrackingData[str(n_rpi) + '_Frame_timestamps'] = RPi_frame_times
+        TrackingData[str(n_rpi) + '_GlobalClock_timestamps'] = RPi_GC_times
+    # Copy over saved frames
     if TrackingSettings['save_frames']:
         src = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
               TrackingSettings['tracking_folder'] + '/frames'

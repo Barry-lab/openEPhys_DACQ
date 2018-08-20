@@ -108,6 +108,39 @@ def combineCamerasData(cameraPos, lastCombPos=None, TrackingSettings=None):
 
     return combPos
 
+def estimate_OpenEphys_timestamps_for_tracking_data(OE_GC_times, RPi_GC_times, RPi_frame_times):
+    '''
+    Estimates Open Ephys timestamps for each tracking data datapoint.
+    OE_GC_times - Global Clock timestamps in Open Ephys time
+    RPi_GC_times - Global Clock timestamps in RPi time
+    posdata - tracking data matrix
+    '''
+    GlobalClock_TTL_Channel = 1
+    RPiTime2Sec = 10 ** 6 # This values is used to convert RPi times to seconds
+    # Crop data if more timestamps recorded on either system.
+    if OE_GC_times.size > RPi_GC_times.size:
+        OE_GC_times = OE_GC_times[:RPi_GC_times.size]
+        print('[ Warning ] OpenEphys recorded more GlobalClock TTL pulses than RPi ' + str(n_rpi) + '.\n' + 
+              'Dumping extra timestamps from the end.')
+    elif OE_GC_times.size < RPi_GC_times.size:
+        RPi_GC_times = RPi_GC_times[:OE_GC_times.size]
+        print('[ Warning ] RPi ' + str(n_rpi) + ' recorded more GlobalClock TTL pulses than Open Ephys.\n' + 
+              'Dumping extra timestamps from the end.')
+    # Find closest RPi GlobalClock timestamp to each RPi frame timestamp
+    RPtimes_idx = []
+    for RPFtime in RPi_frame_times:
+        RPtimes_idx.append(np.argmin(np.abs(RPi_GC_times - RPFtime)))
+    # Compute difference from the GlobalClock timestamps for each frame
+    RPtimes_full = RPi_GC_times[RPtimes_idx]
+    RPF_RP_times_delta = RPi_frame_times - RPtimes_full
+    # Convert this difference to seconds as Open Ephys timestamps
+    RPF_RP_times_delta_in_seconds = RPF_RP_times_delta / float(RPiTime2Sec)
+    # Use frame and GlobalClock timestamp diffence to estimate OpenEphys timepoints
+    OEtimes_full = OE_GC_times[RPtimes_idx]
+    RPi_frame_in_OE_times = OEtimes_full + RPF_RP_times_delta_in_seconds
+
+    return RPi_frame_in_OE_times
+
 def remove_tracking_data_outside_boundaries(posdata, arena_size, max_error=20):
     NotNaN = np.where(np.logical_not(np.isnan(posdata[:,1])))[0]
     idxBad = np.zeros(NotNaN.size, dtype=bool)
@@ -124,11 +157,20 @@ def remove_tracking_data_outside_boundaries(posdata, arena_size, max_error=20):
 
 def process_tracking_data(filename, save_to_file=False):
     # Get TrackingSettings
-    TrackingSettings = NWBio.load_settings(filename,'/TrackingSettings/')
+    TrackingSettings = NWBio.load_settings(filename, '/TrackingSettings/')
     # Load position data for all cameras
     posdatas = []
     for n_rpi in TrackingSettings['use_RPi_nrs']:
-        posdatas.append(NWBio.load_tracking_data(filename, subset=str(n_rpi)))
+        posdata = NWBio.load_raw_tracking_data(filename, n_rpi)
+        if isinstance(posdata, dict):
+            # This is conditional because for early recordings tracking data was immediately stored in Open Ephys time.
+            RPi_frame_times = posdata['RPi_frame_timestamp']
+            RPi_GC_times = posdata['RPi_GC_timestamp']
+            if not ('OE_GC_times' in locals()):
+                OE_GC_times = NWBio.load_GlobalClock_timestamps(filename)
+            RPi_frame_in_OE_times = estimate_OpenEphys_timestamps_for_tracking_data(OE_GC_times, RPi_GC_times, RPi_frame_times)
+            posdata = np.concatenate((RPi_frame_in_OE_times.astype(np.float64)[:, None], posdata['TrackingData']), axis=1)
+            posdatas.append(posdata)
     if len(posdatas) > 1:
         # If data from multiple cameras available, combine it
         PosDataFramesPerSecond = 20.0
@@ -163,7 +205,7 @@ def process_tracking_data(filename, save_to_file=False):
             del combPosData[nanElement]
         timepoints = np.delete(timepoints, listNaNs)
         # Combine timepoints and position data
-        posdata = np.concatenate((np.expand_dims(np.array(timepoints), axis=1), np.array(combPosData)), axis=1)
+        ProcessedPos = np.concatenate((np.expand_dims(np.array(timepoints), axis=1), np.array(combPosData)), axis=1)
         # Print info about None elements
         if len(listNaNs) > 0:
             print('Total of ' + str(len(listNaNs) * (1.0 / PosDataFramesPerSecond)) + ' seconds of position data was lost')
@@ -173,11 +215,11 @@ def process_tracking_data(filename, save_to_file=False):
                 print('This was not in the beginning, but in ' + str(np.sum(np.diff(np.array(listNaNs)) > 1) + 1) + ' other epochs.')
     else:
         # In case of single camera being used, just use data from that camera
-        posdata = posdatas[0]
-    posdata = remove_tracking_data_outside_boundaries(posdata, TrackingSettings['arena_size'], max_error=10)
-    posdata = posdata.astype(np.float64)
+        ProcessedPos = posdatas[0]
+    ProcessedPos = remove_tracking_data_outside_boundaries(ProcessedPos, TrackingSettings['arena_size'], max_error=10)
+    ProcessedPos = ProcessedPos.astype(np.float64)
     if save_to_file:
         # Save corrected data to file
-        NWBio.save_tracking_data(filename, posdata, ProcessedPos=True, ReProcess=False)
+        NWBio.save_tracking_data(filename, ProcessedPos, ProcessedPos=True, ReProcess=False)
 
-    return posdata
+    return ProcessedPos

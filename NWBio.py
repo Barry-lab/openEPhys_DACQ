@@ -180,14 +180,21 @@ def load_events(filename):
     # eventIDs indicate TTL channel number (starting from 1) and are positive for rising signals
 
     # Load data file
-    f = h5py.File(filename, 'r')
     recordingKey = get_recordingKey(filename)
-    # Load timestamps and TLL signal info
-    timestamps = f['acquisition']['timeseries'][recordingKey]['events']['ttl1']['timestamps'].value
-    eventID = f['acquisition']['timeseries'][recordingKey]['events']['ttl1']['data'].value
-    data = {'eventID': eventID, 'timestamps': timestamps}
+    with h5py.File(filename, 'r') as h5file:
+        # Load timestamps and TLL signal info
+        timestamps = h5file['acquisition']['timeseries'][recordingKey]['events']['ttl1']['timestamps'].value
+        eventID = h5file['acquisition']['timeseries'][recordingKey]['events']['ttl1']['data'].value
+        data = {'eventID': eventID, 'timestamps': timestamps}
 
     return data
+
+def load_GlobalClock_timestamps(filename, GlobalClock_TTL_channel=1):
+    '''
+    Returns timestamps of GlobalClock TTL pulses.
+    '''
+    data = load_events(filename)
+    return data['timestamps'][data['eventID'] == GlobalClock_TTL_channel]
 
 def check_if_path_exists(filename, path):
     with h5py.File(filename,'r') as h5file:
@@ -320,15 +327,31 @@ def save_tracking_data(filename, TrackingData, ProcessedPos=False, overwrite=Fal
                 del h5file[processed_pos_path]
             h5file[processed_pos_path] = TrackingData
 
-def load_tracking_data(filename, subset='ProcessedPos'):
+def load_raw_tracking_data(filename, n_rpi):
+    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'
+    TrackingData_path = path + str(n_rpi) + '_TrackingData'
+    RPi_frame_timestamp_path = path + str(n_rpi) + '_Frame_timestamps'
+    RPi_GC_timestamp_path = path + str(n_rpi) + '_GlobalClock_timestamps'
+    with h5py.File(filename, 'r') as h5file:
+        if TrackingData_path in h5file:
+            # This is conditional to allow loading old datasets
+            tracking_data = {'TrackingData': np.array(h5file[TrackingData_path].value),
+                             'RPi_frame_timestamp': np.array(h5file[RPi_frame_timestamp_path].value), 
+                             'RPi_GC_timestamp': np.array(h5file[RPi_GC_timestamp_path].value)}
+            return tracking_data
+        else:
+            # This loads the old format
+            return np.array(h5file[path + str(n_rpi)].value)
+
+def load_processed_tracking_data(filename, subset='ProcessedPos'):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'
     path = path + subset
     with h5py.File(filename, 'r') as h5file:
         return np.array(h5file[path].value)
 
-def get_processed_tracking_data_timestamp_edges(filename):
+def get_processed_tracking_data_timestamp_edges(filename, subset='ProcessedPos'):
     if check_if_processed_position_data_available(filename):
-        data = load_tracking_data(filename, subset='ProcessedPos')
+        data = load_processed_tracking_data(filename, subset=subset)
         edges = [data[0, 0], data[-1, 0]]
     else:
         print('Warning! ProcessedPos not available. Using continuous data timestamps')
@@ -345,8 +368,9 @@ def check_if_tracking_data_available(filename):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'
     return check_if_path_exists(filename, path)
 
-def check_if_processed_position_data_available(filename):
-    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/ProcessedPos/'
+def check_if_processed_position_data_available(filename, subset='ProcessedPos'):
+    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'
+    path = path + subset
     return check_if_path_exists(filename, path)
 
 def check_if_binary_pos(filename):

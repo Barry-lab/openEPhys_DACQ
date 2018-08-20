@@ -124,7 +124,7 @@ def create_DACQ_pos_data(OpenEphysDataPath, pixels_per_metre=None):
     dacq_pos_timestamp_dtype = '>i'
     if NWBio.check_if_processed_position_data_available(OpenEphysDataPath):
         # Load and interpolate ProcessedPos to AxonaData sampling rate
-        posdata = NWBio.load_tracking_data(OpenEphysDataPath, subset='ProcessedPos')
+        posdata = NWBio.load_processed_tracking_data(OpenEphysDataPath)
         xy_pos = posdata[:,1:5].astype(np.float32)
         timestamps = posdata[:,0].astype(np.float32)
         # Realign position data start to 0
