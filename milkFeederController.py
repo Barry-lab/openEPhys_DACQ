@@ -81,7 +81,7 @@ class audioSignalController(object):
     '''
     This class creates a signal with specific parameters and can play it from a local speaker.
     '''
-    def __init__(self, frequency, frequency_band_width=1000, modulation_frequency=0):
+    def __init__(self):
         '''
         The sound frequency band center, width and modulating frequency can be defiend in Hz
         '''
@@ -91,18 +91,33 @@ class audioSignalController(object):
         pygame.mixer.init()
         pygame.init()
         # Create sound
-        self.sound = createAudioSignal(frequency, frequency_band_width, modulation_frequency)
+        self.sound = {}
 
-    def playAudioSignal(self):
-        self.sound.play(-1)
+    def createAudioSignal(self, name, frequency, frequency_band_width, modulation_frequency, loudness='default'):
+        if loudness == 'loud':
+            self.sound[name] = createAudioSignal(frequency, frequency_band_width, modulation_frequency, 200000)
+        else:
+            self.sound[name] = createAudioSignal(frequency, frequency_band_width, modulation_frequency)
 
-    def stopAudioSignal(self):
-        self.sound.stop()
+    def playAudioSignal(self, name):
+        self.sound[name].play(-1)
 
-    def playAudioSignalForSpecificDuration(self, duration):
-        self.sound.play(duration)
+    def stopAudioSignal(self, name):
+        self.sound[name].stop()
+
+    def playAudioSignalForSpecificDuration(self, name, duration):
+        self.sound[name].play(-1, maxtime=int(duration * 1000))
+
+    def startAllSounds(self):
+        for key in self.sound.keys():
+            self.sound[key].play(-1)
+
+    def stopAllSounds(self):
+        for key in self.sound.keys():
+            self.sound[key].stop()
 
     def close(self):
+        self.stopAllSounds()
         pygame.mixer.quit()
         pygame.quit()
 
@@ -112,47 +127,38 @@ class Controller(object):
     This class controls the operation of the pinch valve, speaker and an LED on the milkFeeder.
     '''
 
-    def __init__(self, pinchValve=False, audioSignalParams=None, lightSignalIntensity=None, init_feedback=False):
+    def __init__(self, pinchValve=False, trialAudioSignalParams=None, lightSignalIntensity=None, negativeAudioSignal=None, init_feedback=False):
         '''
         Initializes milkFeeder Controller with specified parameters.
         pinchValve - bool - makes pinch valve release available
-        audioSignalParams - tuple(signal_frequency,frequency_band_width,modulation_frequency) -
+        trialAudioSignalParams - tuple(signal_frequency,frequency_band_width,modulation_frequency) -
                             Initializes audioSignal controller with specified parameters.
         lightSignalIntensity - int - Initializes lightSignal controller with specified intensity (0 - 100).
+        negativeAudioSignal - float - allows playing a full-range white noise for specified duration if > 0
         init_feedback - bool - Sends ZMQ message to localhost if initialization successful: init_successful
                         When using this, ensure a ZMQ device is paired to the IP of the device running this script.
         '''
-        self.parse_arguments(pinchValve, audioSignalParams, lightSignalIntensity, init_feedback)
+        self.pinchValve = bool(pinchValve)
         # Initialize ZMQcomms in a separate thread
         T_initialize_ZMQcomms = Thread(target=self.initialize_ZMQcomms)
         T_initialize_ZMQcomms.start()
         # Initialize all requested features
         if self.pinchValve:
             self.pinchValveController = pinchValveController()
-        if not (self.lightSignalIntensity is None) and self.lightSignalIntensity > 0:
+        if not (lightSignalIntensity is None) and lightSignalIntensity > 0:
             self.LEDcontroller = LEDcontroller(lightSignalIntensity)
-        if not (self.audioSignalParams is None):
-            self.audioSignalController = audioSignalController(*audioSignalParams)
+        if not (trialAudioSignalParams is None) or not (negativeAudioSignal is None):
+            self.audioSignalController = audioSignalController()
+            if not (trialAudioSignalParams is None):
+                self.audioSignalController.createAudioSignal('trialAudioSignal', *trialAudioSignalParams)
+            if not (negativeAudioSignal is None):
+                self.audioSignalController.createAudioSignal('negativeAudioSignal', 12000, 10000, 0, 'loud')
+                self.negativeAudioSignalDuration = negativeAudioSignal
         # Ensure ZMQ comms have been initialized
         T_initialize_ZMQcomms.join()
         # Send feedback text if requested
-        if self.init_feedback:
+        if init_feedback:
             self.ZMQmessenger.sendMessage('init_successful')
-
-    def parse_arguments(self, pinchValve, audioSignalParams, lightSignalIntensity, init_feedback):
-        '''
-        Parses input arguments into class attributes in correct type
-        '''
-        self.pinchValve = bool(pinchValve)
-        if not (audioSignalParams is None):
-            self.audioSignalParams = audioSignalParams
-        else:
-            self.audioSignalParams = None
-        if not (lightSignalIntensity is None):
-            self.lightSignalIntensity = int(lightSignalIntensity)
-        else:
-            self.lightSignalIntensity = None
-        self.init_feedback = bool(init_feedback)
 
     def initialize_ZMQcomms(self):
         '''
@@ -178,14 +184,8 @@ class Controller(object):
             duration = float(duration)
         if self.pinchValve:
             self.pinchValveController.openTimer(duration)
-        if feedback:
-            self.ZMQmessenger.sendMessage('releaseMilk successful')
-
-    def startPlayingAudioSignal(self):
-        self.audioSignalController.playAudioSignal()
-
-    def stopPlayingAudioSignal(self):
-        self.audioSignalController.stopAudioSignal()
+            if feedback:
+                self.ZMQmessenger.sendMessage('releaseMilk successful')
 
     def startLightSignal(self):
         self.LEDcontroller.turnLEDon()
@@ -193,17 +193,32 @@ class Controller(object):
     def stopLightSignal(self):
         self.LEDcontroller.turnLEDoff()
 
+    def startTrialAudioSignal(self):
+        self.audioSignalController.playAudioSignal('trialAudioSignal')
+
+    def stopTrialAudioSignal(self):
+        self.audioSignalController.stopAudioSignal('trialAudioSignal')
+
+    def startNegativeAudioSignal(self):
+        self.audioSignalController.playAudioSignal('negativeAudioSignal')
+
+    def playNegativeAudioSignal(self):
+        self.audioSignalController.playAudioSignalForSpecificDuration('negativeAudioSignal', self.negativeAudioSignalDuration)
+
+    def stopNegativeAudioSignal(self):
+        self.audioSignalController.stopAudioSignal('negativeAudioSignal')
+
     def startAllSignals(self):
         if hasattr(self, 'LEDcontroller'):
-            self.startPlayingAudioSignal()
-        if hasattr(self, 'audioSignalController'):
             self.startLightSignal()
+        if hasattr(self, 'audioSignalController'):
+            self.audioSignalController.startAllSounds()
 
     def stopAllSignals(self):
         if hasattr(self, 'LEDcontroller'):
-            self.stopPlayingAudioSignal()
-        if hasattr(self, 'audioSignalController'):
             self.stopLightSignal()
+        if hasattr(self, 'audioSignalController'):
+            self.audioSignalController.stopAllSounds()
 
     def keepProcessRunning(self):
         '''
@@ -221,6 +236,7 @@ class Controller(object):
         Closes all initiated processes gracefully.
         '''
         self.closeCommandReceived = True
+        self.stopAllSignals()
         self.ZMQmessenger.close()
         if hasattr(self, 'pinchValveController'):
             self.pinchValveController.close()
@@ -235,11 +251,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Running this script initates Controller class.')
     parser.add_argument('--pinchValve', action='store_true', 
                         help='Initializes pinch valve.')
-    parser.add_argument('--audioSignal', type=int, nargs = 3, 
-                        help='Initializes audioSignal controller with specified parameters\n' + \
-                        'signal_frequency frequency_band_width modulation_frequency.')
     parser.add_argument('--lightSignal', type=int, nargs = 1, 
                         help='Initializes lightSignal controller with specified intensity (0 - 100).')
+    parser.add_argument('--trialAudioSignal', type=int, nargs = 3, 
+                        help='Initializes audioSignalController with specified parameters\n' + \
+                        'signal_frequency frequency_band_width modulation_frequency.')
+    parser.add_argument('--negativeAudioSignal', type=float, nargs = 1, 
+                        help='Initializes audioSignalController also for wide-band noise burst of specified duration(s).')
     parser.add_argument('--init_feedback', action='store_true', 
                         help='Sends ZMQ message to localhost if initialization successful: init_successful\n' + \
                         'When using this, ensure a ZMQ device is paired to the IP of the device running this script.')
@@ -257,20 +275,27 @@ if __name__ == '__main__':
             pinchValve = True
         else:
             pinchValve = False
-        if args.audioSignal:
-            audioSignalParams = (args.audioSignal[0], args.audioSignal[1], args.audioSignal[2])
-        else:
-            audioSignalParams = None
         if args.lightSignal:
             lightSignalIntensity = int(args.lightSignal[0])
         else:
             lightSignalIntensity = None
+        if args.trialAudioSignal:
+            trialAudioSignalParams = (args.trialAudioSignal[0], args.trialAudioSignal[1], args.trialAudioSignal[2])
+        else:
+            trialAudioSignalParams = None
+        if args.negativeAudioSignal:
+            negativeAudioSignal = float(args.negativeAudioSignal[0])
+            if negativeAudioSignal == 0:
+                negativeAudioSignal = None
+        else:
+            negativeAudioSignal = None
         if args.init_feedback:
             init_feedback = True
         else:
             init_feedback = False
         # Initialize Controller
-        active_Controller = Controller(pinchValve=pinchValve, audioSignalParams=audioSignalParams, 
-                                       lightSignalIntensity=lightSignalIntensity, init_feedback=init_feedback)
+        active_Controller = Controller(pinchValve=pinchValve, trialAudioSignalParams=trialAudioSignalParams, 
+                                       lightSignalIntensity=lightSignalIntensity, negativeAudioSignal=negativeAudioSignal, 
+                                       init_feedback=init_feedback)
         # Start an endless loop that can be cancelled with close method or ctrl+c
         active_Controller.keepProcessRunning()

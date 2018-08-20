@@ -119,6 +119,7 @@ def exportSettingsFromGUI(self):
                     'Password': str(self.settings['Password'].text()), 
                     'lightSignalIntensity': np.int64(str(self.settings['lightSignalIntensity'].text())), 
                     'lightSignalDelay': np.float64(str(self.settings['lightSignalDelay'].text())), 
+                    'NegativeAudioSignal': np.float64(str(self.settings['NegativeAudioSignal'].text())), 
                     'InitPellets': np.int64(float(str(self.settings['InitPellets'].text()))), 
                     'PelletQuantity': np.int64(float(str(self.settings['PelletQuantity'].text()))), 
                     'PelletRewardMinSeparationMean': np.int64(float(str(self.settings['PelletRewardMinSeparationMean'].text()))), 
@@ -201,7 +202,7 @@ def playSiginal(frequency, frequency_band_width, modulation_frequency):
     # Get sound
     sound = createAudioSignal(frequency, frequency_band_width, modulation_frequency)
     # Play 2 seconds of the sound
-    sound.play(2)
+    sound.play(-1, maxtime=2000)
 
 def SettingsGUI(self):
     self.settings = {}
@@ -260,6 +261,11 @@ def SettingsGUI(self):
     self.settings['lightSignalDelay'] = QtGui.QLineEdit('0')
     hbox.addWidget(self.settings['lightSignalDelay'])
     self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),4,1)
+    hbox = QtGui.QHBoxLayout()
+    hbox.addWidget(QtGui.QLabel('Negative Audio Feedback (s)'))
+    self.settings['NegativeAudioSignal'] = QtGui.QLineEdit('0')
+    hbox.addWidget(self.settings['NegativeAudioSignal'])
+    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),5,1)
     # Create Pellet task specific menu items
     vbox = QtGui.QVBoxLayout()
     font = QtGui.QFont('SansSerif', 15)
@@ -553,16 +559,18 @@ class Core(object):
             username = self.TaskSettings['Username']
             password = self.TaskSettings['Password']
             AudioSignalMode = self.TaskSettings['AudioSignalMode']
+            negativeAudioSignal = self.TaskSettings['NegativeAudioSignal']
             lightSignalIntensity = self.TaskSettings['lightSignalIntensity']
         try:
             if FEEDER_type == 'pellet' or AudioSignalMode == 'ambient':
-                audioSignalParams = None
+                trialAudioSignal = None
             elif AudioSignalMode == 'localised' and FEEDER_type == 'milk':
-                audioSignalParams = (self.FEEDERs['milk'][ID]['SignalHz'], 
-                                     self.FEEDERs['milk'][ID]['SignalHzWidth'], 
-                                     self.FEEDERs['milk'][ID]['ModulHz'])
+                trialAudioSignal = (self.FEEDERs['milk'][ID]['SignalHz'], 
+                                    self.FEEDERs['milk'][ID]['SignalHzWidth'], 
+                                    self.FEEDERs['milk'][ID]['ModulHz'])
             actuator = RewardControl(FEEDER_type, IP, username, password, 
-                                     audioSignalParams=audioSignalParams, 
+                                     trialAudioSignal=trialAudioSignal, 
+                                     negativeAudioSignal=negativeAudioSignal, 
                                      lightSignalIntensity=lightSignalIntensity)
             with self.TaskSettings_Lock:
                 self.FEEDERs[FEEDER_type][ID]['actuator'] = actuator
@@ -1121,19 +1129,22 @@ class Core(object):
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
             self.milkTrialSignal[self.feederID_milkTrial].play(-1)
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
-            self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].playAudioSignal()
+            self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].startTrialAudioSignal()
 
     def stop_milkTrialAudioSignal(self):
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
             self.milkTrialSignal[self.feederID_milkTrial].stop()
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
-            self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].stopAudioSignal()
+            self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].stopTrialAudioSignal()
 
     def start_milkTrialLightSignal(self):
         self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].startLightSignal()
 
     def stop_milkTrialLightSignal(self):
         self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].stopLightSignal()
+
+    def play_NegativeAudioSignal(self):
+        self.FEEDERs['milk'][self.find_closest_feeder_ID()]['actuator'].playNegativeAudioSignal()
 
     def start_milkTrialSignals(self):
         self.start_milkTrialAudioSignal()
@@ -1164,7 +1175,7 @@ class Core(object):
         idx = self.game_counters['Milk trials']['ID'].index(self.feederID_milkTrial)
         self.game_counters['Milk trials']['count'][idx] += 1
 
-    def stop_milkTrial(self, successful):
+    def stop_milkTrial(self, successful, negative_feedback=False):
         # Release reward if successful and update counter
         if successful:
             self.game_state = 'reward_in_progress'
@@ -1178,6 +1189,8 @@ class Core(object):
         else:
             self.milkTrialFailTime = time()
             self.game_state = 'interval'
+            if negative_feedback and self.TaskSettings['NegativeAudioSignal'] > 0:
+                self.play_NegativeAudioSignal()
         # Stop signals
         self.stop_milkTrialSignals()
         # Send timestamp to Open Ephys GUI
@@ -1186,6 +1199,20 @@ class Core(object):
         # Reset GUI signal of trial process
         feeder_button = self.getButton('buttonMilkTrial', self.feederID_milkTrial)
         feeder_button['button_pressed'] = False
+
+    def find_closest_feeder_ID(self):
+        # Get animal position history
+        with self.TaskIO['RPIPos'].combPosHistoryLock:
+            posHistory_one_second_steps = self.TaskIO['RPIPos'].combPosHistory[-self.one_second_steps:]
+        # Compute distances to all active milk feeders
+        mean_posHistory = compute_mean_posHistory(posHistory_one_second_steps)
+        distances = []
+        for ID in self.activeMfeeders:
+            distances.append(euclidean(mean_posHistory, self.FEEDERs['milk'][ID]['Position']))
+        # Find identity ID of closest feeder
+        ID = self.activeMfeeders[np.argmin(distances)]
+
+        return ID
 
     def check_if_reward_in_progress(self):
         '''
@@ -1407,10 +1434,14 @@ class Core(object):
                 # If subject reached goal location, stop milk trial with positive outcome
                 self.game_state = 'transition'
                 threading.Thread(target=self.stop_milkTrial, args=(True,)).start() # changes self.game_state = 'reward_in_progress'
-            elif conditions['milk_trial_duration'] or conditions['distance_from_other_feeders']:
-                # If time limit for task duration has passed or subject went to incorrect location, stop milk trial with negative outcome
+            elif conditions['milk_trial_duration']:
+                # If time limit for task duration has passed, stop milk trial with negative outcome
                 self.game_state = 'transition'
                 threading.Thread(target=self.stop_milkTrial, args=(False,)).start() # changes self.game_state = 'interval'
+            elif conditions['distance_from_other_feeders']:
+                # If subject went to incorrect location, stop milk trial with negative outcome and feedback
+                self.game_state = 'transition'
+                threading.Thread(target=self.stop_milkTrial, args=(False, True)).start() # changes self.game_state = 'interval'
         # IF IN REWARD_IN_PROGRESS STATE
         elif self.game_state == 'reward_in_progress':
             reward_in_progress = self.check_if_reward_in_progress()

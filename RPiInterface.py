@@ -296,11 +296,12 @@ class onlineTrackingData(object):
 class RewardControl(object):
     # This class allows control of FEEDERs
     # FEEDER_type can be either 'milk' or 'pellet'
-    def __init__(self, FEEDER_type, RPiIP, RPiUsername, RPiPassword, audioSignalParams=None, lightSignalIntensity=0):
+    def __init__(self, FEEDER_type, RPiIP, RPiUsername, RPiPassword, trialAudioSignal=None, negativeAudioSignal=0, lightSignalIntensity=0):
         self.FEEDER_type = FEEDER_type
         self.RPiIP = RPiIP
-        self.audioSignalParams = audioSignalParams
+        self.trialAudioSignal = trialAudioSignal
         self.lightSignalIntensity = lightSignalIntensity
+        self.negativeAudioSignal = negativeAudioSignal
         # Set up SSH connection
         self.ssh_connection = ssh(RPiIP, RPiUsername, RPiPassword)
         self.ssh_connection.sendCommand('sudo pkill python') # Ensure any past processes have closed
@@ -333,8 +334,10 @@ class RewardControl(object):
         command = 'python milkFeederController.py'
         command += ' ' + '--pinchValve '
         command += ' ' + '--init_feedback'
-        if not (self.audioSignalParams is None):
-            command += ' ' + '--audioSignal ' + ' '.join(map(str, self.audioSignalParams))
+        if not (self.trialAudioSignal is None):
+            command += ' ' + '--trialAudioSignal ' + ' '.join(map(str, self.trialAudioSignal))
+        if self.negativeAudioSignal > 0:
+            command += ' ' + '--negativeAudioSignal ' + str(self.negativeAudioSignal)
         if self.lightSignalIntensity > 0:
             command += ' ' + '--lightSignal ' + str(self.lightSignalIntensity)
 
@@ -419,11 +422,14 @@ class RewardControl(object):
         else:
             return False
 
-    def playAudioSignal(self):
-        self.Controller_messenger.sendMessage('startPlayingAudioSignal')
+    def startTrialAudioSignal(self):
+        self.Controller_messenger.sendMessage('startTrialAudioSignal')
 
-    def stopAudioSignal(self):
-        self.Controller_messenger.sendMessage('stopPlayingAudioSignal')
+    def stopTrialAudioSignal(self):
+        self.Controller_messenger.sendMessage('stopTrialAudioSignal')
+
+    def playNegativeAudioSignal(self):
+        self.Controller_messenger.sendMessage('playNegativeAudioSignal')
 
     def startLightSignal(self):
         self.Controller_messenger.sendMessage('startLightSignal')

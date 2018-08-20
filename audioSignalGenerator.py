@@ -34,7 +34,7 @@ def createSineWaveSound(frequency, sampleRate, peak):
 
     return arr
 
-def createAudioSignal(frequency, frequency_band_width, modulation_frequency):
+def createAudioSignal(frequency, frequency_band_width, modulation_frequency, peak=4096):
     '''
     Creates a sound signal with specified parameters (in Hz), 
     that can be played in scope where pygame is initialized as:
@@ -45,9 +45,10 @@ def createAudioSignal(frequency, frequency_band_width, modulation_frequency):
         sound.play(n) play for n seconds
         sound.play(-1) play indefinitely
         sound.stop() stop playing the sound
+
+        peak - int - default is 4096. Changes the amplitude of the raw sound data
     '''
     sampleRate = 48000 # Must be the same as in the line 
-    peak = 4096 # 4096 : the peak ; volume ; loudness
     if int(round(frequency_band_width)) == 0:
         arr = createSineWaveSound(frequency, sampleRate, peak)
     else:
