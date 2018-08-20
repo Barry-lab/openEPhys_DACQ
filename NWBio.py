@@ -4,6 +4,9 @@ import h5py
 import numpy as np
 import os
 from HelperFunctions import tetrode_channels
+from pprint import pprint
+from copy import copy
+import argparse
 
 def get_recordingKey(filename):
     with h5py.File(filename, 'r') as h5file:
@@ -434,3 +437,75 @@ def save_tetrode_clusterIDs(filename, ntet, clusterIDs, spike_name='spikes', ove
             else:
                 raise ValueError('Tetrode ' + str(ntet + 1) + ' clusterIDs already exists in ' + filename)
         h5file[path] = np.int16(clusterIDs).squeeze()
+
+def fill_empty_dictionary_from_source(selection, src_dict):
+    '''
+    Populates a dictionary with None values with values from a source
+    dictionary with identical structure.
+    '''
+    dst_dict = copy(selection)
+    for key, item in dst_dict.items():
+        print(['key', key])
+        print(['item', item])
+        if isinstance(item, dict):
+            dst_dict[key] = fill_empty_dictionary_from_source(item, src_dict[key])
+        elif item is None:
+            dst_dict[key] = src_dict[key]
+        else:
+            raise ValueError('Destination dictionary has incorrect.')
+
+    return dst_dict
+
+def extract_recording_info(filename, selection='default'):
+    '''
+    Returns recording info for the recording file.
+
+    selection - allows specifying which data return
+        'default' - some hard-coded selection of data
+        'all' - all of the recording settings
+        dict - a dictionary with the same exact keys and structure
+               as the recording settings, with None for item values
+               and missing keys for unwanted elements. The dictionary
+               will be returned with None values populated by values
+               from recording settings.
+    '''
+    if isinstance(selection, str) and selection == 'default':
+        recording_info = {}
+        recording_info.update(load_settings(filename, '/General/'))
+        del recording_info['experimenter']
+        del recording_info['rec_file_path']
+        del recording_info['root_folder']
+        if recording_info['TaskActive']:
+            recording_info.update({'TaskName': load_settings(filename, '/TaskSettings/name/')})
+            for key in recording_info['channel_map'].keys():
+                del recording_info['channel_map'][key]['list']
+        pos_edges = get_processed_tracking_data_timestamp_edges(filename)
+        recording_info['duration (min)'] = int(round((pos_edges[1] - pos_edges[0]) / 60))
+    elif isinstance(selection, str) and selection == 'all':
+        recording_info = load_settings(filename)
+    elif isinstance(selection, dict):
+        full_recording_info = load_settings(filename)
+        recording_info = fill_empty_dictionary_from_source(selection, full_recording_info)
+
+    return recording_info
+
+def display_recording_data(root_path, selection='default'):
+    '''
+    Prints recording info for the whole directory tree.
+    '''
+    for dirName, subdirList, fileList in os.walk(root_path):
+        for fname in fileList:
+            if fname == 'experiment_1.nwb':
+                filename = os.path.join(dirName, fname)
+                recording_info = extract_recording_info(filename, selection)
+                print('Data on path: ' + dirName)
+                pprint(recording_info)
+
+if __name__ == '__main__':
+    # Input argument handling and help info
+    parser = argparse.ArgumentParser(description='Extract info from Open Ephys.')
+    parser.add_argument('root_path', type=str, nargs=1, 
+                        help='Root directory for recording(s)')
+    args = parser.parse_args()
+    # Get paths to recording files
+    display_recording_data(args.root_path[0])
