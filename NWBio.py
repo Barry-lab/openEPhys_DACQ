@@ -477,8 +477,8 @@ def extract_recording_info(filename, selection='default'):
         del recording_info['root_folder']
         if recording_info['TaskActive']:
             recording_info.update({'TaskName': load_settings(filename, '/TaskSettings/name/')})
-            for key in recording_info['channel_map'].keys():
-                del recording_info['channel_map'][key]['list']
+        for key in recording_info['channel_map'].keys():
+            del recording_info['channel_map'][key]['list']
         pos_edges = get_processed_tracking_data_timestamp_edges(filename)
         recording_info['duration (min)'] = int(round((pos_edges[1] - pos_edges[0]) / 60))
     elif isinstance(selection, str) and selection == 'all':
