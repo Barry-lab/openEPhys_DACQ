@@ -164,12 +164,12 @@ def process_tracking_data(filename, save_to_file=False):
         posdata = NWBio.load_raw_tracking_data(filename, n_rpi)
         if isinstance(posdata, dict):
             # This is conditional because for early recordings tracking data was immediately stored in Open Ephys time.
-            RPi_frame_times = posdata['RPi_frame_timestamp']
-            RPi_GC_times = posdata['RPi_GC_timestamp']
+            RPi_frame_times = posdata['OnlineTrackerData_timestamps']
+            RPi_GC_times = posdata['GlobalClock_timestamps']
             if not ('OE_GC_times' in locals()):
                 OE_GC_times = NWBio.load_GlobalClock_timestamps(filename)
             RPi_frame_in_OE_times = estimate_OpenEphys_timestamps_for_tracking_data(OE_GC_times, RPi_GC_times, RPi_frame_times)
-            posdata = np.concatenate((RPi_frame_in_OE_times.astype(np.float64)[:, None], posdata['TrackingData']), axis=1)
+            posdata = np.concatenate((RPi_frame_in_OE_times.astype(np.float64)[:, None], posdata['OnlineTrackerData']), axis=1)
             posdatas.append(posdata)
     if len(posdatas) > 1:
         # If data from multiple cameras available, combine it

@@ -48,14 +48,26 @@ class paired_messenger(object):
         self.callbacks = []
         if printMessages:
             self.add_callback(self.printMessage)
+        # Add verification callback
+        self.verification_dict = {}
+        self.add_callback(self.verification_check)
         # Start listening thread
         self.lock = threading.Lock()
         self.is_running = True
         self.thread = threading.Thread(target=self.run)
         self.thread.start()
 
-    def sendMessage(self, message):
+    def sendMessage(self, message, verify=False):
+        '''
+        message - str - sent to paired device
+        verify - str - if set, sendMessage() waits until such message is received back
+        '''
+        if not (verify is False):
+            self.verification_dict[verify] = False
         self.socket.send(message)
+        if not (verify is False):
+            while not self.verification_dict[verify]:
+                time.sleep(0.05)
 
     def close(self):
 
@@ -110,6 +122,10 @@ class paired_messenger(object):
 
     def printMessage(self, msg):
         print(msg)
+
+    def verification_check(self, msg):
+        if msg in self.verification_dict.keys():
+            self.verification_dict[msg] = True
 
 class PublishToOpenEphys(object):
     '''

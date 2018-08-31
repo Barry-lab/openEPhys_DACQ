@@ -5,6 +5,7 @@
 
 from paramiko import client
 from paramiko.ssh_exception import SSHException
+from threading import Thread
 
 class ssh:
     # This class was taken from:
@@ -17,6 +18,7 @@ class ssh:
         self.client = client.SSHClient()
         self.client.set_missing_host_key_policy(client.AutoAddPolicy())
         self.client.connect(address, username=username, password=password, look_for_keys=False)
+        self.Ts_sendCommand = []
 
     def sendCommand(self, command, timeout=5, verbose=True):
         if(self.client):
@@ -42,6 +44,11 @@ class ssh:
         else:
             print("Connection not opened.")
 
+    def sendCommand_threading(self, command, timeout=5, verbose=True):
+        T = Thread(target=self.sendCommand, args=(command, timeout, verbose))
+        T.start()
+        self.Ts_sendCommand.append(T)
+
     def testConnection(self, timeout=5):
         '''
         Returns True if connection is active. False if connection inactive until timeout or session inactive.
@@ -60,8 +67,11 @@ class ssh:
         else:
             return False
 
-    def disconnect(self):
+    def disconnect(self, force=False):
         if(self.client):
+            if not force and len(self.Ts_sendCommand) > 0:
+                for T in self.Ts_sendCommand:
+                    T.join()
             self.client.close()
         else:
             print("Connection not opened.")

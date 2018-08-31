@@ -3,79 +3,113 @@
 ### By Sander Tanni, January 2018, UCL
 
 import zmq
-import time
+from time import time, sleep
 from sshScripts import ssh
 import json
-import threading
+from threading import Lock, Thread
 import numpy as np
 from scipy.spatial.distance import euclidean
 from itertools import combinations
 from TrackingDataProcessing import combineCamerasData
 from ZMQcomms import paired_messenger
+from multiprocessing.dummy import Pool as ThreadPool
+
+
+class CameraControl(object):
+    def __init__(self, address, port, username='pi', password='raspberry', retry=6, tracking=False):
+        self._init_successful = False
+        self.Controller_messenger = paired_messenger(address, int(port))
+        self.Controller_messenger.add_callback(self.Controller_message_parser)
+        self.RPiSSH = CameraControl.initRPiController(address, port, username, password, tracking)
+        _init_start_time = time()
+        while not self._init_successful:
+            sleep(0.1)
+            if retry and time() - _init_start_time > retry:
+                self.RPiSSH = CameraControl.initRPiController(address, port, username, password, tracking)
+                _init_start_time = time()
+
+    @staticmethod
+    def initRPiController(address, port, username='pi', password='raspberry', tracking=False):
+        RPiSSH = ssh(address, username, password)
+        RPiSSH.sendCommand('sudo pkill python') # Ensure any past processes have closed
+        if tracking:
+            command = 'cd ' + 'Tracking' + ' && python tracking.py --remote --port ' + str(port) + ' --tracking'
+        else:
+            command = 'cd ' + 'Tracking' + ' && python tracking.py --remote --port ' + str(port)
+        RPiSSH.sendCommand_threading(command)
+
+        return RPiSSH
+
+    def Controller_message_parser(self, message):
+        if message == 'init_successful':
+            self._init_successful = True
+
+    def start(self):
+        message = 'start'
+        self.Controller_messenger.sendMessage(message, verify='Action Completed: ' + message)
+
+    def start_streaming(self, address, port):
+        message = ' '.join(('start_streaming', str(address), str(port)))
+        self.Controller_messenger.sendMessage(message, verify='Action Completed: ' + message)
+
+    def stop(self):
+        message = 'stop'
+        self.Controller_messenger.sendMessage(message, verify='Action Completed: ' + message)
+
+    def close(self):
+        message = 'close'
+        self.Controller_messenger.sendMessage(message, verify='Action Completed: ' + message)
+        self.RPiSSH.disconnect()
+        self.Controller_messenger.close()
+
+    @staticmethod
+    def CameraControl_unpackPool(kwargs):
+        '''
+        Helper function to allow using pool with argument list.
+        kwargs - dict - key value pairs for input arguments to CameraControl
+        '''
+        return CameraControl(**kwargs)
+
+    @staticmethod
+    def init_CameraControls_with_TrackingSettings(TrackingSettings, OnlineTracking=False):
+        '''
+        Returns a dictionary where each TrackingSettings['use_RPi_nrs'] element is a key
+        to corresponding initialized CameraControl object. 
+        '''
+        kwargs_list = []
+        for n_rpi in TrackingSettings['use_RPi_nrs']:
+            kwargs_list.append({'address': TrackingSettings['RPiInfo'][str(n_rpi)]['IP'], 
+                                'port': TrackingSettings['ZMQcomms_port'], 
+                                'username': TrackingSettings['username'], 
+                                'password': TrackingSettings['password'], 
+                                'tracking': OnlineTracking})
+        pool = ThreadPool(len(TrackingSettings['use_RPi_nrs']))
+        CameraControlsList = pool.map(CameraControl.CameraControl_unpackPool, kwargs_list)
+        pool.close()
+        CameraControls = {}
+        for camera_controller, n_rpi in zip(CameraControlsList, TrackingSettings['use_RPi_nrs']):
+            CameraControls[n_rpi] = camera_controller
+
+        return CameraControls
+
 
 class TrackingControl(object):
 
     def __init__(self, TrackingSettings):
-        # Load infromation on all RPis
-        self.TrackingSettings = TrackingSettings
-        self.number_of_RPis = len(self.TrackingSettings['use_RPi_nrs'])
-        # Initialize ZMQ connection with all RPis
-        self.Controller_messenger = range(self.number_of_RPis)
-        T_initRPiMessenber = []
-        for nRPi, n_rpi in enumerate(self.TrackingSettings['use_RPi_nrs']):
-            T_initRPiMessenber.append(threading.Thread(target=self.initController_messenger, args=[n_rpi, nRPi]))
-            T_initRPiMessenber[nRPi].start()
-        for T in T_initRPiMessenber:
-            T.join()
-        # Initialize RPiController with all RPis
-        self.RPi_init_Successful = [False for x in range(self.number_of_RPis)]
-        self.RPiSSH = range(self.number_of_RPis)
-        self.T_initRPiController = []
-        for nRPi, n_rpi in enumerate(self.TrackingSettings['use_RPi_nrs']):
-            self.T_initRPiController.append(threading.Thread(target=self.initRPiController, args=[n_rpi, nRPi]))
-            self.T_initRPiController[nRPi].start()
-        # Wait until all RPis have confirmed to be ready
-        all_RPi_ready = False
-        while not all_RPi_ready:
-            time.sleep(0.1)
-            all_RPi_ready = all(self.RPi_init_Successful)
-
-    def initController_messenger(self, n_rpi, nRPi):
-        # Set up ZMQ connection
-        messenger = paired_messenger(address=self.TrackingSettings['RPiInfo'][str(n_rpi)]['IP'], 
-                                     port=int(self.TrackingSettings['stop_port']))
-        messenger.add_callback((self.Controller_message_parser, nRPi))
-        time.sleep(1)
-        self.Controller_messenger[nRPi] = messenger
-
-    def initRPiController(self, n_rpi, nRPi):
-        self.RPiSSH[nRPi] = ssh(self.TrackingSettings['RPiInfo'][str(n_rpi)]['IP'], self.TrackingSettings['username'], self.TrackingSettings['password'])
-        self.RPiSSH[nRPi].sendCommand('sudo pkill python') # Ensure any past processes have closed
-        command = 'cd ' + self.TrackingSettings['tracking_folder'] + ' && python tracking.py --remote'
-        self.RPiSSH[nRPi].sendCommand(command)
-
-    def Controller_message_parser(self, message, nRPi):
-        if message == 'init_successful':
-            self.RPi_init_Successful[nRPi] = True
+        self.CameraControls = CameraControl.init_CameraControls_with_TrackingSettings(TrackingSettings, 
+                                                                                      OnlineTracking=True)
 
     def start(self):
-        for messenger in self.Controller_messenger:
-            messenger.sendMessage('start')
+        for n_rpi in self.CameraControls:
+            self.CameraControls[n_rpi].start()
 
     def stop(self):
-        for messenger in self.Controller_messenger:
-            messenger.sendMessage('stop')
-        self.close()
+        for n_rpi in self.CameraControls:
+            self.CameraControls[n_rpi].stop()
 
     def close(self):
-        # Close SSH connections
-        for connection in self.RPiSSH:
-            connection.disconnect()
-        for T in self.T_initRPiController:
-            T.join()
-        # Close ZMQ messengers
-        for messenger in self.Controller_messenger:
-            messenger.close()
+        for n_rpi in self.CameraControls:
+            self.CameraControls[n_rpi].close()
 
 
 class onlineTrackingData(object):
@@ -105,11 +139,11 @@ class onlineTrackingData(object):
         self.combPosHistory = []
         self.setupSocket() # Set up listening of position data
         # Initialize Locks to avoid errors
-        self.posDatasLock = threading.Lock()
-        self.combPosHistoryLock = threading.Lock()
-        self.histogramLock = threading.Lock()
+        self.posDatasLock = Lock()
+        self.combPosHistoryLock = Lock()
+        self.histogramLock = Lock()
         # Start updating position data and storing it in history
-        threading.Thread(target=self.updateCombPosHistory).start()
+        Thread(target=self.updateCombPosHistory).start()
 
     def setupSocket(self):
         # Set ZeroMQ socket to listen on incoming position data from all RPis
@@ -127,15 +161,15 @@ class onlineTrackingData(object):
         nRPi = [i for i,x in enumerate(self.TrackingSettings['use_RPi_nrs']) if x == n_rpi][0]
         oldPos = [0.0, 0.0]
         currPos = [1.0, 1.0]
-        time_of_last_datapoint = time.time()
+        time_of_last_datapoint = time()
         while self.KeepGettingData:
-            time_since_last_datapoint = time.time() - time_of_last_datapoint
+            time_since_last_datapoint = time() - time_of_last_datapoint
             if time_since_last_datapoint > data_rate:
                 newPos = [-1, -1]
                 p0 = np.array(currPos) - np.array(oldPos)
                 lastDirection = np.arctan2(p0[0], p0[1])
                 while newPos[0] < 0 or newPos[0] > self.TrackingSettings['arena_size'][0] or newPos[1] < 0 or newPos[1] > self.TrackingSettings['arena_size'][1]:
-                    time_since_last_datapoint = time.time() - time_of_last_datapoint
+                    time_since_last_datapoint = time() - time_of_last_datapoint
                     newDirection = np.random.normal(loc=lastDirection, scale=np.pi / 32)
                     # Allow circular continuity
                     newDirection = np.arctan2(np.sin(newDirection), np.cos(newDirection))
@@ -149,14 +183,14 @@ class onlineTrackingData(object):
                     newPos = np.array(currPos) + posShift
                     if time_since_last_datapoint > 0.05:
                         with self.posDatasLock:
-                            self.posDatas[nRPi] = [n_rpi, None, None, None, None, None, None, None, None]
+                            self.posDatas[nRPi] = [n_rpi, None, None, None, None, None, None]
                         lastDirection = (np.random.random() - 0.5) * 2 * np.pi
                 oldPos = currPos
                 currPos = newPos
                 with self.posDatasLock:
-                    self.posDatas[nRPi] = [n_rpi, None, None, newPos[0], newPos[1], None, None, None, None]
-                time_of_last_datapoint = time.time()
-            time.sleep(0.005)
+                    self.posDatas[nRPi] = [n_rpi, newPos[0], newPos[1], None, None, None, None]
+                time_of_last_datapoint = time()
+            sleep(0.005)
 
     def updatePosDatas(self):
         # Updates self.posDatas when any new position data is received
@@ -178,7 +212,7 @@ class onlineTrackingData(object):
                         self.posDatas[nRPi] = posData
             else:
                 # If synthetic data generated, wait a moment before continuing
-                time.sleep(0.02)
+                sleep(0.02)
 
     def combineCurrentLineData(self, previousCombPos):
         with self.posDatasLock:
@@ -188,12 +222,12 @@ class onlineTrackingData(object):
             # Convert posDatas for use in combineCamerasData function
             cameraPos = []
             for posData in posDatas:
-                cameraPos.append(np.array(posData[2:6], dtype=np.float32))
+                cameraPos.append(np.array(posData[1:5], dtype=np.float32))
             # Combine data from cameras
             lastCombPos = combineCamerasData(cameraPos, previousCombPos, self.TrackingSettings)
         else:
             # If only a single camera is used, extract position data from posData into numpy array
-            lastCombPos = np.array(posDatas[0][2:6], dtype=np.float32)
+            lastCombPos = np.array(posDatas[0][1:5], dtype=np.float32)
 
         return lastCombPos
 
@@ -229,7 +263,7 @@ class onlineTrackingData(object):
     def updateCombPosHistory(self):
         if not self.SynthData:
             # Initialize RPi position data listening, unless synthetic data requested
-            threading.Thread(target=self.updatePosDatas).start()
+            Thread(target=self.updatePosDatas).start()
             # Continue once data is received from each RPi
             RPi_data_available = np.zeros(len(self.TrackingSettings['use_RPi_nrs']), dtype=bool)
             while not np.all(RPi_data_available):
@@ -239,8 +273,8 @@ class onlineTrackingData(object):
             print('All RPi data available')
         else:
             # Start generating movement data if synthetic data requested
-            threading.Thread(target=self.generatePosData, args=[self.TrackingSettings['use_RPi_nrs'][0]]).start()
-            time.sleep(0.5)
+            Thread(target=self.generatePosData, args=[self.TrackingSettings['use_RPi_nrs'][0]]).start()
+            sleep(0.5)
         # Set up speed tracking
         one_second_steps = int(np.round(1 / self.combPos_update_interval))
         self.lastSecondDistance = 0 # vector distance from position 1 second in past
@@ -252,10 +286,10 @@ class onlineTrackingData(object):
             while lastCombPos is None:
                 lastCombPos = self.combineCurrentLineData(None)
             self.combPosHistory.append(list(lastCombPos))
-        time_of_last_datapoint = time.time()
+        time_of_last_datapoint = time()
         # Update the data at specific interval
         while self.KeepGettingData:
-            time_since_last_datapoint = time.time() - time_of_last_datapoint
+            time_since_last_datapoint = time() - time_of_last_datapoint
             if time_since_last_datapoint > self.combPos_update_interval:
                 # If enough time has passed since last update, append to combPosHistory list
                 with self.combPosHistoryLock:
@@ -264,7 +298,7 @@ class onlineTrackingData(object):
                         self.combPosHistory.append(list(lastCombPos))
                     else:
                         self.combPosHistory.append(lastCombPos)
-                time_of_last_datapoint = time.time()
+                time_of_last_datapoint = time()
                 if len(self.combPosHistory) > one_second_steps:
                     # Compute distance from one second in the past if enough data available
                     with self.combPosHistoryLock:
@@ -284,12 +318,12 @@ class onlineTrackingData(object):
                     else:
                         self.lastSecondDistance = None
             else:
-                time.sleep(self.combPos_update_interval * 0.1)
+                sleep(self.combPos_update_interval * 0.1)
 
     def close(self):
         # Closes the updatePosDatas thread and ZeroMQ socket for position listening
         self.KeepGettingData = False
-        time.sleep(0.25) # Allow the thread to run one last time before closing the socket to avoid error
+        sleep(0.25) # Allow the thread to run one last time before closing the socket to avoid error
         if not self.SynthData:
             self.sockSUB.close()
 
@@ -360,13 +394,13 @@ class RewardControl(object):
         elif self.FEEDER_type == 'pellet':
             command = self.pelletFeederController_init_command()
         # Initiate process on the RPi over SSH
-        self.T_Controller = threading.Thread(target=self.ssh_Controller_connection.sendCommand, 
+        self.T_Controller = Thread(target=self.ssh_Controller_connection.sendCommand, 
                                              args=(command, max_init_wait_time, False)) # Set timeout to max_init_wait_time and verbosity to False
         self.T_Controller.start()
         # Wait until positive initialization feedback or timer runs out
-        start_time = time.time()
-        while not self.Controller_init_successful and (time.time() - start_time) < max_init_wait_time:
-            time.sleep(0.1)
+        start_time = time()
+        while not self.Controller_init_successful and (time() - start_time) < max_init_wait_time:
+            sleep(0.1)
 
         return self.Controller_init_successful
 
@@ -406,13 +440,13 @@ class RewardControl(object):
             command = 'release_pellets ' + str(quantity) + ' True'
         self.Controller_messenger.sendMessage(command)
         # Wait for feedback message
-        start_time = time.time()
-        while not self.release_feedback_message_received and (time.time() - start_time) < max_wait_time:
-            time.sleep(0.1)
+        start_time = time()
+        while not self.release_feedback_message_received and (time() - start_time) < max_wait_time:
+            sleep(0.1)
             # The following allows reseting start_time between pellets
             if self.release_pellets_in_progress:
                 self.release_pellets_in_progress = False
-                start_time = time.time()
+                start_time = time()
         # Return True or False if message successful/failure or False if no message received in time.
         if self.release_feedback_message_received:
             if self.FEEDER_type == 'milk':
@@ -465,19 +499,19 @@ class GlobalClockControl(object):
     def __init__(self, TrackingSettings):
         self.TrackingSettings = TrackingSettings
         self.initController_messenger()
-        self.T_initRPiController = threading.Thread(target=self.initRPiController)
+        self.T_initRPiController = Thread(target=self.initRPiController)
         self.T_initRPiController.start()
         # Wait until all RPis have confirmed to be ready
         self.RPi_init_Successful = False
         while not self.RPi_init_Successful:
-            time.sleep(0.1)
+            sleep(0.1)
 
     def initController_messenger(self):
         # Set up ZMQ connection
         self.Controller_messenger = paired_messenger(address=self.TrackingSettings['global_clock_ip'], 
                                                      port=int(self.TrackingSettings['global_clock_port']))
         self.Controller_messenger.add_callback(self.Controller_message_parser)
-        time.sleep(1)
+        sleep(1)
 
     def initRPiController(self):
         self.RPiSSH = ssh(self.TrackingSettings['global_clock_ip'], self.TrackingSettings['username'], 

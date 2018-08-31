@@ -153,38 +153,51 @@ def update_tracking_camera_files(TrackingSettings):
     rmtree(RPiTempFolder)
 
 def retrieve_specific_camera_tracking_data(n_rpi, TrackingSettings, RPiTempFolder, data_events, TrackingData, TrackingDataLock):
-    # Copy over tracking data from RPis
+    # Get OnlineTrackerData File
     src_file = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
-               TrackingSettings['tracking_folder'] + '/logfile.csv'
-    TrackingLog_File = os.path.join(RPiTempFolder, 'TrackingLog' + str(n_rpi) + '.csv')
-    callstr = 'scp -q ' + src_file + ' ' + TrackingLog_File
+               TrackingSettings['tracking_folder'] + '/OnlineTrackerData.csv'
+    OnlineTrackerData_File = os.path.join(RPiTempFolder, 'OnlineTrackerData' + str(n_rpi) + '.csv')
+    callstr = 'scp -q ' + src_file + ' ' + OnlineTrackerData_File
     _ = os.system(callstr)
+    # Get OnlineTrackerData timestamps File
+    src_file = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
+               TrackingSettings['tracking_folder'] + '/RawVideoEncoderTimestamps.csv'
+    OnlineTrackerData_timestamps_File = os.path.join(RPiTempFolder, 'RawVideoEncoderTimestamps' + str(n_rpi) + '.csv')
+    callstr = 'scp -q ' + src_file + ' ' + OnlineTrackerData_timestamps_File
+    _ = os.system(callstr)
+    # Get VideoData timestamps File
+    src_file = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
+               TrackingSettings['tracking_folder'] + '/VideoEncoderTimestamps.csv'
+    VideoData_timestamps_File = os.path.join(RPiTempFolder, 'VideoEncoderTimestamps' + str(n_rpi) + '.csv')
+    callstr = 'scp -q ' + src_file + ' ' + VideoData_timestamps_File
+    _ = os.system(callstr)
+    # Get GlobalClock timestamps File
     src_file = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
                TrackingSettings['tracking_folder'] + '/TTLpulse_CameraTime.csv'
-    TTLpulse_CameraTime_File = os.path.join(RPiTempFolder, 'TTLpulse_CameraTime' + str(n_rpi) + '.csv')
-    callstr = 'scp -q ' + src_file + ' ' + TTLpulse_CameraTime_File
+    GlobalClock_timestamps_File = os.path.join(RPiTempFolder, 'TTLpulse_CameraTime' + str(n_rpi) + '.csv')
+    callstr = 'scp -q ' + src_file + ' ' + GlobalClock_timestamps_File
     _ = os.system(callstr)
-    # Read tracking data from this RPi
-    RPi_frame_times = np.genfromtxt(TrackingLog_File, delimiter=',', dtype=int, usecols=(1,))
-    trackingData = np.genfromtxt(TrackingLog_File, delimiter=',', dtype=float, usecols=(2,3,4,5,6,7))
-    # Read GlobalClock TTL pulse times from this RPi
-    RPi_GC_times = np.genfromtxt(TTLpulse_CameraTime_File, delimiter=',', dtype=int)
+    # Read data from files into numpy arrays
+    OnlineTrackerData = np.genfromtxt(OnlineTrackerData_File, delimiter=',', dtype=float)
+    OnlineTrackerData_timestamps = np.genfromtxt(OnlineTrackerData_timestamps_File, dtype=int)
+    VideoData_timestamps = np.genfromtxt(VideoData_timestamps_File, dtype=int)
+    GlobalClock_timestamps = np.genfromtxt(GlobalClock_timestamps_File, delimiter=',', dtype=int)
     with TrackingDataLock:
-        TrackingData[str(n_rpi) + '_TrackingData'] = trackingData
-        TrackingData[str(n_rpi) + '_Frame_timestamps'] = RPi_frame_times
-        TrackingData[str(n_rpi) + '_GlobalClock_timestamps'] = RPi_GC_times
-    # Copy over saved frames
-    if TrackingSettings['save_frames']:
-        src = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
-              TrackingSettings['tracking_folder'] + '/frames'
-        dst = os.path.join(RPiTempFolder, 'frames_' + str(n_rpi))
-        callstr = 'scp -q -r ' + src + ' ' + dst
-        _ = os.system(callstr)
+        TrackingData[str(n_rpi) + '_OnlineTrackerData'] = OnlineTrackerData
+        TrackingData[str(n_rpi) + '_OnlineTrackerData_timestamps'] = OnlineTrackerData_timestamps
+        TrackingData[str(n_rpi) + '_VideoData_timestamps'] = VideoData_timestamps
+        TrackingData[str(n_rpi) + '_GlobalClock_timestamps'] = GlobalClock_timestamps
+    # Copy over video data
+    src = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
+          TrackingSettings['tracking_folder'] + '/video.h264'
+    dst = os.path.join(RPiTempFolder, 'video_' + str(n_rpi) + '.h264')
+    callstr = 'scp -q -r ' + src + ' ' + dst
+    _ = os.system(callstr)
 
 def store_frames_to_recording_folder(TrackingSettings, rec_file_path, RPiTempFolder):
     for n_rpi in TrackingSettings['use_RPi_nrs']:
-        src = os.path.join(RPiTempFolder, 'frames_' + str(n_rpi))
-        dst = os.path.join(os.path.dirname(rec_file_path), 'frames_' + str(n_rpi))
+        src = os.path.join(RPiTempFolder, 'video_' + str(n_rpi) + '.h264')
+        dst = os.path.join(os.path.dirname(rec_file_path), 'video_' + str(n_rpi) + '.h264')
         move(src, dst)
 
 def store_tracking_data_to_recording_file(TrackingSettings, rec_file_path):
@@ -201,8 +214,7 @@ def store_tracking_data_to_recording_file(TrackingSettings, rec_file_path):
         T_retrievePosLogsRPi.append(T)
     for T in T_retrievePosLogsRPi:
         T.join()
-    if TrackingSettings['save_frames']:
-        store_frames_to_recording_folder(TrackingSettings, rec_file_path, RPiTempFolder)
+    store_frames_to_recording_folder(TrackingSettings, rec_file_path, RPiTempFolder)
     rmtree(RPiTempFolder)
     # Save position data from all sources to recording file
     NWBio.save_tracking_data(rec_file_path, TrackingData)
@@ -590,6 +602,9 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
                 raise ValueError('Tracking must be active for task to work')
         # Initialize tracking
         if self.Settings['General']['Tracking']:
+            print('Connecting to GlobalClock RPi...')
+            self.GlobalClockControl = rpiI.GlobalClockControl(self.Settings['TrackingSettings'])
+            print('Connecting to GlobalClock RPi Successful')
             # Connect to tracking RPis
             print('Connecting to tracking RPis...')
             update_tracking_camera_files(self.Settings['TrackingSettings'])
@@ -602,9 +617,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
                                         'speedLimit': 10}# centimeters of distance in last second to be included
             self.RPIpos = rpiI.onlineTrackingData(self.Settings['TrackingSettings'], HistogramParameters=deepcopy(self.histogramParameters), SynthData=False)
             print('Initializing Online Tracking Data Successful')
-            print('Connecting to GlobalClock RPi...')
-            self.GlobalClockControl = rpiI.GlobalClockControl(self.Settings['TrackingSettings'])
-            print('Connecting to GlobalClock RPi Successful')
         # Initialize listening to Open Ephys GUI messages
         print('Connecting to Open Ephys GUI via ZMQ...')
         self.OEmessages = SubscribeToOpenEphys(verbose=False)
@@ -722,6 +734,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             # Stop tracking
             print('Stopping tracking RPis...')
             self.trackingControl.stop()
+            self.trackingControl.close()
             print('Stopping tracking RPis Successful')
         # Stop reading Open Ephys messages
         print('Closing Open Ephys GUI ZMQ connection...')

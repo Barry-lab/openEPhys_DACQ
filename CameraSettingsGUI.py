@@ -26,9 +26,58 @@ from PIL import Image
 from HelperFunctions import openSingleFileDialog
 from tempfile import mkdtemp
 from RecordingManager import update_tracking_camera_files
-import threading
+from threading import Thread
 from copy import deepcopy
 import NWBio
+from RPiInterface import CameraControl
+import io
+import socket
+import struct
+from time import time
+
+def im_item_in_im_view(im_view):
+    # Prepare im_view with image item
+    im_view.clear()
+    view = im_view.addViewBox()
+    view.setAspectLocked(True)
+    im_item = pg.ImageItem()
+    view.addItem(im_item)
+
+    return im_item
+
+def display_stream(im_item, port):
+    # Start a socket listening for connections on 0.0.0.0:8000 (0.0.0.0 means
+    # all interfaces)
+    server_socket = socket.socket()
+    server_socket.bind(('0.0.0.0', port))
+    server_socket.listen(0)
+    # Accept a single connection and make a file-like object out of it
+    connection = server_socket.accept()[0].makefile('rb')
+    try:
+        while True:
+            s_t = time()
+            # Read the length of the image as a 32-bit unsigned int. If the
+            # length is zero, quit the loop
+            image_len = struct.unpack('<L', connection.read(struct.calcsize('<L')))[0]
+            if not image_len:
+                break
+            # Construct a stream to hold the image data and read the image
+            # data from the connection
+            image_stream = io.BytesIO()
+            image_stream.write(connection.read(image_len))
+            # Rewind the stream, open it as an image with PIL and do some
+            # processing on it
+            image_stream.seek(0)
+            image = Image.open(image_stream)
+            frame = np.array(image)
+            # frame = np.pad(frame, [(1, 1), (1, 1), (0, 0)], mode='constant', constant_values=255)
+            im_item.setImage(np.swapaxes(np.flipud(frame),0,1))
+    finally:
+        if 'frame' in locals():
+            frame = np.zeros(frame.shape, dtype=np.uint8)
+            im_item.setImage(np.swapaxes(np.flipud(frame),0,1))
+        connection.close()
+        server_socket.close()
 
 def plotImage(im_view, image):
     # This function is used to display an image in any of the plots in the bottom
@@ -97,6 +146,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         self.im_views = [self.im_view_1, self.im_view_2, self.im_view_3, self.im_view_4]
         self.calibrationData = {}
         # Set GUI interaction connections
+        self.pb_show_image.setCheckable(True)
         self.pb_show_image.clicked.connect(lambda:self.show_image())
         self.pb_calibrate.clicked.connect(lambda:self.calibrate())
         self.pb_show_calibration.clicked.connect(lambda:self.show_calibration())
@@ -106,11 +156,6 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         self.pb_save.clicked.connect(lambda:self.save())
         self.pb_apply.clicked.connect(lambda:self.apply())
         self.pb_cancel.clicked.connect(lambda:self.cancel())
-        # Initialize Exposure Setting list
-        itemstrings = ['off', 'auto', 'night', 'nightpreview', 'backlight', 'spotlight', 'sports', \
-                       'snow', 'beach', 'verylong', 'fixedfps', 'antishake', 'fireworks']
-        self.lw_exposure_settings.addItems(itemstrings)
-        self.lw_exposure_settings.setCurrentRow(1)
         # Show MainWindow
         self.show()
 
@@ -120,11 +165,6 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
             LEDmode = 'single'
         elif self.rb_led_double.isChecked():
             LEDmode = 'double'
-        # Check if saving images is requested
-        if self.rb_save_im_yes.isChecked():
-            save_frames = True
-        elif self.rb_save_im_no.isChecked():
-            save_frames = False
         # Put camera settings from GUI to a dictionary
         use_RPi_Bool = np.array([0] * len(self.cb_rpis), dtype=bool)
         RPiInfo = {}
@@ -135,27 +175,21 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
                                    'location': np.array(map(float, str(self.pt_rpi_loc[n_rpi].toPlainText()).split(',')), dtype=np.float64)}
         use_RPi_nrs = np.arange(len(self.cb_rpis))[use_RPi_Bool]
         TrackingSettings = {'LEDmode': LEDmode, 
-                            'save_frames': np.array(save_frames), 
                             'arena_size': np.array([str(self.parent.pt_arena_size_x.toPlainText()), str(self.parent.pt_arena_size_y.toPlainText())], dtype=np.float64), 
                             'calibration_n_dots': np.array([str(self.pt_ndots_x.toPlainText()), str(self.pt_ndots_y.toPlainText())], dtype=np.int64), 
                             'corner_offset': np.array([str(self.pt_offset_x.toPlainText()), str(self.pt_offset_y.toPlainText())], dtype=np.float64), 
                             'calibration_spacing': np.float64(str(self.pt_calibration_spacing.toPlainText())), 
-                            'camera_iso': np.int64(str(self.pt_camera_iso.toPlainText())), 
                             'LED_separation': np.float64(str(self.pt_LED_separation.toPlainText())), 
                             'LED_angle': np.float64(str(self.pt_LED_angle.toPlainText())), 
                             'camera_transfer_radius': np.float64(str(self.pt_camera_transfer_radius.toPlainText())), 
-                            'shutter_speed': np.int64(str(self.pt_shutter_speed.toPlainText())), 
-                            'exposure_setting': str(self.lw_exposure_settings.currentItem().text()), 
-                            'exposure_settings_selection': np.int64(self.lw_exposure_settings.currentRow()), 
                             'smoothing_radius': np.int64(str(self.pt_smooth_r.toPlainText())), 
-                            'resolution': np.array(map(int, str(self.pt_resolution.toPlainText()).split(',')), dtype=np.int64), 
                             'centralIP': str(self.pt_local_ip.toPlainText()), 
                             'global_clock_ip': str(self.pt_global_clock_ip.toPlainText()), 
                             'global_clock_port': str(self.pt_global_clock_port.toPlainText()), 
                             'password': str(self.pt_rpi_password.toPlainText()), 
                             'username': str(self.pt_rpi_username.toPlainText()), 
                             'pos_port': str(self.pt_posport.toPlainText()), 
-                            'stop_port': str(self.pt_stopport.toPlainText()), 
+                            'ZMQcomms_port': str(self.pt_ZMQcomms_port.toPlainText()), 
                             'RPiInfo': RPiInfo, 
                             'use_RPi_nrs': use_RPi_nrs, 
                             'tracking_folder': self.trackingFolder, 
@@ -175,10 +209,6 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
             self.rb_led_single.setChecked(True)
         elif TrackingSettings['LEDmode'] == 'double':
             self.rb_led_double.setChecked(True)
-        if TrackingSettings['save_frames']:
-            self.rb_save_im_yes.setChecked(True)
-        elif not TrackingSettings['save_frames']:
-            self.rb_save_im_no.setChecked(True)
         self.parent.pt_arena_size_x.setPlainText(str(TrackingSettings['arena_size'][0]))
         self.parent.pt_arena_size_y.setPlainText(str(TrackingSettings['arena_size'][1]))
         self.pt_ndots_x.setPlainText(str(TrackingSettings['calibration_n_dots'][0]))
@@ -190,12 +220,6 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         self.pt_LED_separation.setPlainText(str(TrackingSettings['LED_separation']))
         self.pt_LED_angle.setPlainText(str(TrackingSettings['LED_angle']))
         self.pt_camera_transfer_radius.setPlainText(str(TrackingSettings['camera_transfer_radius']))
-        self.pt_camera_iso.setPlainText(str(TrackingSettings['camera_iso']))
-        self.pt_shutter_speed.setPlainText(str(TrackingSettings['shutter_speed']))
-        self.lw_exposure_settings.setCurrentRow(TrackingSettings['exposure_settings_selection'])
-        CamRes = TrackingSettings['resolution']
-        CamResStr = str(CamRes[0]) + ', ' + str(CamRes[1])
-        self.pt_resolution.setPlainText(CamResStr)
         self.pt_local_ip.setPlainText(TrackingSettings['centralIP'])
         if 'global_clock_ip' in TrackingSettings:
             self.pt_global_clock_ip.setPlainText(TrackingSettings['global_clock_ip'])
@@ -203,7 +227,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         self.pt_rpi_password.setPlainText(TrackingSettings['password'])
         self.pt_rpi_username.setPlainText(TrackingSettings['username'])
         self.pt_posport.setPlainText(TrackingSettings['pos_port'])
-        self.pt_stopport.setPlainText(TrackingSettings['stop_port'])
+        self.pt_ZMQcomms_port.setPlainText(TrackingSettings['ZMQcomms_port'])
         for n_rpi in range(len(self.cb_rpis)):
             self.pt_rpi_ips[n_rpi].setPlainText(TrackingSettings['RPiInfo'][str(n_rpi)]['IP'])
             self.cb_rpis[n_rpi].setChecked(TrackingSettings['RPiInfo'][str(n_rpi)]['active'])
@@ -226,27 +250,31 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         self.close()
 
     def show_image(self):
+        display_stream_ports_start = 8000
         TrackingSettings = self.get_TrackingSettings()
-        update_tracking_camera_files(TrackingSettings)
-        if len(TrackingSettings['use_RPi_nrs']) == 0:
-            print('No cameras selected')
+        display_stream_ports = [display_stream_ports_start + n_rpi for n_rpi in TrackingSettings['use_RPi_nrs']]
+        self.Ts_display_stream = []
+        if self.pb_show_image.isChecked():
+            # Start a separate thread for each RPi for displaying the streamed data
+            for n_rpi, port in zip(TrackingSettings['use_RPi_nrs'], display_stream_ports):
+                im_item = im_item_in_im_view(self.im_views[n_rpi])
+                T_display_stream = Thread(target=display_stream, args=(im_item, port))
+                T_display_stream.start()
+                self.Ts_display_stream.append(T_display_stream)
+            # Initialize cameras and start the streaming
+            self.CameraControls = CameraControl.init_CameraControls_with_TrackingSettings(TrackingSettings)
+            for n_rpi, port in zip(TrackingSettings['use_RPi_nrs'], display_stream_ports):
+                self.CameraControls[n_rpi].start_streaming(TrackingSettings['centralIP'], port)
         else:
-            print('Getting images ...')
-            # Acquire current image from all tracking RPis
-            RPiImageTempFolder = mkdtemp('RPiImageTempFolder')
-            T_getRPiImage = []
+            # Stop camera streaming and recording
             for n_rpi in TrackingSettings['use_RPi_nrs']:
-                T = threading.Thread(target=get_current_image, args=[TrackingSettings, n_rpi, RPiImageTempFolder])
-                T.start()
-                T_getRPiImage.append(T)
-            for T in T_getRPiImage:
+                self.CameraControls[n_rpi].stop()
+            # Close camera controller
+            for n_rpi in TrackingSettings['use_RPi_nrs']:
+                self.CameraControls[n_rpi].close()
+            # Wait until all streams have finished
+            for T in self.Ts_display_stream:
                 T.join()
-            # Plot current frame for each RPi
-            for n_rpi in TrackingSettings['use_RPi_nrs']:
-                image = Image.open(os.path.join(RPiImageTempFolder, 'frame' + str(n_rpi) + '.jpg'))
-                plotImage(self.im_views[n_rpi], image)
-            rmtree(RPiImageTempFolder)
-            print('Images displayed.')
 
     def calibrate(self):
         TrackingSettings = self.get_TrackingSettings()
@@ -259,7 +287,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
             RPiCalibrationTempFolder = mkdtemp('RPiCalibrationTempFolder')
             T_calibrateRPi = []
             for n_rpi in TrackingSettings['use_RPi_nrs']:
-                T = threading.Thread(target=calibrate_camera, args=[TrackingSettings, n_rpi, RPiCalibrationTempFolder])
+                T = Thread(target=calibrate_camera, args=[TrackingSettings, n_rpi, RPiCalibrationTempFolder])
                 T.start()
                 T_calibrateRPi.append(T)
             for T in T_calibrateRPi:
@@ -299,7 +327,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
             RPiImageTempFolder = mkdtemp('RPiImageTempFolder')
             T_getRPiImage = []
             for n_rpi in TrackingSettings['use_RPi_nrs']:
-                T = threading.Thread(target=get_overlay_on_current_image, args=[TrackingSettings, n_rpi, RPiImageTempFolder])
+                T = Thread(target=get_overlay_on_current_image, args=[TrackingSettings, n_rpi, RPiImageTempFolder])
                 T.start()
                 T_getRPiImage.append(T)
             for T in T_getRPiImage:
@@ -413,6 +441,7 @@ class CameraSettings(QtGui.QMainWindow, CameraSettingsGUIDesign.Ui_MainWindow):
         self.test_tracking_win.exec_()
         # When dialog window closes, stop the RPis
         trackingControl.stop()
+        trackingControl.close()
 
 # The following is the default ending for a QtGui application script
 def main():

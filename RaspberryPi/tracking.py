@@ -1,6 +1,7 @@
 import numpy as np
 import picamera
 import picamera.array
+from picamera import mmal
 from time import sleep, time
 import cv2
 import csv
@@ -11,214 +12,64 @@ import os
 import cPickle as pickle
 from scipy.spatial.distance import euclidean
 import sys
-from multiprocessing import Process, RawArray, RawValue, Lock, Pipe
-from ctypes import c_uint8, c_uint64
+from multiprocessing import Manager, Process, RawArray
 from copy import copy, deepcopy
-from Queue import Queue
 from threading import Thread
 from ZMQcomms import paired_messenger
 import argparse
 from shutil import rmtree
+from Queue import Empty as QueueIsEmpty
+from ctypes import c_uint8
+import warnings
+import io
+import socket
+import struct
 
-# # Write output to a log file
-# orig_stdout = sys.stdout
-# sys.stdout = open('stdout', 'w')
-# sys.stderr = open('stderr','w')
 
-class process_with_queue(object):
-    '''
-    Base class for handling incoming data with a queue.
-
-    When creating sub-classes from this base-class:
-        Overwrite process() method, which otherwise raises NotImplementedError.
-        When changing __init__() or close() methods, use:
-            super(SubClassName, self).__init__()
-            super(SubClassName, self).close()
-    '''
-    def __init__(self):
-        self.init_queue()
-
-    def process(self, *args, **kwargs):
+class csv_writer(object):
+    def __init__(self, filename):
         '''
-        This method is called on any arguments passed to add_to_queue().
+        Note! Any file at filename is overwritten.
         '''
-        raise NotImplementedError
+        if os.path.exists(filename):
+            os.remove(filename)
+        self.logfile = open(filename, 'a')
+        self.logwriter = csv.writer(self.logfile)
 
-    def queue_processor(self):
+    def write(self, data):
         '''
-        Runs in a separate daemon thread and calls process() if anything in queue.
+        data - list - written to CSV file as a row
         '''
-        while True:
-            args, kwargs = self.queue.get()
-            self.process(*args, **kwargs)
-            self.queue.task_done()
-
-    def init_queue(self):
-        self.queue = Queue()
-        T_queue_processor = Thread(target=self.queue_processor)
-        T_queue_processor.setDaemon(True)
-        T_queue_processor.start()
-
-    def add_to_queue(self, *args, **kwargs):
-        '''
-        This adds input to processing queue, which 
-        '''
-        self.queue.put((args, kwargs))
+        self.logwriter.writerow(data)
 
     def close(self):
-        '''
-        Waits until all tasks added to the queue have been completed.
-        '''
-        self.queue.join()
+        self.logfile.close()
 
 
-class multiprocess_function(object):
+def distance_between_adjacent_pixels(calibrationTmatrix, frame_shape):
     '''
-    This class starts a process on a separate CPU core using multiprocessing module.
-    It allows running a function on a separate process rapidly without spending time on
-    creating the process or sending data to the process each time it is run.
-
-    Each time run() method is called, the provided function is run just once.
-    Run blocks until function call has been completed.
-    Run returns the output from the function if it is not None.
-
-    The function is called with the same arguments as used to instantiate multiprocess_function.
-
-    Input arguments must be possible to pass with multiprocessing.Process() method as args.
-    This means that only arguments that can be pickled, can be used.
-
-    Data used by the function that can change any time it is run can be passed as
-    shared shared memory or server processes, such as multiprocessing.Array().
+    Approximation of distance in centimeters correspond to single pixel difference at the center of field of view.
     '''
-    def __init__(self, function, *args, **kwargs):
-        '''
-        Input argument function is to be called with any input arguments that follow it.
-        '''
-        # Set up connection with the process in case data is returned
-        self.processor_listener, processor_sender = Pipe(duplex=False)
-        # This lock starts locked. When this lock is released, processor stops running.
-        self.processor_Stopper_Lock = Lock()
-        self.processor_Stopper_Lock.acquire()
-        # This lock starts locked. When released, function is run and this lock is locked.
-        self.processor_Start_Lock = Lock()
-        self.processor_Start_Lock.acquire()
-        # This lock starts locked. It is released as a run of function is finished and locked again by parent process.
-        self.processor_End_Lock = Lock()
-        self.processor_End_Lock.acquire()
-        self.P_processor = Process(target=self.processor, 
-                                       args=(function, args, kwargs, processor_sender, 
-                                             self.processor_Stopper_Lock, 
-                                             self.processor_Start_Lock, 
-                                             self.processor_End_Lock))
-        self.P_processor.start()
+    distance_in_pixels = 10
+    # Pick two points at the center of the field of view
+    tmp_loc1 = np.reshape(np.array([int(frame_shape[1] / 2), int(frame_shape[0] / 2)],dtype=np.float32),(1,1,2))
+    tmp_loc2 = np.reshape(np.array([int(frame_shape[1] / 2), int(frame_shape[0] / 2) + distance_in_pixels],dtype=np.float32),(1,1,2))
+    # Use transformation matrix to map pixel values to position in real world in centimeters
+    tmp_loc1 = cv2.perspectiveTransform(tmp_loc1, calibrationTmatrix)
+    tmp_loc2 = cv2.perspectiveTransform(tmp_loc2, calibrationTmatrix)
+    # Compute the distance between the two points in real world centimeters
+    distance_in_cm = euclidean(np.array([tmp_loc1[0,0,0].astype('float'), tmp_loc1[0,0,1].astype('float')]), 
+                               np.array([tmp_loc2[0,0,0].astype('float'), tmp_loc2[0,0,1].astype('float')]))
+    # Compute distance in centimeters between adjacent pixels
+    distance = float(distance_in_cm) / float(distance_in_pixels)
 
-    @staticmethod
-    def processor(function, args, kwargs, result_sender, Stopper_Lock, Start_Lock, End_Lock):
-        '''
-        This method is run in a separate process and controlled with run() and close() methods.
-        '''
-        while not Stopper_Lock.acquire(block=False):
-            if Start_Lock.acquire(block=True, timeout=0.01):
-                ret = function(*args, **kwargs)
-                End_Lock.release()
-                result_sender.send(ret)
+    return distance
 
-    def run(self):
-        '''
-        Instructs processor() to call the function.
-        Returns function output if not None.
-        '''
-        self.processor_Start_Lock.release()
-        self.processor_End_Lock.acquire()
-        ret = self.processor_listener.recv()
-        if not (ret is None):
-            return ret
-
-    def close(self):
-        '''
-        Stops processor() method running in a seprarte process after any ongoing function call.
-        '''
-        self.processor_Stopper_Lock.release()
-        self.P_processor.join()
+def convert_centimeters_to_pixel_distance(distance_in_cm, calibrationTmatrix, frame_shape):
+    return int(np.round(float(distance_in_cm) / distance_between_adjacent_pixels(calibrationTmatrix, frame_shape)))
 
 
-class frame_writer(process_with_queue):
-    '''
-    Inherits process_with_queue functionality and instantiates multiprocess_function classes
-    to store frames from the queue.
-
-    Note that storing the images is an intensive process limited by disk writing speed.
-    Increasing the image_quality (and thereby amount of data per frame) can reduce the maximum
-    frames per second possible before long periods of data write gaps. These can cause issues
-    with queues and parent processes.
-    '''
-
-    def __init__(self, resolution, n_processes=2, path_to_frames='frames', image_quality=85):
-        '''
-        Inherits __init__() from process_with_queue and adds initialization of frame writing.
-
-        resolution - tuple - (frame_width,frame_height).
-        n_processes - int - number of multiprocessing processes to use for writing frames (default is 2).
-        path_to_frames - path for writing frames, default is 'frames' sub-folder in working directory.
-        image_quality - int - between 1 and 100, higher being larger file size and higher quality (default is 85).
-        '''
-        super(frame_writer, self).__init__()
-        self.clear_path_to_frames(path_to_frames)
-        self.init_multiprocess_function(resolution, path_to_frames, image_quality)
-
-    def clear_path_to_frames(self, path_to_frames):
-        '''
-        Ensures path_to_frames is an empty folder.
-        '''
-        path_to_frames = path_to_frames
-        if os.path.exists(path_to_frames):
-            rmtree(path_to_frames)
-        os.mkdir(path_to_frames)
-
-    @staticmethod
-    def save_frame(path_to_frames, image_quality, frametime_RawArray, frame_RawArray, frame_shape):
-        '''
-        Stores frame as JPEG image file with frametime_RawArray as name.
-        The limiting factor for the speed of this function is the writing speed of the device.
-        Lower image_quality results in smaller file sizes, which allows for storing more frames per second.
-        '''
-        frame = np.frombuffer(frame_RawArray, dtype=c_uint8).reshape(frame_shape)
-        frametime = int(frametime_RawArray.value)
-        filename = os.path.join(path_to_frames, str(frametime) + '.jpg')
-        cv2.imwrite(filename, frame, [int(cv2.IMWRITE_JPEG_QUALITY), image_quality])
-
-    def init_multiprocess_function(self, resolution, path_to_frames, image_quality):
-        '''
-        Initializes multiprocess_function class with save_frame() method and shared states.
-        '''
-        # Create a shared memory array
-        self.frametime_RawValue = RawValue(c_uint64)
-        frame_shape = (resolution[1], resolution[0], 3)
-        numel = int(frame_shape[0] * frame_shape[1] * frame_shape[2])
-        frame_RawArray = RawArray(c_uint8, numel)
-        self.frame_RawArray_Numpy_Wrapper = np.frombuffer(frame_RawArray, dtype=c_uint8).reshape(frame_shape)
-        # Instantiate multiprocess_function
-        self.multiprocess_function = multiprocess_function(self.save_frame, path_to_frames, image_quality, 
-                                                           self.frametime_RawValue, 
-                                                           frame_RawArray, frame_shape)
-
-    def process(self, frame, frametime):
-        '''
-        Passes data to multiprocess_function class which runs save_frame.
-        '''
-        np.copyto(self.frame_RawArray_Numpy_Wrapper, frame)
-        self.frametime_RawValue.value = int(frametime)
-        self.multiprocess_function.run()
-
-    def close(self):
-        '''
-        Inherits close() from process_with_queue and closes multiprocess_function class.
-        '''
-        super(frame_writer, self).close()
-        self.multiprocess_function.close()
-
-
-class online_tracker(process_with_queue):
+class OnlineTracker(object):
     '''
     Inherits process_with_queue functionality and instantiates multiprocess_function class
     for processing each frame in the queue with detect_leds() method.
@@ -240,15 +91,17 @@ class online_tracker(process_with_queue):
             'smoothing_radius' - int
             'calibrationTmatrix' - array
             'doubleLED' - bool
-            'LED_separation_pix' - int
-            'resolution' - tuple - (frame_width,frame_height)
+            'LED_separation' - float
+            'frame_shape' - tuple - (height, width, channels) of incoming frames
         '''
-        super(online_tracker, self).__init__()
         self.RPi_number = params['RPi_number']
+        params['LED_separation_pix'] = convert_centimeters_to_pixel_distance(params['LED_separation'], 
+                                                                             params['calibrationTmatrix'], 
+                                                                             params['frame_shape'])
         self.init_ZMQpublisher(params['RPiIP'], params['pos_port'])
-        self.init_logfile_writer()
+        self.csv_writer = csv_writer('OnlineTrackerData.csv')
         params['cutout'] = self.create_circular_cutout(params)
-        self.init_multiprocess_function(params)
+        self.params = params
 
     def init_ZMQpublisher(self, RPiIP, pos_port):
         '''
@@ -259,16 +112,7 @@ class online_tracker(process_with_queue):
         contextpub = zmq.Context()
         self.ZMQpublisher = contextpub.socket(zmq.PUB)
         self.ZMQpublisher.bind(posIP)
-        sleep(0.1) # Give time to establish sockets for ZeroMQ
-
-    def init_logfile_writer(self, filename='logfile.csv'):
-        '''
-        Sets up CSV file writer.
-        '''
-        if os.path.exists(filename):
-            os.remove(filename)
-        self.logfile = open(filename, 'a')
-        self.logwriter = csv.writer(self.logfile)
+        sleep(0.5) # Give time to establish sockets for ZeroMQ
 
     @staticmethod
     def transform_pix_to_cm(pos_pix, calibrationTmatrix):
@@ -284,7 +128,6 @@ class online_tracker(process_with_queue):
 
         return pos_cm
 
-
     @staticmethod
     def detect_first_led(gray, calibrationTmatrix):
         '''
@@ -293,7 +136,7 @@ class online_tracker(process_with_queue):
         '''
         (_1, lum, _2, led_pix) = cv2.minMaxLoc(gray) # Find coordinates of pixel with highest value
         led_pix = led_pix[::-1]
-        xy_cm = online_tracker.transform_pix_to_cm(led_pix, calibrationTmatrix)
+        xy_cm = OnlineTracker.transform_pix_to_cm(led_pix, calibrationTmatrix)
 
         return led_pix, xy_cm, lum
 
@@ -304,7 +147,7 @@ class online_tracker(process_with_queue):
         '''
         # Extract necessary values from params
         cutout_radius = params['LED_separation_pix'] * 2
-        img_shape = (params['resolution'][1], params['resolution'][0])
+        img_shape = params['frame_shape'][:2]
         # Create array blank array for search area
         cutout_shape = (cutout_radius * 2 + 1, cutout_radius * 2 + 1)
         blank = np.zeros(cutout_shape, dtype=np.uint8)
@@ -356,7 +199,7 @@ class online_tracker(process_with_queue):
         Return coordinates and value of maximum pixel in range of center_pix.
         Coordinate values in C-major order relative to the grayscale image.
         '''
-        shifted_cutout = online_tracker.center_and_crop_cutout(cutout, center_pix)
+        shifted_cutout = OnlineTracker.center_and_crop_cutout(cutout, center_pix)
         # Extract pixel values from img and put into blank cutout array
         pix_vals = img[shifted_cutout['ind_1_extr'], shifted_cutout['ind_2_extr']]
         img_cutout = shifted_cutout['blank']
@@ -378,13 +221,13 @@ class online_tracker(process_with_queue):
         Coordinate values in C-major order relative to the grayscale image.
         '''
         gray = cv2.circle(gray, tuple(led_pix_1[::-1]), int(round(LED_separation_pix / 2.0)), 0, -1)
-        led_pix, lum = online_tracker.detect_max_luminance_in_circular_area(gray, led_pix_1, cutout)
-        xy_cm = online_tracker.transform_pix_to_cm(led_pix, calibrationTmatrix)
+        led_pix, lum = OnlineTracker.detect_max_luminance_in_circular_area(gray, led_pix_1, cutout)
+        xy_cm = OnlineTracker.transform_pix_to_cm(led_pix, calibrationTmatrix)
 
         return led_pix, xy_cm, lum
 
     @staticmethod
-    def detect_leds(frame_RawArray, frame_shape, params):
+    def detect_leds(frame, params):
         '''
         Detects brightest point on grayscaled data after smoothing.
         If multiple LEDs in use, tries finding the second brithest spot in proximity of the first.
@@ -398,12 +241,11 @@ class online_tracker(process_with_queue):
 
             Values are None for second LED if not requested or not found.
         '''
-        frame = np.frombuffer(frame_RawArray, dtype=c_uint8).reshape(frame_shape)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) # Convert BGR data to grayscale
         gray = cv2.GaussianBlur(gray, (params['smoothing_radius'], params['smoothing_radius']), 0) # Smooth the image
-        led_pix_1, led_cm_1, lum_1 = online_tracker.detect_first_led(gray, params['calibrationTmatrix'])
+        led_pix_1, led_cm_1, lum_1 = OnlineTracker.detect_first_led(gray, params['calibrationTmatrix'])
         if params['doubleLED']:
-            led_pix_2, led_cm_2, lum_2 = online_tracker.detect_second_led(gray, params['calibrationTmatrix'], 
+            led_pix_2, led_cm_2, lum_2 = OnlineTracker.detect_second_led(gray, params['calibrationTmatrix'], 
                                                                           led_pix_1, params['LED_separation_pix'], 
                                                                           params['cutout'])
             linedata = [led_cm_1[0], led_cm_1[1], led_cm_2[0], led_cm_2[1], lum_1, lum_2]
@@ -411,19 +253,6 @@ class online_tracker(process_with_queue):
             linedata = [led_cm_1[0], led_cm_1[1], None, None, lum_1, None]
 
         return linedata
-
-    def init_multiprocess_function(self, params):
-        '''
-        Initializes multiprocess_function class with detect_leds() method and shared state.
-        '''
-        # Create a shared memory array
-        frame_shape = (params['resolution'][1], params['resolution'][0], 3)
-        numel = int(frame_shape[0] * frame_shape[1] * frame_shape[2])
-        frame_RawArray = RawArray(c_uint8, numel)
-        self.frame_RawArray_Numpy_Wrapper = np.frombuffer(frame_RawArray, dtype=c_uint8).reshape(frame_shape)
-        # Instantiate multiprocess_function
-        self.multiprocess_function = multiprocess_function(self.detect_leds, frame_RawArray, 
-                                                           frame_shape, params)
 
     def send_data_with_ZMQpublisher(self, linedata):
         '''
@@ -438,111 +267,22 @@ class online_tracker(process_with_queue):
         '''
         self.logwriter.writerow(linedata)
 
-    def process(self, frame, frametime):
+    def process(self, frame):
         '''
-        Passes data to multiprocess_function for running detect_leds() method.
+        Processes YUV frame using detect_leds() method.
         Passes output from detect_leds() to be sent via ZMQ and writtend to CSV file.
         '''
-        np.copyto(self.frame_RawArray_Numpy_Wrapper, frame)
-        linedata = self.multiprocess_function.run()
-        linedata = [self.RPi_number, frametime] + linedata
-        self.send_data_with_ZMQpublisher(linedata)
-        self.write_to_logfile(linedata)
+        frame = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR)
+        linedata = OnlineTracker.detect_leds(frame, self.params)
+        self.send_data_with_ZMQpublisher([self.RPi_number] + linedata)
+        self.csv_writer.write(linedata)
 
     def close(self):
         '''
-        Inherits close() from process_with_queue and closes multiprocess_function class.
         Also closes CSV file and ZMQ publisher.
         '''
-        super(online_tracker, self).close()
-        self.multiprocess_function.close()
-        self.logfile.close()
+        self.csv_writer.close()
         self.ZMQpublisher.close()
-
-
-class Frame_Handler(process_with_queue):
-    '''
-    Inherits process_with_queue functionality and instantiates online_tracker class and
-    frame_writer if save_frames is True. Frame_Handler makes copies of any incoming data
-    and passes them on to next queues in online_tracker and frame_writer.
-    '''
-
-    def __init__(self, params):
-        '''
-        Inherits __init__() from process_with_queue and adds initialization of online_tracker and frame_writer.
-        params - dict - must contain all parameters necessary for online_tracker class and:
-            'save_frames' - bool - indicates if frame_writer is used.
-        '''
-        super(Frame_Handler, self).__init__()
-        self.save_frames = params['save_frames']
-        self.online_tracker = online_tracker(params)
-        if self.save_frames:
-            self.frame_writer = frame_writer(params['resolution'])
-
-    def process(self, frame, frametime):
-        '''
-        Makes copies of incoming data and passes them to online_tracker and frame_writer.
-        '''
-        self.online_tracker.add_to_queue(copy(frame), copy(frametime))
-        if self.save_frames:
-            self.frame_writer.add_to_queue(copy(frame), copy(frametime))
-
-    def close(self):
-        '''
-        Inherits close() from process_with_queue and closes online_tracker and frame_writer.
-        '''
-        super(Frame_Handler, self).close()
-        self.online_tracker.close()
-        if self.save_frames:
-            self.frame_writer.close()
-
-
-class PiCameraOutput(picamera.array.PiRGBAnalysis):
-    '''
-    This class can be used as output for picamera.PiCamera.start_recording().
-    It grabs GPU clock times for synchronization and passes them with each frame to a queue in
-    Frame_Handler class, which takes care of the handling and processing of frames.
-
-    Incoming frames are ignored until start() method is called.
-    '''
-
-    def __init__(self, Frame_Handler_Params, *args, **kwargs):
-        '''
-        Initializes TTL signalling and Frame_Handler.
-
-        Frame_Handler_Params - dict - must contain all parameters necessary for Frame_Handler.
-        '''
-        super(PiCameraOutput, self).__init__(*args, **kwargs)
-        self.frame_handler = Frame_Handler(Frame_Handler_Params)
-        self.Use_PiCamera_Stream = False
-        self.analyse_method_active = False
-
-    def analyse(self, frame):
-        '''
-        Grabs camera GPU timestamps and passes each frame to Frame_Handler queue.
-        '''
-        if self.Use_PiCamera_Stream:
-            self.analyse_method_active = True
-            # Each time a frame is catpured, this function is called on that frame
-            frametime = copy(self.camera.frame.timestamp) # Get timestamp of frame capture (PTS) in RPi camera time
-            self.frame_handler.add_to_queue(frame, frametime)
-            self.analyse_method_active = False
-
-    def start(self):
-        '''
-        Makes analyse() process incoming frames.
-        '''
-        self.Use_PiCamera_Stream = True
-
-    def close(self, *args, **kwargs):
-        '''
-        Closes all child classes and processes in correct order.
-        '''
-        super(PiCameraOutput, self).close(*args, **kwargs)
-        self.Use_PiCamera_Stream = False # Ensures no further frames are sent to analyse
-        while self.analyse_method_active: # Ensures all frames in analyse have been passed to self.frame_handler
-            sleep(0.01)
-        self.frame_handler.close()
 
 
 class TTLpulse_CameraTime_Writer(object):
@@ -557,31 +297,265 @@ class TTLpulse_CameraTime_Writer(object):
         '''
         self.camera = camera
         self.ttlPin = ttlPin
-        self.init_logfile_writer(filename)
+        self.csv_writer = csv_writer(filename)
         # Initialize TTL edge detection
         self.piGPIO = pigpio.pi()
         self.piGPIOCallback = self.piGPIO.callback(self.ttlPin, pigpio.RISING_EDGE, self.write_time)
 
-    def init_logfile_writer(self, filename):
-        '''
-        Sets up CSV file writer.
-        '''
-        if os.path.exists(filename):
-            os.remove(filename)
-        self.logfile = open(filename, 'a')
-        self.logwriter = csv.writer(self.logfile)
-
     def write_time(self, gpio, level, tick):
         '''
         Retrieves camera timestamp and writes it to the file.
+        The latency between TTL pulse tick and system tick after querying camera timestamp is subtracted.
         '''
-        currenttime = copy(self.camera.timestamp)
-        self.logwriter.writerow([currenttime])
+        currenttime = self.camera.timestamp
+        tickDiff = pigpio.tickDiff(tick, self.piGPIO.get_current_tick())
+        currenttime = currenttime - tickDiff
+        self.csv_writer.write([currenttime])
 
     def close(self):
         self.piGPIOCallback.cancel()
         self.piGPIO.stop()
-        self.logfile.close()
+        self.csv_writer.close()
+
+
+def RPiNumber():
+    '''
+    Returns RPiNumber from a file in the current working directory.
+    '''
+    with open('RPiNumber','r') as file:
+        RPi_number = int(file.read().splitlines()[0])
+
+    return RPi_number
+
+
+class SharedArrayQueue(object):
+    '''
+    Replicates Queue functionality for specified size and ctype of numpy arrays,
+    for fast transfer of data between processes using pre-allocated shared memory.
+    '''
+    def __init__(self, ctype, array_shape, max_queue_length):
+        '''
+        ctype - ctypes of the arrays e.g. c_uint8.
+        array_shape - tuple - dimensions of the array, e.g. (480, 720).
+        max_queue_length - int - number of pre-allocated shared arrays.
+            Note! Too high value for large arrays could cause Out Of Memory errors.
+        '''
+        self.ctype = ctype
+        self.array_shape = array_shape
+        self.manager = Manager()
+        self.data_indices = range(max_queue_length)
+        self.occupied_data_indices = self.manager.list()
+        self.shared_arrays, self.shared_array_wrappers = SharedArrayQueue.create_shared_arrays(ctype, array_shape, max_queue_length)
+
+    @staticmethod
+    def create_shared_array(ctype, array_shape):
+        '''
+        Returns a multiprocessing.RawArray and its Numpy wrapper.
+        '''
+        numel = int(reduce(lambda x, y: x*y, array_shape))
+        shared_array = RawArray(ctype, numel)
+        shared_array_wrapper = np.frombuffer(shared_array, dtype=ctype).reshape(array_shape)
+
+        return shared_array, shared_array_wrapper
+
+    @staticmethod
+    def create_shared_arrays(ctype, array_shape, max_queue_length):
+        '''
+        Arranges shared_array and shared_array_wrapper from create_shared_array 
+        into lists of length max_queue_length.
+        '''
+        shared_arrays = []
+        shared_array_wrappers = []
+        for n in range(max_queue_length):
+            shared_array, shared_array_wrapper = SharedArrayQueue.create_shared_array(ctype, array_shape)
+            shared_arrays.append(shared_array)
+            shared_array_wrappers.append(shared_array_wrapper)
+
+        return shared_arrays, shared_array_wrappers
+
+    def put(self, data, block=False):
+        '''
+        Stores data into available location in shared memory if data is numpy.ndarray.
+        If data is not numpy.ndarray, using get on this item in the queue will return string 'IncorrectItem'.
+        If max_queue_length has been reached and block=False (default), an Exception is raised.
+        If max_queue_length has been reached and block=True, method waits until space in queue is available.
+        '''
+        if isinstance(data, np.ndarray):
+            # Find available data indices
+            unavailable_data_indices = list(self.occupied_data_indices)
+            available_data_indices = list(set(self.data_indices) - set(unavailable_data_indices))
+            # Find single available index to use or if none available, raise Exception
+            if len(available_data_indices) > 0:
+                array_position = available_data_indices.pop(0)
+                # Place array into shared array
+                np.copyto(self.shared_array_wrappers[array_position], data)
+                # Update available 
+                self.occupied_data_indices.append(array_position)
+            else:
+                if block:
+                    sleep(0.001)
+                    self.put(data, block)
+                else:
+                    raise Exception('SharedArrayQueue pre-allocated memory full!')
+        else:
+            self.occupied_data_indices.append(-1)
+
+    def get(self, timeout=None):
+        '''
+        Returns the next numpy.ndarray in the queue and waits until available.
+        If anything else has been put into queue, get() returns 'IncorrectItem'.
+        If timeout is specified and item is not available, get()
+        waits until timeout seconds and returns 'TimeoutReached'.
+        '''
+        if not (timeout is None):
+            timeout_start_time = time()
+        while True:
+            if len(self.occupied_data_indices) == 0:
+                sleep(0.001)
+            else:
+                array_position = self.occupied_data_indices.pop(0)
+                if array_position >= 0:
+                    data = np.frombuffer(self.shared_arrays[array_position], dtype=self.ctype)
+                    return data.reshape(self.array_shape)
+                else:
+                    return 'IncorrectItem'
+            # Return None if timeout has been reached
+            if not (timeout is None):
+                if time() - timeout_start_time > timeout:
+                    return 'TimeoutReached'
+
+    def qsize(self):
+        '''
+        Returns the number of items currently in the queue.
+        '''
+        return len(self.occupied_data_indices)
+
+    def join(self):
+        '''
+        Waits until all items have been acquired from the queue.
+        '''
+        while len(self.occupied_data_indices) > 0:
+            sleep(0.001)
+
+
+class RawYUV_Processor(object):
+    '''
+    Used by RawYUV_Output to process each incoming frame.
+    Uses SharedArrayQueue to pass items into OnlineTracker in a separate process.
+    '''
+    def __init__(self, OnlineTrackerParams, frame_shape):
+        '''
+        OnlineTrackerParams - dict - input to prepare_OnlineTracker_params
+        frame_shape - tuple - (height, width, n_channels) of incoming frames
+        '''
+        OnlineTrackerParams['frame_shape'] = frame_shape
+        self.queue = SharedArrayQueue(c_uint8, frame_shape, 50)
+        self.P_OnlineTracker_Process = Process(target=RawYUV_Processor.OnlineTracker_Process, 
+                                                args=(OnlineTrackerParams, self.queue))
+        self.P_OnlineTracker_Process.start()
+
+    @staticmethod
+    def OnlineTracker_Process(params, queue):
+        '''
+        Uses OnlineTracker.process() on each item in the queue,
+        until 'IncorrectItem' is received from queue.get().
+
+        params - dict - parameters required by OnlineTracker.
+        '''
+        OT = OnlineTracker(params)
+        while True:
+            s_t = time()
+            item = queue.get(timeout=0.01)
+            if isinstance(item, np.ndarray):
+                OT.process(item)
+            elif isinstance(item, str) and item == 'IncorrectItem':
+                break
+        OT.close()
+
+    def write(self, frame):
+        '''
+        Called by RawYUV_Output for each frame.
+        '''
+        self.queue.put(frame)
+
+    def close(self):
+        self.queue.put('STOP')
+        self.queue.join()
+        self.P_OnlineTracker_Process.join()
+
+
+class PiVideoEncoder_with_timestamps(picamera.PiVideoEncoder):
+    '''
+    picamera.PiVideoEncoder subclass that writes camera timestamp
+    of each frame to file VideoEncoderTimestamps.csv
+    '''
+    def __init__(self, *args, **kwargs):
+        super(PiVideoEncoder_with_timestamps, self).__init__(*args, **kwargs)
+        self.csv_writer = csv_writer('VideoEncoderTimestamps.csv')
+
+    def _callback_write(self, buf, **kwargs):
+
+        if isinstance(buf, picamera.mmalobj.MMALBuffer):
+            # for firmware >= 4.4.8
+            flags = buf.flags
+        else:
+            # for firmware < 4.4.8
+            flags = buf[0].flags
+
+        if not (flags & mmal.MMAL_BUFFER_HEADER_FLAG_CONFIG):
+
+            if flags & mmal.MMAL_BUFFER_HEADER_FLAG_FRAME_END:
+
+                if buf.pts < 0:
+                    # this usually happens if the video quality is set to
+                    # a low value (= high quality). Try something in the range
+                    # 20 to 25.
+                    print("invalid time time stamp (buf.pts < 0):", buf.pts)
+
+                self.csv_writer.write([buf.pts])
+
+        return super(PiVideoEncoder_with_timestamps, self)._callback_write(buf, **kwargs)
+
+    def close(self, *args, **kwargs):
+        super(PiVideoEncoder_with_timestamps, self).close(*args, **kwargs)
+        self.csv_writer.close()
+
+
+class PiRawVideoEncoder_with_timestamps(picamera.PiRawVideoEncoder):
+    '''
+    picamera.PiRawVideoEncoder subclass that writes camera timestamp
+    of each frame to file RawVideoEncoderTimestamps.csv
+    '''
+    def __init__(self, *args, **kwargs):
+        super(PiRawVideoEncoder_with_timestamps, self).__init__(*args, **kwargs)
+        self.csv_writer = csv_writer('RawVideoEncoderTimestamps.csv')
+
+    def _callback_write(self, buf, **kwargs):
+
+        if isinstance(buf, picamera.mmalobj.MMALBuffer):
+            # for firmware >= 4.4.8
+            flags = buf.flags
+        else:
+            # for firmware < 4.4.8
+            flags = buf[0].flags
+
+        if not (flags & mmal.MMAL_BUFFER_HEADER_FLAG_CONFIG):
+
+            if flags & mmal.MMAL_BUFFER_HEADER_FLAG_FRAME_END:
+
+                if buf.pts < 0:
+                    # this usually happens if the video quality is set to
+                    # a low value (= high quality). Try something in the range
+                    # 20 to 25.
+                    print("invalid time time stamp (buf.pts < 0):", buf.pts)
+
+                self.csv_writer.write([buf.pts])
+
+        return super(PiRawVideoEncoder_with_timestamps, self)._callback_write(buf, **kwargs)
+
+    def close(self, *args, **kwargs):
+        super(PiRawVideoEncoder_with_timestamps, self).close(*args, **kwargs)
+        self.csv_writer.close()
 
 
 class PiCamera_with_timestamps(picamera.PiCamera):
@@ -597,84 +571,245 @@ class PiCamera_with_timestamps(picamera.PiCamera):
         super(PiCamera_with_timestamps, self).__init__(*args, **kwargs)
         if Start_TTLpulse_CameraTime_Writer:
             self.TTLpulse_CameraTime_Writer = TTLpulse_CameraTime_Writer(self)
+        self.ThisThingIsAlive = True
+
+    def _get_video_encoder(self, *args, **kwargs):
+        '''
+        Provides an encoder class with timestamps for encoder_formats 'h264' and 'yuv'.
+        In case of format 'mjpeg', picamera.PiCookedVideoEncoder is returned.
+        Other formats raise ValueError.
+        '''
+        encoder_format = args[2]
+        if encoder_format == 'h264':
+            return PiVideoEncoder_with_timestamps(self, *args, **kwargs)
+        elif encoder_format == 'yuv':
+            return PiRawVideoEncoder_with_timestamps(self, *args, **kwargs)
+        elif encoder_format == 'mjpeg':
+            return picamera.PiCookedVideoEncoder(self, *args, **kwargs)
+        else:
+            raise ValueError('Incorrect encoder format requested from PiCamera_with_timestamps.')
 
     def stop_recording(self, *args, **kwargs):
         if hasattr(self, 'TTLpulse_CameraTime_Writer'):
             self.TTLpulse_CameraTime_Writer.close()
         super(PiCamera_with_timestamps, self).stop_recording(*args, **kwargs)
 
+    def close(self, *args, **kwargs):
+        super(PiCamera_with_timestamps, self).close(*args, **kwargs)
+        self.ThisThingIsAlive = False
 
-def RPiNumber():
+
+class RawYUV_Output(picamera.array.PiYUVAnalysis):
     '''
-    Returns RPiNumber from a file in the current working directory.
+    Output for picamera.PiCamera.start_recording(format='yuv').
+    Uses 
     '''
-    with open('RPiNumber','r') as file:
-        RPi_number = int(file.read().splitlines()[0])
 
-    return RPi_number
+    def __init__(self, *args, **kwargs):
+        '''
+        RawYUV_Output_Processor keyword argument write() method is called for each frame.
+        If no RawYUV_Output_Processor provided, frames are not processed.
+        '''
+        online_tracking = kwargs.pop('online_tracking', False)
+        OnlineTrackerParams = kwargs.pop('OnlineTrackerParams', None)
+        if online_tracking and not (OnlineTrackerParams is None):
+            frame_shape = (kwargs['size'][1], kwargs['size'][0], 3)
+            self.RawYUV_Output_Processor = RawYUV_Processor(OnlineTrackerParams, frame_shape)
+        super(RawYUV_Output, self).__init__(*args, **kwargs)
 
-def distance_between_adjacent_pixels(calibrationTmatrix, resolution):
+    def analyse(self, frame):
+        if hasattr(self, 'RawYUV_Output_Processor'):
+            self.RawYUV_Output_Processor.write(frame)
+
+    def close(self, *args, **kwargs):
+        super(RawYUV_Output, self).close(*args, **kwargs)
+        if hasattr(self, 'RawYUV_Output_Processor'):
+            self.RawYUV_Output_Processor.close()
+
+
+class Stream_MJPEG_Output(object):
     '''
-    Approximation of distance in centimeters correspond to single pixel difference at the center of field of view.
+    Streams MJPEG data to an IP address
     '''
-    distance_in_pixels = 10
-    # Pick two points at the center of the field of view
-    tmp_loc1 = np.reshape(np.array([int(resolution[0] / 2), int(resolution[1] / 2)],dtype=np.float32),(1,1,2))
-    tmp_loc2 = np.reshape(np.array([int(resolution[0] / 2), int(resolution[1] / 2) + distance_in_pixels],dtype=np.float32),(1,1,2))
-    # Use transformation matrix to map pixel values to position in real world in centimeters
-    tmp_loc1 = cv2.perspectiveTransform(tmp_loc1, calibrationTmatrix)
-    tmp_loc2 = cv2.perspectiveTransform(tmp_loc2, calibrationTmatrix)
-    # Compute the distance between the two points in real world centimeters
-    distance_in_cm = euclidean(np.array([tmp_loc1[0,0,0].astype('float'), tmp_loc1[0,0,1].astype('float')]), 
-                               np.array([tmp_loc2[0,0,0].astype('float'), tmp_loc2[0,0,1].astype('float')]))
-    # Compute distance in centimeters between adjacent pixels
-    distance = float(distance_in_cm) / float(distance_in_pixels)
+    def __init__(self, address, port):
+        '''
+        address - str - IP address where to send data.
+        port - int - port number to use.
+        '''
+        self.client_socket = socket.socket()
+        self.client_socket.connect((address, port))
+        self.connection = self.client_socket.makefile('wb')
+        self.stream = io.BytesIO()
 
-    return distance
+    def write(self, buf):
+        if buf.startswith(b'\xff\xd8'):
+            # Start of new frame; send the old one's length
+            # then the data
+            size = self.stream.tell()
+            if size > 0:
+                self.connection.write(struct.pack('<L', size))
+                self.connection.flush()
+                self.stream.seek(0)
+                self.connection.write(self.stream.read(size))
+                self.stream.seek(0)
+        self.stream.write(buf)
 
-def convert_centimeters_to_pixel_distance(distance_in_cm, calibrationTmatrix, resolution):
-    return int(np.round(float(distance_in_cm) / distance_between_adjacent_pixels(calibrationTmatrix, resolution)))
+    def close(self):
+        self.connection.write(struct.pack('<L', 0))
+        self.connection.close()
+        self.client_socket.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self.close()
+
 
 class CameraController(object):
     '''
-    Controls RPi camera and frame processing.
+    Initializes PiCamera and allows control of recording.
     '''
+    resolutions = {'low': (800, 608), 'high': (1600, 1216)}
 
-    def __init__(self, TrackingSettings=None, remoteControl=False):
+    def __init__(self, resolution_option=None, online_tracking=False, OnlineTrackerParams=None):
         '''
-        TrackingSettings - dict - as created by CameraSettingsGUI.
-        remoteControl - bool - if True, start and stop commands are expected via ZMQ. Otherwise, raw_input.
+        resolution - str - 'high' for (1600, 1216). Otherwise (800, 608) is used.
+        RawYUV_Processor - object - write() method is called for each YUV frame to be processed.
         '''
-        if TrackingSettings is None:
-            with open('TrackingSettings.p','rb') as file:
-                TrackingSettings = pickle.load(file)
-        self.remoteControl = remoteControl
-        # Set start and end triggers
-        if self.remoteControl:
-            self.start_image_acquisition = False
-            self.stop_image_acquisition = False
-        # Initialize ZMQ communications
-        if self.remoteControl:
-            self.initialize_ZMQcomms(int(TrackingSettings['stop_port']))
-        # Parse recording settings
-        self.camera_iso = TrackingSettings['camera_iso']
-        self.shutter_speed = TrackingSettings['shutter_speed']
-        self.exposure_setting = TrackingSettings['exposure_setting']
-        self.resolution = TrackingSettings['resolution']
-        self.Frame_Handler_Params = self.prepare_Frame_Handler_Params(RPiNumber(), TrackingSettings)
-        # Specify framerate based on how fast Frame_Handler processes a single frame
-        if self.Frame_Handler_Params['save_frames']:
-            self.framerate = 25
+        self._init_camera(resolution_option)
+        if online_tracking and not (OnlineTrackerParams is None):
+            self.RawYUV_Output = RawYUV_Output(self.camera, size=self.resolutions['low'], 
+                                               online_tracking=online_tracking, 
+                                               OnlineTrackerParams=OnlineTrackerParams)
         else:
-            self.framerate = 30
+            self.RawYUV_Output = RawYUV_Output(self.camera, size=self.resolutions['low'])
+        self._reset_available_ports()
+        self.ThisThingIsAlive = True
 
-    def initialize_ZMQcomms(self, port):
+    def _init_camera(self, resolution_option=None, warmup=2):
+        '''
+        Initializes camera with specififed settings and fixes gains.
+
+        resolution - str - 'high' for (1600, 1216). Otherwise (800, 608) is used.
+        '''
+        self.camera = PiCamera_with_timestamps(clock_mode='raw', sensor_mode=4, framerate=30, 
+                                               resolution=self._get_resolution(resolution_option), 
+                                               TTLpulse_CameraTime_Writer=True)
+        self.camera.awb_mode = 'auto'
+        self.camera.exposure_mode = 'auto'
+        self.camera.start_preview()
+        sleep(warmup)
+        gains = self.camera.awb_gains
+        self.camera.awb_mode = 'off'
+        self.camera.awb_gains = gains
+        self.camera.shutter_speed = self.camera.exposure_speed
+        self.camera.exposure_mode = 'off'
+
+    def _get_resolution(self, setting):
+        return self.resolutions[setting] if setting in self.resolutions.keys() else self.resolutions['low']
+
+    def _reset_available_ports(self):
+        self._available_ports = [1, 2, 3]
+
+    def _get_available_port(self):
+        return self._available_ports.pop(0)
+
+    def start_processing(self):
+        if self.camera.resolution == self.resolutions['low']:
+            self.camera.start_recording(self.RawYUV_Output, format='yuv', 
+                                        splitter_port=self._get_available_port())
+        else:
+            self.camera.start_recording(self.RawYUV_Output, format='yuv', 
+                                        splitter_port=self._get_available_port(), 
+                                        resize=self.resolutions['low'])
+
+    def start_recording_video(self):
+        self.camera.start_recording('video.h264', format='h264', 
+                                    splitter_port=self._get_available_port(), quality=23)
+
+    def start(self):
+        '''
+        Starts recording video and processing frames.
+        '''
+        self.start_recording_video()
+        self.start_processing()
+
+    def stop(self):
+        self.camera.stop_recording()
+        if hasattr(self, 'Stream_MJPEG_Output'):
+            self.Stream_MJPEG_Output.close()
+            del self.Stream_MJPEG_Output
+        self._reset_available_ports()
+
+    def start_streaming(self, address='192.168.0.10', port=8000):
+        '''
+        Starts MJPEG stream to Recording PC.
+        '''
+        self.Stream_MJPEG_Output = Stream_MJPEG_Output(address=address, port=port)
+        if self.camera.resolution == self.resolutions['low']:
+            self.camera.start_recording(self.Stream_MJPEG_Output, format='mjpeg', 
+                                        splitter_port=self._get_available_port())
+        else:
+            self.camera.start_recording(self.Stream_MJPEG_Output, format='mjpeg', 
+                                        splitter_port=self._get_available_port(), 
+                                        resize=self.resolutions['low'])
+
+
+    def grab_frame(self, resolution_option=None):
+        '''
+        Returns frame requested resolution option or with video capture resolution as BGR numpy array.
+        '''
+        resolution = resolution_option or self.camera.resolution
+        frame_shape = (resolution[1], resolution[0], 3)
+        output = np.empty((frame_shape[0] * frame_shape[1] * frame_shape[2],), dtype=np.uint8)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self.camera.capture(output, format='bgr', use_video_port=True, resize=resolution)
+        frame = output.reshape(frame_shape)
+
+        return frame
+
+    def close(self):
+        self.camera.close()
+        while self.camera.ThisThingIsAlive:
+            sleep(0.05)
+        self.RawYUV_Output.close()
+        self.ThisThingIsAlive = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self.close()
+
+
+class CameraRemoteController(object):
+    '''
+    Initializes ZMQ, CameraController and waits for commands to control CameraController.
+    '''
+    def __init__(self, port, **kwargs):
+        '''
+        port - int - ZMQ paired_messenger port.
+        '''
+        T_initialize_ZMQcomms = Thread(target=self.initialize_ZMQcomms, 
+                                       args=(port,))
+        T_initialize_ZMQcomms.start()
+        with CameraController(**kwargs) as self.Controller:
+            T_initialize_ZMQcomms.join()
+            self.ZMQmessenger.sendMessage('init_successful')
+            self.KeepCameraControllerAlive = True
+            while self.KeepCameraControllerAlive:
+                sleep(0.1)
+
+    def initialize_ZMQcomms(self, port,  warmup=2):
         '''
         Initializes ZMQ communication with Recording PC.
         '''
         self.ZMQmessenger = paired_messenger(port=port)
+        sleep(warmup) # This allows enough time for ZMQ protocols to be initiated
+        self.command_parsing_in_progress = False
         self.ZMQmessenger.add_callback(self.command_parser)
-        sleep(1) # This ensures all ZMQ protocols have been properly initated before finishing this process
 
     def command_parser(self, message):
         '''
@@ -683,96 +818,90 @@ class CameraController(object):
         method_name = message.split(' ')[0]
         args = message.split(' ')[1:]
         getattr(self, method_name)(*args)
-
-    @staticmethod
-    def prepare_Frame_Handler_Params(RPi_Nr, TrackingSettings):
-        '''
-        Parses TrackingSettings to produce specific parameters required by Frame_Handler.
-        '''
-        Frame_Handler_Params = {}
-        Frame_Handler_Params['RPi_number'] = RPi_Nr
-        # Load the Calibration Matrix
-        if str(RPi_Nr) in TrackingSettings['calibrationData'].keys():
-            calibrationTmatrix = TrackingSettings['calibrationData'][str(RPi_Nr)]['calibrationTmatrix']
-        else:
-            raise ValueError('Calibration data does not exist for this RPi.')
-        Frame_Handler_Params['calibrationTmatrix'] = calibrationTmatrix
-        # Identify if doubleLED tracking is enabled
-        if TrackingSettings['LEDmode'] == 'double':
-            Frame_Handler_Params['doubleLED'] = True
-        elif TrackingSettings['LEDmode'] == 'single':
-            Frame_Handler_Params['doubleLED'] = False
-        # Find values for distances between LED
-        LED_separation_pix = convert_centimeters_to_pixel_distance(TrackingSettings['LED_separation'], 
-                                                                   Frame_Handler_Params['calibrationTmatrix'], 
-                                                                   TrackingSettings['resolution'])
-        Frame_Handler_Params['LED_separation_pix'] = LED_separation_pix
-        # Other parameters
-        Frame_Handler_Params['resolution'] = TrackingSettings['resolution']
-        Frame_Handler_Params['save_frames'] = TrackingSettings['save_frames']
-        Frame_Handler_Params['smoothing_radius'] = TrackingSettings['smoothing_radius']
-        Frame_Handler_Params['pos_port'] = TrackingSettings['pos_port']
-        Frame_Handler_Params['RPiIP'] = TrackingSettings['RPiInfo'][str(RPi_Nr)]['IP']
-
-        return Frame_Handler_Params
+        if message != 'close':
+            self.ZMQmessenger.sendMessage('Action Completed: ' + message)
 
     def start(self):
-        self.start_image_acquisition = True
+        self.Controller.start()
+
+    def start_streaming(self, address, port):
+        address = str(address)
+        port = int(port)
+        self.Controller.start_streaming(address, port)
 
     def stop(self):
-        self.stop_image_acquisition = True
+        self.Controller.stop()
 
-    def run_Camera(self):
-        '''
-        Uses picamera.PiCamera.camera and PiCameraOutput to capture and process camera feed, respectively.
-        If remoteControl is True, camera feed capture and processing is started and stopped with ZMQ messages.
-        Otherwise, with user pressing Enter.
-        '''
-        with PiCamera_with_timestamps(clock_mode='raw', framerate=self.framerate, TTLpulse_CameraTime_Writer=True) as camera: # Initializes the RPi camera module
-            camera.resolution = tuple(self.resolution) # Set frame capture resolution
-            camera.exposure_mode = self.exposure_setting
-            camera.iso = self.camera_iso # Set Camera ISO value (sensitivity to light)
-            camera.shutter_speed = self.shutter_speed # Set camera shutter speed
-            camera.awb_mode = 'auto'
-            with PiCameraOutput(self.Frame_Handler_Params, camera) as output: # Initializes the PiCameraOutput class
-                camera.start_recording(output, format='bgr') # Initializes the camera
-                sleep(2) # Let the camera warm up
-                # Fix gains
-                gains = camera.awb_gains
-                camera.awb_mode = 'off'
-                camera.awb_gains = gains
-                camera.shutter_speed = camera.exposure_speed
-                camera.exposure_mode = 'off'
-                # Wait for starting command
-                if self.remoteControl:
-                    self.ZMQmessenger.sendMessage('init_successful')
-                    while not self.start_image_acquisition:
-                        sleep(0.01)
-                else:
-                    _ = raw_input('Press enter to start image acquisition: ')
-                output.start()
-                # Wait for stop command
-                if self.remoteControl:
-                    while not self.stop_image_acquisition:
-                        sleep(0.1)
-                else:
-                    _ = raw_input('Press enter to stop image acquisition: ')
-                # Stop recording
-                camera.stop_recording()
-        # Close ZMQ messenger
-        if self.remoteControl:
-            self.ZMQmessenger.close()
+    def close(self):
+        self.KeepCameraControllerAlive = False
+        while self.Controller.ThisThingIsAlive:
+            sleep(0.05)
+        self.ZMQmessenger.sendMessage('Action Completed: close')
+        self.ZMQmessenger.close()
+
+
+def StartStop_CameraController(**kwargs):
+    with CameraController(**kwargs) as Controller:
+        _ = raw_input('Press enter to start image acquisition: ')
+        Controller.start()
+        _ = raw_input('Press enter to stop image acquisition: ')
+        Controller.stop()
+
+def load_settings():
+    if os.path.isfile('TrackingSettings.p'):
+        with open('TrackingSettings.p','rb') as file:
+            TrackingSettings = pickle.load(file)
+        # Get RPi Number
+        params = {}
+        params['RPi_number'] = RPiNumber()
+        # Load the Calibration Matrix
+        if str(params['RPi_number']) in TrackingSettings['calibrationData'].keys():
+            calibrationTmatrix = TrackingSettings['calibrationData'][str(params['RPi_number'])]['calibrationTmatrix']
+        else:
+            raise ValueError('Calibration data does not exist for this RPi.')
+        params['calibrationTmatrix'] = calibrationTmatrix
+        # Identify if doubleLED tracking is enabled
+        if TrackingSettings['LEDmode'] == 'double':
+            params['doubleLED'] = True
+        elif TrackingSettings['LEDmode'] == 'single':
+            params['doubleLED'] = False
+        # Get rest of the params
+        params['smoothing_radius'] = TrackingSettings['smoothing_radius']
+        params['pos_port'] = TrackingSettings['pos_port']
+        params['RPiIP'] = TrackingSettings['RPiInfo'][str(params['RPi_number'])]['IP']
+        params['LED_separation'] = TrackingSettings['LED_separation']
+
+        return params
+
+
+def main(args):
+    kwargs = {}
+    if args.tracking:
+        OnlineTrackerParams = load_settings()
+        if not (OnlineTrackerParams is None):
+            kwargs['online_tracking'] = True
+            kwargs['OnlineTrackerParams'] = OnlineTrackerParams
+    if args.video_resolution:
+        kwargs['resolution_option'] = args.video_resolution[0]
+    if args.remote:
+        if args.port:
+            CameraRemoteController(args.port[0], **kwargs)
+        else:
+            raise ValueError('Port required for remote control.')
+    else:
+        StartStop_CameraController(**kwargs)
+
 
 if __name__ == '__main__':
     # Input argument handling and help info
     parser = argparse.ArgumentParser(description='Running this script initates CameraController class.')
     parser.add_argument('--remote', action='store_true', 
                         help='Expects start and stop commands over ZMQ. Default is keyboard input.')
+    parser.add_argument('--port', type=int, nargs=1, 
+                        help='The port to use for ZMQ paired_messenger with Recording PC.')
+    parser.add_argument('--tracking', action='store_true', 
+                        help='Initializes RawYUV_Processor with TrackingSettings.p')
+    parser.add_argument('--video_resolution', type=str, nargs=1, 
+                        help='[high] for (1600, 1216). Otherwise (800, 608) is used.')
     args = parser.parse_args()
-    # If releasePellet command given skip everything and just release the number of pellets specified
-    if args.remote:
-        Controller = CameraController(remoteControl=True)
-        Controller.run_Camera()
-    else:
-        Controller = CameraController()
-        Controller.run_Camera()
+    main(args)

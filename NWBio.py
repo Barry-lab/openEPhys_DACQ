@@ -332,15 +332,17 @@ def save_tracking_data(filename, TrackingData, ProcessedPos=False, overwrite=Fal
 
 def load_raw_tracking_data(filename, n_rpi):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'
-    TrackingData_path = path + str(n_rpi) + '_TrackingData'
-    RPi_frame_timestamp_path = path + str(n_rpi) + '_Frame_timestamps'
-    RPi_GC_timestamp_path = path + str(n_rpi) + '_GlobalClock_timestamps'
+    OnlineTrackerData_path = path + str(n_rpi) + '_OnlineTrackerData'
+    OnlineTrackerData_timestamps_path = path + str(n_rpi) + '_OnlineTrackerData_timestamps'
+    VideoData_timestamps_path = path + str(n_rpi) + '_VideoData_timestamps'
+    GlobalClock_timestamps_path = path + str(n_rpi) + '_GlobalClock_timestamps'
     with h5py.File(filename, 'r') as h5file:
-        if TrackingData_path in h5file:
+        if OnlineTrackerData_path in h5file:
             # This is conditional to allow loading old datasets
-            tracking_data = {'TrackingData': np.array(h5file[TrackingData_path].value),
-                             'RPi_frame_timestamp': np.array(h5file[RPi_frame_timestamp_path].value), 
-                             'RPi_GC_timestamp': np.array(h5file[RPi_GC_timestamp_path].value)}
+            tracking_data = {'OnlineTrackerData': np.array(h5file[OnlineTrackerData_path].value), 
+                             'OnlineTrackerData_timestamps': np.array(h5file[OnlineTrackerData_timestamps_path].value), 
+                             'VideoData_timestamps': np.array(h5file[VideoData_timestamps_path].value), 
+                             'GlobalClock_timestamps': np.array(h5file[GlobalClock_timestamps_path].value)}
             return tracking_data
         else:
             # This loads the old format
