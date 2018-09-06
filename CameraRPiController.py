@@ -790,7 +790,7 @@ class Stream_MJPEG_Output(object):
         self.close()
 
 
-class CameraController(object):
+class Controller(object):
     '''
     Initializes PiCamera and allows control of recording.
     '''
@@ -981,27 +981,27 @@ class CameraController(object):
         self.close()
 
 
-def StartStop_CameraController():
-    with CameraController() as Controller:
+def StartStop_Controller():
+    with Controller() as Controller:
         _ = raw_input('Press enter to start image acquisition: ')
-        Controller.start()
+        controller.start()
         _ = raw_input('Press enter to stop image acquisition: ')
-        Controller.stop()
+        controller.stop()
 
 
 def main(args):
     if args.remote:
         if args.port:
-            remote_controlled_class(CameraController, block=True, port=args.port[0])
+            remote_controlled_class(Controller, block=True, port=args.port[0])
         else:
             raise ValueError('Port required for remote control.')
     else:
-        StartStop_CameraController()
+        StartStop_Controller()
 
 
 if __name__ == '__main__':
     # Input argument handling and help info
-    parser = argparse.ArgumentParser(description='Running this script initates CameraController class.')
+    parser = argparse.ArgumentParser(description='Running this script initates Controller class.')
     parser.add_argument('--remote', action='store_true', 
                         help='Expects start and stop commands over ZMQ. Default is keyboard input.')
     parser.add_argument('--port', type=int, nargs=1, 

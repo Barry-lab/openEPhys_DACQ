@@ -22,7 +22,7 @@ Regardless of whether the HDMI cable extension is used or not, a board with the 
 
 The Standard Coaxial Cable plug can be soldered to the RPi GPIO Pinout. See the above image. On Raspberry Pi 3 Model B the Ground from the Coaxial plug should be soldered on the 5th pin on the 2nd row and the Other contact from the Coaxial plug to the 6th pin in the same row. That is if rows and pins are counted from the RPi corner diagonal from the LAN port.
 
-More clearly, the Ground from Coaxial plug must be soldered to any of the **Ground pins** on RPi and the other contact from the Coaxial plug must be soldered to **Physical pin 11**. If a different Physical pin is used than nr 11, then changes should be made in the tracking script (tracking.py, ttlPin variable). To identify the identity of each pin, use the https://pinout.xyz/ information.
+More clearly, the Ground from Coaxial plug must be soldered to any of the **Ground pins** on RPi and the other contact from the Coaxial plug must be soldered to pin **BCM 18**. If pin is used, then changes should be made in the tracking script (CameraRPiController.py, TTLpulse_CameraTime_Writer class input). To identify the identity of each pin, use the https://pinout.xyz/ information.
 
 .. _installingRaspbian:
 

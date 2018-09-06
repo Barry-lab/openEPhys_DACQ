@@ -13,10 +13,124 @@ from itertools import combinations
 from TrackingDataProcessing import combineCamerasData
 from ZMQcomms import paired_messenger, remote_object_controller
 from multiprocessing.dummy import Pool as ThreadPool
+from tempfile import mkdtemp
+from shutil import rmtree
+import os
+
+
+def write_files_to_RPi(files, address, username='pi', verbose=False):
+    '''
+    files - list or tuple of files to copy to home directory on the RPi
+    address - RPi address
+    username - RPi username to use for access
+    '''
+    if verbose:
+        qflag = ''
+    else:
+        qflag = '-q '
+    RPi_network_path = username + '@' + address
+    for file in files:
+        callstr = 'scp ' + qflag + file + ' ' + RPi_network_path + ':/home/pi'
+        _ = os.system(callstr)
+
+def read_file_from_RPi(source_filename, target_filename, address, username='pi', verbose=False):
+    if verbose:
+        qflag = ''
+    else:
+        qflag = '-q '
+    RPi_network_path = username + '@' + address
+    src = RPi_network_path + ':/home/pi/' + source_filename
+    callstr = 'scp ' + qflag + src + ' ' + target_filename
+    _ = os.system(callstr)
+
+def read_files_from_RPi(files, target_path, address, username='pi', verbose=False):
+    '''
+    files - list or tuple of files to copy from home directory of the RPi
+    target_path - folder to which the files will be copied to
+    address - RPi address
+    username - RPi username to use for access
+    '''
+    for file in files:
+        target_filename = os.path.join(target_path, file)
+        read_file_from_RPi(file, target_filename, address, username, verbose)
+
+
+class Camera_RPi_file_manager(object):
+    def __init__(self, address, username='pi', verbose=False):
+        self.address = address
+        self.username = username
+        self.verbose = verbose
+
+    @staticmethod
+    def Camera_RPi_files():
+        return ('ZMQcomms.py',
+                'CameraRPiController.py')
+
+    @staticmethod
+    def video_file_name_on_RPi():
+        return 'video.h264'
+
+    @staticmethod
+    def video_file_name_on_RecordingPC(cameraID):
+        return 'video_' + cameraID + '.h264'
+
+    def update_files_on_RPi(self):
+        write_files_to_RPi(Camera_RPi_file_manager.Camera_RPi_files(), self.address, self.username, self.verbose)
+
+    def retrieve_timestamps(self):
+        temp_folder = mkdtemp('RPiTempFolder')
+        files = ('RawVideoEncoderTimestamps.csv', 
+                 'VideoEncoderTimestamps.csv', 
+                 'TTLpulseTimestamps.csv')
+        read_files_from_RPi(files, temp_folder, self.address, self.username, self.verbose)
+        filename = os.path.join(temp_folder, files[0])
+        self.OnlineTrackerData_timestamps = np.genfromtxt(filename, dtype=int)
+        filename = os.path.join(temp_folder, files[1])
+        self.VideoData_timestamps = np.genfromtxt(filename, dtype=int)
+        filename = os.path.join(temp_folder, files[2])
+        self.GlobalClock_timestamps = np.genfromtxt(filename, dtype=int)
+        rmtree(temp_folder)
+
+    def retrieve_OnlineTrackerData(self):
+        temp_folder = mkdtemp('RPiTempFolder')
+        read_files_from_RPi(('OnlineTrackerData.csv',), temp_folder, self.address, self.username, self.verbose)
+        filename = os.path.join(temp_folder, 'OnlineTrackerData.csv')
+        self.OnlineTrackerData = np.genfromtxt(filename, delimiter=',', dtype=float)
+        rmtree(temp_folder)
+
+    def retrieve_timestamps_and_OnlineTrackerData(self):
+        '''
+        Must be called before get_timestamps_and_OnlineTrackerData()
+        '''
+        self.retrieve_timestamps()
+        self.retrieve_OnlineTrackerData()
+
+    def get_timestamps_and_OnlineTrackerData(self, cameraID='0'):
+        '''
+        Must be called after retrieve_timestamps_and_OnlineTrackerData()
+        '''
+        return {'ColumnLabels': ['X1', 'Y1', 'X2', 'Y2', 'Luminance_1', 'Luminance_2'], 
+                'OnlineTrackerData': self.OnlineTrackerData,
+                'OnlineTrackerData_timestamps': self.OnlineTrackerData_timestamps,
+                'VideoData_timestamps': self.VideoData_timestamps,
+                'GlobalClock_timestamps': self.GlobalClock_timestamps, 
+                'VideoFile': Camera_RPi_file_manager.video_file_name_on_RecordingPC(cameraID)}
+
+    def copy_over_video_data(self, folder_path, cameraID='0'):
+        '''
+        Copies over video data to folder_path with cameraID included in the filename.
+        '''
+        read_file_from_RPi(Camera_RPi_file_manager.video_file_name_on_RPi(), 
+                           os.path.join(folder_path, Camera_RPi_file_manager.video_file_name_on_RecordingPC(cameraID)), 
+                           self.address, self.username, self.verbose)
 
 
 class CameraControl(object):
     def __init__(self, address, port, username='pi', password='raspberry', resolution_option=None, OnlineTrackerParams=None):
+        # Make sure files on RPi are up to date
+        self.RPi_file_manager = Camera_RPi_file_manager(address, username)
+        self.RPi_file_manager.update_files_on_RPi()
+        # Start initiation protocol
         CameraController_init_successful = False
         while not CameraController_init_successful:
             RemoteControl_init_successful = False
@@ -43,7 +157,7 @@ class CameraControl(object):
     def _init_RPiSSH(address, port, username='pi', password='raspberry'):
         RPiSSH = ssh(address, username, password)
         RPiSSH.sendCommand('sudo pkill python') # Ensure any past processes have closed
-        command = 'cd ' + 'Tracking' + ' && python tracking.py --remote --port ' + str(port)
+        command = 'python CameraRPiController.py --remote --port ' + str(port)
         RPiSSH.sendCommand_threading(command)
 
         return RPiSSH

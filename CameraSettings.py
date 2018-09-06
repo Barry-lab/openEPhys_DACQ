@@ -51,7 +51,7 @@ class PerpetualTimer(object):
             self.timer.cancel()
 
 class CameraDisplay(object):
-    def __init__(self, stream_port, image_display_method, cameraID, FPS=30):
+    def __init__(self, stream_port, image_display_method, cameraID, FPS=10):
         self.image_display_method = image_display_method
         self.cameraID = cameraID
         # Set internal variables

@@ -100,128 +100,31 @@ def check_if_nwb_recording(dataFilePath):
 
     return file_recording
 
-def update_specific_camera(address, username):
-    # Set default variables.
-    path_to_scripts = 'RaspberryPi/'
-    tracking_folder = '/home/pi/Tracking'
-    # Use up to date scripts
-    callstr = 'rsync -qavrP -e "ssh -l server" ' + path_to_scripts + ' ' + \
-              username + '@' + address + ':' + \
-              tracking_folder + ' --delete'
-    _ = os.system(callstr)
-    # Copy over ZMQcomms.py
-    src_file = 'ZMQcomms.py'
-    dst_file = username + '@' + address + ':' + \
-               tracking_folder
-    callstr = 'scp -q ' + src_file + ' ' + dst_file
-    _ = os.system(callstr)
-
-def update_tracking_camera_files(CameraSettings):
-    # Updates settings and scripts on all tracking cameras in use (based on settings)
-    # Create temporary working directory
-    T_updateRPi = []
-    for cameraID in CameraSettings['CameraSpecific'].keys():
-        address = CameraSettings['CameraSpecific'][cameraID]['address']
-        username = CameraSettings['General']['username']
-        T = threading.Thread(target=update_specific_camera, args=(address, username))
-        T.start()
-        T_updateRPi.append(T)
-    for T in T_updateRPi:
-        T.join()
-
-def video_file_name_on_RPi():
-    return 'video.h264'
-
-def video_file_name_on_RecordingPC(cameraID):
-    return 'video_' + cameraID + '.h264'
-
-def retrieve_specific_camera_data(cameraID, address, username, temp_folder, 
-                                           TrackingData, TrackingDataLock):
-    # Set default variables.
-    tracking_folder = '/home/pi/Tracking'
-    # Get OnlineTrackerData File
-    src_file = username + '@' + address + ':' + \
-               tracking_folder + '/OnlineTrackerData.csv'
-    OnlineTrackerData_File = os.path.join(temp_folder, 'OnlineTrackerData.csv')
-    callstr = 'scp -q ' + src_file + ' ' + OnlineTrackerData_File
-    _ = os.system(callstr)
-    # Get OnlineTrackerData timestamps File
-    src_file = username + '@' + address + ':' + \
-               tracking_folder + '/RawVideoEncoderTimestamps.csv'
-    OnlineTrackerData_timestamps_File = os.path.join(temp_folder, 'RawVideoEncoderTimestamps.csv')
-    callstr = 'scp -q ' + src_file + ' ' + OnlineTrackerData_timestamps_File
-    _ = os.system(callstr)
-    # Get VideoData timestamps File
-    src_file = username + '@' + address + ':' + \
-               tracking_folder + '/VideoEncoderTimestamps.csv'
-    VideoData_timestamps_File = os.path.join(temp_folder, 'VideoEncoderTimestamps.csv')
-    callstr = 'scp -q ' + src_file + ' ' + VideoData_timestamps_File
-    _ = os.system(callstr)
-    # Get GlobalClock timestamps File
-    src_file = username + '@' + address + ':' + \
-               tracking_folder + '/TTLpulseTimestamps.csv'
-    GlobalClock_timestamps_File = os.path.join(temp_folder, 'TTLpulseTimestamps.csv')
-    callstr = 'scp -q ' + src_file + ' ' + GlobalClock_timestamps_File
-    _ = os.system(callstr)
-    # Read data from files into numpy arrays
-    OnlineTrackerData = np.genfromtxt(OnlineTrackerData_File, delimiter=',', dtype=float)
-    OnlineTrackerData_timestamps = np.genfromtxt(OnlineTrackerData_timestamps_File, dtype=int)
-    VideoData_timestamps = np.genfromtxt(VideoData_timestamps_File, dtype=int)
-    GlobalClock_timestamps = np.genfromtxt(GlobalClock_timestamps_File, delimiter=',', dtype=int)
-    CameraData = {'ColumnLabels': ['X1', 'Y1', 'X2', 'Y2', 'Luminance_1', 'Luminance_2'], 
-                  'OnlineTrackerData': OnlineTrackerData,
-                  'OnlineTrackerData_timestamps': OnlineTrackerData_timestamps,
-                  'VideoData_timestamps': VideoData_timestamps,
-                  'GlobalClock_timestamps': GlobalClock_timestamps, 
-                  'VideoFile': video_file_name_on_RecordingPC(cameraID)}
-    with TrackingDataLock:
-        TrackingData[cameraID] = CameraData
-
-def retrieve_specific_camera_video_data(address, username, filename):
-    # Set default variables.
-    tracking_folder = '/home/pi/Tracking'
-    # Copy over video data
-    src = username + '@' + address + ':' + \
-          tracking_folder + '/' + video_file_name_on_RPi()
-    callstr = 'scp -q ' + src + ' ' + filename
-    print('DEBUG')
-    print(callstr)
-    _ = os.system(callstr)
-
 def store_camera_data_to_recording_file(CameraSettings, rec_file_path):
-    # Copy all tracking data from active RPis and load to memory
-    TrackingData = {}
-    RPiTempFolder = mkdtemp('RPiTempFolder')
-    T_retrievePosLogsRPi = []
-    TrackingDataLock = threading.Lock()
-    T_args = [RPiTempFolder, TrackingData, TrackingDataLock]
+    # Initialize file_manager for each camera
+    file_managers = {}
     for cameraID in CameraSettings['CameraSpecific'].keys():
-        temp_sub_folder = os.path.join(RPiTempFolder, cameraID)
-        os.mkdir(temp_sub_folder)
         address = CameraSettings['CameraSpecific'][cameraID]['address']
         username = CameraSettings['General']['username']
-        args = (cameraID, 
-                CameraSettings['CameraSpecific'][cameraID]['address'], 
-                CameraSettings['General']['username'], 
-                temp_sub_folder, 
-                TrackingData, 
-                TrackingDataLock)
-        T = threading.Thread(target=retrieve_specific_camera_data, args=args)
-        T.start()
-        T_retrievePosLogsRPi.append(T)
-    for T in T_retrievePosLogsRPi:
-        T.join()
-    rmtree(RPiTempFolder)
-    # Save position data from all sources to recording file
-    NWBio.save_tracking_data(rec_file_path, TrackingData)
-    # Retrieve video data
+        file_managers[cameraID] = rpiI.Camera_RPi_file_manager(address, username)
+    # Retrieve data concurrently from all cameras
     T_list = []
     for cameraID in CameraSettings['CameraSpecific'].keys():
-        address = CameraSettings['CameraSpecific'][cameraID]['address']
-        username = CameraSettings['General']['username']
-        filename = os.path.join(os.path.dirname(rec_file_path), video_file_name_on_RecordingPC(cameraID))
-        T = threading.Thread(target=retrieve_specific_camera_video_data, 
-                             args=(address, username, filename))
+        T = threading.Thread(target=file_managers[cameraID].retrieve_timestamps_and_OnlineTrackerData)
+        T.start()
+        T_list.append(T)
+    for T in T_list:
+        T.join()
+    # Combine data from cameras and store to recording file
+    CameraData = {}
+    for cameraID in CameraSettings['CameraSpecific'].keys():
+        CameraData[cameraID] = file_managers[cameraID].get_timestamps_and_OnlineTrackerData(cameraID)
+    NWBio.save_tracking_data(rec_file_path, CameraData)
+    # Copy video data directly to recording folder 
+    T_list = []
+    for cameraID in CameraSettings['CameraSpecific'].keys():
+        T = threading.Thread(target=file_managers[cameraID].copy_over_video_data, 
+                             args=(os.path.dirname(rec_file_path), cameraID))
         T.start()
         T_list.append(T)
     for T in T_list:
@@ -580,7 +483,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             print('Connecting to GlobalClock RPi Successful')
             # Connect to tracking RPis
             print('Connecting to tracking RPis...')
-            update_tracking_camera_files(self.Settings['CameraSettings'])
             self.trackingControl = rpiI.TrackingControl(self.Settings['CameraSettings'])
             print('Connecting to tracking RPis Successful')
             # Initialize onlineTrackingData class
