@@ -15,32 +15,33 @@ import NWBio
 from itertools import combinations
 from scipy.spatial.distance import euclidean
 
-def combineCamerasData(cameraPos, lastCombPos=None, TrackingSettings=None):
+def combineCamerasData(cameraPos, lastCombPos, cameraIDs, CameraSettings, arena_size):
     # This outputs position data based on which camera is closest to tracking target.
 
     # cameraPos - list of numpy vecors with 4 elements (x1,y1,x2,y2) for each camera
-    # lastCombPos - Last known output from this function
-    # TrackingSettings - settings file saved by CameraSettingsGUI.py
+    # lastCombPos - Last known output from this function. If None, the function will attempt to locate the animal.
+    # cameraIDs - list of of CameraSettings.keys() in corresponding order to cameraPos and lastCombPos
+    # CameraSettings - settings dictionary created by CameraSettings.CameraSettingsApp
+    # arena_size - 2 element numpy array with arena height and width.
 
     # Output - numpy vector (x1,y1,x2,y2) with data from closest camera
 
-    # If lastCombPos is not provided, the function will attempt to locate the animal
-    # simultaneously from at least 2 cameras with smaller separation than half of TrackingSettings['camera_transfer_radius']
+    # Animal detection finding method in case lastCombPos=None
+    #   simultaneously from at least 2 cameras with smaller separation than half of CameraSettings['camera_transfer_radius']
     #   If successful, closest mean coordinate is set as output
     #   If unsuccessful, output is None
 
     N_RPis = len(cameraPos)
     cameraPos = np.array(cameraPos, dtype=np.float32)
-    camera_relative_locs = []
-    for nRPi in range(N_RPis):
-        n_rpi = TrackingSettings['use_RPi_nrs'][nRPi]
-        camera_relative_locs.append(TrackingSettings['RPiInfo'][str(n_rpi)]['location'])
-    camera_relative_locs = np.array(camera_relative_locs, dtype=np.float32)
+    camera_locations = []
+    for cameraID in cameraIDs:
+        camera_locations.append(CameraSettings['CameraSpecific'][cameraID]['address']['location_xy'])
+    camera_locations = np.array(camera_locations, dtype=np.float32)
 
     # Only work with camera data from inside the enviornment
     # Find bad pos data lines
     idxBad = np.zeros(cameraPos.shape[0], dtype=bool)
-    arena_size = TrackingSettings['arena_size'] # Points beyond arena size
+    # Points beyond arena size
     x_too_big = cameraPos[:,0] > arena_size[0] + 20
     y_too_big = cameraPos[:,1] > arena_size[1] + 20
     idxBad = np.logical_or(idxBad, np.logical_or(x_too_big, y_too_big))
@@ -52,13 +53,13 @@ def combineCamerasData(cameraPos, lastCombPos=None, TrackingSettings=None):
     # Only continue if at least one RPi data remains
     if N_RPis > 0:
         cameraPos = cameraPos[np.logical_not(idxBad),:]
-        camera_relative_locs = camera_relative_locs[np.logical_not(idxBad),:]
+        camera_locations = camera_locations[np.logical_not(idxBad),:]
         if np.any(lastCombPos):
             # Check which cameras provide data close enough to lastCombPos
             RPi_correct = []
             for nRPi in range(N_RPis):
                 lastCombPos_distance = euclidean(cameraPos[nRPi, :2], lastCombPos[:2])
-                RPi_correct.append(lastCombPos_distance < TrackingSettings['camera_transfer_radius'])
+                RPi_correct.append(lastCombPos_distance < CameraSettings['General']['camera_transfer_radius'])
             RPi_correct = np.array(RPi_correct, dtype=bool)
             # If none were found to be withing search radius, set output to None
             if not np.any(RPi_correct):
@@ -69,12 +70,12 @@ def combineCamerasData(cameraPos, lastCombPos=None, TrackingSettings=None):
                     # Only use correct cameras
                     N_RPis = np.sum(RPi_correct)
                     cameraPos = cameraPos[RPi_correct, :]
-                    camera_relative_locs = camera_relative_locs[RPi_correct, :]
+                    camera_locations = camera_locations[RPi_correct, :]
                     meanPos = np.mean(cameraPos[:, :2], axis=0)
                     # Find mean position distance from all cameras
                     cam_distances = []
                     for nRPi in range(N_RPis):
-                        camera_loc = camera_relative_locs[nRPi, :] * np.array(TrackingSettings['arena_size'])
+                        camera_loc = camera_locations[nRPi, :]
                         cam_distances.append(euclidean(camera_loc, meanPos))
                     # Find closest distance camera and output its location coordinates
                     closest_camera = np.argmin(np.array(cam_distances))
@@ -92,7 +93,7 @@ def combineCamerasData(cameraPos, lastCombPos=None, TrackingSettings=None):
                 pairDistances.append(euclidean(cameraPos[c[0], :2], cameraPos[c[1], :2]))
                 cameraPairs.append(np.array(c))
             cameraPairs = np.array(cameraPairs)
-            cameraPairs_Match = np.array(pairDistances) < (TrackingSettings['camera_transfer_radius'] / 2)
+            cameraPairs_Match = np.array(pairDistances) < (CameraSettings['General']['camera_transfer_radius'] / 2.0)
             # If position can not be verified from multiple cameras, set output to none
             if not np.any(cameraPairs_Match):
                 combPos = None
@@ -113,7 +114,7 @@ def estimate_OpenEphys_timestamps_for_tracking_data(OE_GC_times, RPi_GC_times, R
     Estimates Open Ephys timestamps for each tracking data datapoint.
     OE_GC_times - Global Clock timestamps in Open Ephys time
     RPi_GC_times - Global Clock timestamps in RPi time
-    posdata - tracking data matrix
+    RPi_frame_times - Frame timestamps in RPi time
     '''
     GlobalClock_TTL_Channel = 1
     RPiTime2Sec = 10 ** 6 # This values is used to convert RPi times to seconds
@@ -156,12 +157,15 @@ def remove_tracking_data_outside_boundaries(posdata, arena_size, max_error=20):
     return posdata
 
 def process_tracking_data(filename, save_to_file=False):
-    # Get TrackingSettings
-    TrackingSettings = NWBio.load_settings(filename, '/TrackingSettings/')
+    # Get CameraSettings
+    CameraSettings = NWBio.load_settings(filename, '/CameraSettings/')
+    cameraIDs = sorted(CameraSettings['CameraSpecific'].keys())
+    # Get arena_size
+    arena_size = NWBio.load_settings(filename, '/General/arena_size')
     # Load position data for all cameras
     posdatas = []
-    for n_rpi in TrackingSettings['use_RPi_nrs']:
-        posdata = NWBio.load_raw_tracking_data(filename, n_rpi)
+    for cameraID in cameraIDs:
+        posdata = NWBio.load_raw_tracking_data(filename, cameraID)
         if isinstance(posdata, dict):
             # This is conditional because for early recordings tracking data was immediately stored in Open Ephys time.
             RPi_frame_times = posdata['OnlineTrackerData_timestamps']
@@ -194,7 +198,7 @@ def process_tracking_data(filename, save_to_file=False):
             cameraPos = []
             for nRPi in range(len(posdatas)):
                 cameraPos.append(posdatas[nRPi][idx_tp[nRPi], 1:5])
-            tmp_comb_data = combineCamerasData(cameraPos, combPosData[-1], TrackingSettings)
+            tmp_comb_data = combineCamerasData(cameraPos, combPosData[-1], cameraIDs, CameraSettings, arena_size)
             combPosData.append(tmp_comb_data)
             if tmp_comb_data is None:
                 listNaNs.append(npoint)
@@ -216,7 +220,7 @@ def process_tracking_data(filename, save_to_file=False):
     else:
         # In case of single camera being used, just use data from that camera
         ProcessedPos = posdatas[0]
-    ProcessedPos = remove_tracking_data_outside_boundaries(ProcessedPos, TrackingSettings['arena_size'], max_error=10)
+    ProcessedPos = remove_tracking_data_outside_boundaries(ProcessedPos, arena_size, max_error=10)
     ProcessedPos = ProcessedPos.astype(np.float64)
     if save_to_file:
         # Save corrected data to file

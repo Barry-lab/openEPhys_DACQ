@@ -14,16 +14,14 @@ from scipy.spatial.distance import euclidean
 import sys
 from multiprocessing import Manager, Process, RawArray
 from copy import copy, deepcopy
-from threading import Thread
-from ZMQcomms import paired_messenger
+from ZMQcomms import remote_controlled_class
 import argparse
-from shutil import rmtree
-from Queue import Empty as QueueIsEmpty
 from ctypes import c_uint8
 import warnings
 import io
 import socket
 import struct
+from PIL import Image
 
 
 class csv_writer(object):
@@ -85,29 +83,27 @@ class OnlineTracker(object):
         csv file writer and multiprocess_function class for running detect_leds() method.
 
         params - dict - must contain all the parameters used by the class:
-            'RPi_number' - int
             'RPiIP' - str
-            'pos_port' - str
+            'OnlineTracker_port' - str
             'smoothing_radius' - int
             'calibrationTmatrix' - array
-            'doubleLED' - bool
+            'tracking_mode' - str
             'LED_separation' - float
             'frame_shape' - tuple - (height, width, channels) of incoming frames
         '''
-        self.RPi_number = params['RPi_number']
         params['LED_separation_pix'] = convert_centimeters_to_pixel_distance(params['LED_separation'], 
                                                                              params['calibrationTmatrix'], 
                                                                              params['frame_shape'])
-        self.init_ZMQpublisher(params['RPiIP'], params['pos_port'])
+        self.init_ZMQpublisher(params['RPiIP'], params['OnlineTracker_port'])
         self.csv_writer = csv_writer('OnlineTrackerData.csv')
         params['cutout'] = self.create_circular_cutout(params)
         self.params = params
 
-    def init_ZMQpublisher(self, RPiIP, pos_port):
+    def init_ZMQpublisher(self, RPiIP, OnlineTracker_port):
         '''
         Sets up publishing messages with ZMQ at 'localhost'.
         '''
-        posIP = 'tcp://' + RPiIP + ':' + pos_port
+        posIP = 'tcp://' + RPiIP + ':' + str(OnlineTracker_port)
         # For sending position data
         contextpub = zmq.Context()
         self.ZMQpublisher = contextpub.socket(zmq.PUB)
@@ -244,12 +240,12 @@ class OnlineTracker(object):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) # Convert BGR data to grayscale
         gray = cv2.GaussianBlur(gray, (params['smoothing_radius'], params['smoothing_radius']), 0) # Smooth the image
         led_pix_1, led_cm_1, lum_1 = OnlineTracker.detect_first_led(gray, params['calibrationTmatrix'])
-        if params['doubleLED']:
+        if params['tracking_mode'] == 'dual_led':
             led_pix_2, led_cm_2, lum_2 = OnlineTracker.detect_second_led(gray, params['calibrationTmatrix'], 
                                                                           led_pix_1, params['LED_separation_pix'], 
                                                                           params['cutout'])
             linedata = [led_cm_1[0], led_cm_1[1], led_cm_2[0], led_cm_2[1], lum_1, lum_2]
-        else:
+        elif params['tracking_mode'] =='single_led':
             linedata = [led_cm_1[0], led_cm_1[1], None, None, lum_1, None]
 
         return linedata
@@ -274,7 +270,7 @@ class OnlineTracker(object):
         '''
         frame = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR)
         linedata = OnlineTracker.detect_leds(frame, self.params)
-        self.send_data_with_ZMQpublisher([self.RPi_number] + linedata)
+        self.send_data_with_ZMQpublisher(linedata)
         self.csv_writer.write(linedata)
 
     def close(self):
@@ -289,7 +285,7 @@ class TTLpulse_CameraTime_Writer(object):
     '''
     Writes camera current timestamps to csv file whenever TLL pulse rising edge detected.
     '''
-    def __init__(self, camera, ttlPin=18, filename='TTLpulse_CameraTime.csv'):
+    def __init__(self, camera, ttlPin=18):
         '''
         camera - picamera.PiCamera instance
         ttlPin - BCM numbering pin for detecting TTL pulses
@@ -297,7 +293,7 @@ class TTLpulse_CameraTime_Writer(object):
         '''
         self.camera = camera
         self.ttlPin = ttlPin
-        self.csv_writer = csv_writer(filename)
+        self.csv_writer = csv_writer('TTLpulseTimestamps.csv')
         # Initialize TTL edge detection
         self.piGPIO = pigpio.pi()
         self.piGPIOCallback = self.piGPIO.callback(self.ttlPin, pigpio.RISING_EDGE, self.write_time)
@@ -316,16 +312,6 @@ class TTLpulse_CameraTime_Writer(object):
         self.piGPIOCallback.cancel()
         self.piGPIO.stop()
         self.csv_writer.close()
-
-
-def RPiNumber():
-    '''
-    Returns RPiNumber from a file in the current working directory.
-    '''
-    with open('RPiNumber','r') as file:
-        RPi_number = int(file.read().splitlines()[0])
-
-    return RPi_number
 
 
 class SharedArrayQueue(object):
@@ -484,6 +470,97 @@ class RawYUV_Processor(object):
         self.P_OnlineTracker_Process.join()
 
 
+class Calibrator(object):
+    '''
+    Performs operations using input frame and calibration_parameters.
+    See description of methods:
+        get_pattern()
+        get_frame_with_pattern()
+        get_calibrationTmatrix()
+        get_calibration_data()
+    '''
+    def __init__(self, frame, calibration_parameters, pattern=None, calibrationTmatrix=None):
+        '''
+        frame - uint8 numpy array - cv2 RGB image
+        calibration_parameters - dict - {'ndots_xy': tuple of ints - nr of dots along frame (height, width)
+                                         'spacing': float - spacing of dots in centimeters
+                                         'offset_xy_xy': tuple of floats - (offset on x axis, offset on 6 axis)}
+        Optional to save computation time for some methods
+            pattern - as output from get_pattern()
+            calibrationTmatrix - as output from get_calibrationTmatrix()
+        '''
+        self.frame = frame
+        self.ndots_xy = calibration_parameters['ndots_xy']
+        self.spacing = calibration_parameters['spacing']
+        self.offset_xy = calibration_parameters['offset_xy']
+        self.calibrationTmatrix = calibrationTmatrix
+        self.pattern = pattern
+
+    def _detect_pattern(self):
+        gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
+        flags = cv2.CALIB_CB_ASYMMETRIC_GRID + cv2.CALIB_CB_CLUSTERING
+        ret, pattern = cv2.findCirclesGrid(gray,(self.ndots_xy[0], self.ndots_xy[1]), flags=flags)
+        if ret:
+            self.pattern = pattern
+
+        return ret
+
+    def get_pattern(self):
+        '''
+        Returns dot pattern array if available or successfully detect.
+        Returns None otherwise.
+        '''
+        if not (self.pattern is None):
+            return self.pattern
+        elif self._detect_pattern():
+            return self.pattern
+
+    def get_frame_with_pattern(self):
+        if not (self.pattern is None):
+            return cv2.drawChessboardCorners(self.frame, (self.ndots_xy[0], self.ndots_xy[1]), self.pattern, True)
+
+    def _compute_calibrationTmatrix(self):
+        # Generate object point values corresponding to the pattern
+        objp = np.mgrid[0:self.ndots_xy[0],0:self.ndots_xy[1]].T.reshape(-1,2).astype(np.float32)
+        objp[:,1] = objp[:,1] / 2
+        shiftrows = np.arange(1,self.ndots_xy[1],2)
+        for row in shiftrows:
+            tmpidx = np.arange(row * self.ndots_xy[0], (row + 1) * self.ndots_xy[0])
+            objp[tmpidx,0] = objp[tmpidx,0] + 0.5
+        # Stretch the object point values to scale with the real pattern
+        objp = objp * self.spacing
+        # Add offset_xy from arena corner to get circle locations in the arena
+        objp[:,0] = objp[:,0] + self.offset_xy[0]
+        objp[:,1] = objp[:,1] + self.offset_xy[1]
+        # Add the zeros to force pattern onto the plane in 3D world
+        objp = np.concatenate((objp, np.zeros((objp.shape[0],1))), 1)
+        # Compute transformation matrix
+        self.calibrationTmatrix, mask = cv2.findHomography(self.pattern, objp, cv2.RANSAC,5.0)
+
+    def get_calibrationTmatrix(self):
+        '''
+        Returns calibrationTmatrix array if available or pattern availalbe for computation.
+        Returns None otherwise.
+        '''
+        if not (self.calibrationTmatrix is None):
+            return self.calibrationTmatrix
+        elif not (self.pattern is None):
+            self._compute_calibrationTmatrix()
+            return self.calibrationTmatrix
+
+    def get_calibration_data(self):
+        '''
+        Returns a dictionary if data available or can be computed. Returns None otherwise.
+        {'calibrationTmatrix' - as output from get_calibrationTmatrix()
+        'pattern' - as output from get_pattern()
+        'frame' - input frame}
+        '''
+        pattern = self.get_pattern()
+        if not (pattern is None):
+            calibrationTmatrix = self.get_calibrationTmatrix()
+            return {'calibrationTmatrix': calibrationTmatrix, 'pattern': pattern, 'frame': self.frame}
+
+
 class PiVideoEncoder_with_timestamps(picamera.PiVideoEncoder):
     '''
     picamera.PiVideoEncoder subclass that writes camera timestamp
@@ -610,9 +687,8 @@ class RawYUV_Output(picamera.array.PiYUVAnalysis):
         RawYUV_Output_Processor keyword argument write() method is called for each frame.
         If no RawYUV_Output_Processor provided, frames are not processed.
         '''
-        online_tracking = kwargs.pop('online_tracking', False)
         OnlineTrackerParams = kwargs.pop('OnlineTrackerParams', None)
-        if online_tracking and not (OnlineTrackerParams is None):
+        if not (OnlineTrackerParams is None):
             frame_shape = (kwargs['size'][1], kwargs['size'][0], 3)
             self.RawYUV_Output_Processor = RawYUV_Processor(OnlineTrackerParams, frame_shape)
         super(RawYUV_Output, self).__init__(*args, **kwargs)
@@ -640,22 +716,70 @@ class Stream_MJPEG_Output(object):
         self.client_socket.connect((address, port))
         self.connection = self.client_socket.makefile('wb')
         self.stream = io.BytesIO()
+        # Set variables for single frame grab
+        self.grabbing_single_frame = False
+        self.start_grabbing_single_frame = False
 
     def write(self, buf):
-        if buf.startswith(b'\xff\xd8'):
-            # Start of new frame; send the old one's length
-            # then the data
-            size = self.stream.tell()
-            if size > 0:
-                self.connection.write(struct.pack('<L', size))
-                self.connection.flush()
-                self.stream.seek(0)
-                self.connection.write(self.stream.read(size))
-                self.stream.seek(0)
-        self.stream.write(buf)
+        if self.grabbing_single_frame:
+            self.write_for_grab_frame(buf)
+        if not self.grabbing_single_frame:
+            if buf.startswith(b'\xff\xd8'):
+                # Start of new frame; send the old one's length
+                # then the data
+                size = self.stream.tell()
+                if size > 0:
+                    self.connection.write(struct.pack('<L', size))
+                    self.connection.flush()
+                    self.stream.seek(0)
+                    self.connection.write(self.stream.read(size))
+                    self.stream.seek(0)
+                    if self.start_grabbing_single_frame:
+                        self.write_for_grab_frame(buf)
+            self.stream.write(buf)
+
+    def write_for_grab_frame(self, buf):
+        if self.start_grabbing_single_frame:
+            self.grabbing_single_frame = True
+            self.start_grabbing_single_frame = False
+            self.single_frame_stream.write(buf)
+        else:
+            if buf.startswith(b'\xff\xd8'):
+                self.grabbing_single_frame = False
+            else:
+                self.single_frame_stream.write(buf)
+        
+    def grab_frame(self):
+        '''
+        Returns next full frame.
+        '''
+        self.single_frame_stream = io.BytesIO()
+        self.start_grabbing_single_frame = True
+        while self.start_grabbing_single_frame or self.grabbing_single_frame:
+            sleep(0.05)
+        self.single_frame_stream.seek(0)
+        image = Image.open(self.single_frame_stream)
+        frame = np.array(image)
+        self.grabbing_single_frame = False
+
+        return frame
+        
+    # def grab_frame(self):
+    #     '''
+    #     Returns next full frame.
+    #     '''
+    #     self.grabbing_single_frame = True
+    #     while not self.single_frame_available:
+    #         sleep(0.005)
+    #     image = Image.open(self.stream)
+    #     frame = np.array(image)
+    #     self.grabbing_single_frame = False
+
+    #     return frame
 
     def close(self):
         self.connection.write(struct.pack('<L', 0))
+        self.connection.flush()
         self.connection.close()
         self.client_socket.close()
 
@@ -672,20 +796,17 @@ class CameraController(object):
     '''
     resolutions = {'low': (800, 608), 'high': (1600, 1216)}
 
-    def __init__(self, resolution_option=None, online_tracking=False, OnlineTrackerParams=None):
+    def __init__(self, resolution_option=None, OnlineTrackerParams=None):
         '''
         resolution - str - 'high' for (1600, 1216). Otherwise (800, 608) is used.
-        RawYUV_Processor - object - write() method is called for each YUV frame to be processed.
+        OnlineTrackerParams - dict - see OnlineTracker input arguments.
         '''
+        self._delete_old_files()
         self._init_camera(resolution_option)
-        if online_tracking and not (OnlineTrackerParams is None):
-            self.RawYUV_Output = RawYUV_Output(self.camera, size=self.resolutions['low'], 
-                                               online_tracking=online_tracking, 
-                                               OnlineTrackerParams=OnlineTrackerParams)
-        else:
-            self.RawYUV_Output = RawYUV_Output(self.camera, size=self.resolutions['low'])
+        self.init_processing(OnlineTrackerParams)
         self._reset_available_ports()
-        self.ThisThingIsAlive = True
+        self.isRecording = False
+        self.isStreaming = False
 
     def _init_camera(self, resolution_option=None, warmup=2):
         '''
@@ -706,6 +827,10 @@ class CameraController(object):
         self.camera.shutter_speed = self.camera.exposure_speed
         self.camera.exposure_mode = 'off'
 
+    def _delete_old_files(self):
+        if os.path.exists('video.h264'):
+            os.remove('video.h264')
+
     def _get_resolution(self, setting):
         return self.resolutions[setting] if setting in self.resolutions.keys() else self.resolutions['low']
 
@@ -715,7 +840,88 @@ class CameraController(object):
     def _get_available_port(self):
         return self._available_ports.pop(0)
 
+    def init_processing(self, OnlineTrackerParams=None):
+        if not (OnlineTrackerParams is None):
+            self.RawYUV_Output = RawYUV_Output(self.camera, size=self.resolutions['low'], 
+                                               OnlineTrackerParams=OnlineTrackerParams)
+        else:
+            self.RawYUV_Output = RawYUV_Output(self.camera, size=self.resolutions['low'])
+
+    def grab_frame_with_capture(self, resolution=None):
+        '''
+        Returns frame requested resolution option or with video capture resolution as RGB numpy array.
+
+        Note! May fail during streaming or recordings.
+        '''
+        resolution = resolution or self.camera.resolution
+        frame_shape = (resolution[1], resolution[0], 3)
+        output = np.empty((frame_shape[0] * frame_shape[1] * frame_shape[2],), dtype=np.uint8)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self.camera.capture(output, format='rgb', use_video_port=True, resize=resolution)
+        frame = output.reshape(frame_shape)
+
+        return frame
+
+    def grab_frame_from_MJPEG_stream(self, resolution=None):
+        '''
+        Returns frame requested resolution option or with video capture resolution as RGB numpy array.
+
+        Is more reliable during streaming.
+        '''
+        resolution = resolution or self.camera.resolution
+        frame_shape = (resolution[1], resolution[0], 3)
+        frame = self.Stream_MJPEG_Output.grab_frame()
+        if frame_shape != frame.shape:
+            frame = cv2.resize(frame, (frame_shape[1], frame_shape[0]))
+
+        return frame
+
+    def grab_frame(self, resolution=None):
+        if self.isStreaming:
+            return self.grab_frame_from_MJPEG_stream(resolution)
+        else:
+            return self.grab_frame_with_capture(resolution)
+
+    def calibrate(self, calibration_parameters, keep_frames={'low': True}):
+        '''
+        Grabs frames low' and 'high' if current camera resolution is 'high'. Else just 'low'.
+        Attempts to calibrate using Calibrator and these frames and returns output if successful.
+        Returns None if calibration unsuccessful.
+
+        calibration_parameters - dict - as required by Calibrator
+        keep_frames - dict - keys corresponding to output with bool values to specify if to return frames.
+                    By default only 'low' resolution frame is returned.
+
+        output = {'low':  Calibrator.get_calibration_data(), 
+                  'high': Calibrator.get_calibration_data()}
+        '''
+        # Identify if calibration is necessary at both resolutions
+        if self.camera.resolution == self.resolutions['high']:
+            calibration_resolutions = self.resolutions
+        else:
+            calibration_resolutions = {'low': self.resolutions['low']}
+        # Get frames at calibration_resolutions
+        frames = {}
+        for key in calibration_resolutions.keys():
+            frames[key] = self.grab_frame(calibration_resolutions[key])
+            sleep(0.2) # Ensures there is not too long block on MJPEG capture
+        # Calibrate each frame
+        calibration = {}
+        for key in frames.keys():
+            calibrator = Calibrator(frames[key], calibration_parameters)
+            calibration[key] = calibrator.get_calibration_data()
+        # Return calibration if successful, otherwise None
+        if not (None in calibration.viewvalues()):
+            # Remove unwanted frames
+            for key in calibration:
+                if not (key in keep_frames and keep_frames[key] == True):
+                    del calibration[key]['frame']
+
+            return calibration
+
     def start_processing(self):
+        self.isRecording = True
         if self.camera.resolution == self.resolutions['low']:
             self.camera.start_recording(self.RawYUV_Output, format='yuv', 
                                         splitter_port=self._get_available_port())
@@ -725,6 +931,7 @@ class CameraController(object):
                                         resize=self.resolutions['low'])
 
     def start_recording_video(self):
+        self.isRecording = True
         self.camera.start_recording('video.h264', format='h264', 
                                     splitter_port=self._get_available_port(), quality=23)
 
@@ -741,11 +948,15 @@ class CameraController(object):
             self.Stream_MJPEG_Output.close()
             del self.Stream_MJPEG_Output
         self._reset_available_ports()
+        self.isRecording = False
+        self.isStreaming = False
 
     def start_streaming(self, address='192.168.0.10', port=8000):
         '''
         Starts MJPEG stream to Recording PC.
         '''
+        self.isRecording = True
+        self.isStreaming = True
         self.Stream_MJPEG_Output = Stream_MJPEG_Output(address=address, port=port)
         if self.camera.resolution == self.resolutions['low']:
             self.camera.start_recording(self.Stream_MJPEG_Output, format='mjpeg', 
@@ -755,27 +966,13 @@ class CameraController(object):
                                         splitter_port=self._get_available_port(), 
                                         resize=self.resolutions['low'])
 
-
-    def grab_frame(self, resolution_option=None):
-        '''
-        Returns frame requested resolution option or with video capture resolution as BGR numpy array.
-        '''
-        resolution = resolution_option or self.camera.resolution
-        frame_shape = (resolution[1], resolution[0], 3)
-        output = np.empty((frame_shape[0] * frame_shape[1] * frame_shape[2],), dtype=np.uint8)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            self.camera.capture(output, format='bgr', use_video_port=True, resize=resolution)
-        frame = output.reshape(frame_shape)
-
-        return frame
-
     def close(self):
+        if self.isRecording:
+            self.stop()
         self.camera.close()
         while self.camera.ThisThingIsAlive:
             sleep(0.05)
         self.RawYUV_Output.close()
-        self.ThisThingIsAlive = False
 
     def __enter__(self):
         return self
@@ -784,112 +981,22 @@ class CameraController(object):
         self.close()
 
 
-class CameraRemoteController(object):
-    '''
-    Initializes ZMQ, CameraController and waits for commands to control CameraController.
-    '''
-    def __init__(self, port, **kwargs):
-        '''
-        port - int - ZMQ paired_messenger port.
-        '''
-        T_initialize_ZMQcomms = Thread(target=self.initialize_ZMQcomms, 
-                                       args=(port,))
-        T_initialize_ZMQcomms.start()
-        with CameraController(**kwargs) as self.Controller:
-            T_initialize_ZMQcomms.join()
-            self.ZMQmessenger.sendMessage('init_successful')
-            self.KeepCameraControllerAlive = True
-            while self.KeepCameraControllerAlive:
-                sleep(0.1)
-
-    def initialize_ZMQcomms(self, port,  warmup=2):
-        '''
-        Initializes ZMQ communication with Recording PC.
-        '''
-        self.ZMQmessenger = paired_messenger(port=port)
-        sleep(warmup) # This allows enough time for ZMQ protocols to be initiated
-        self.command_parsing_in_progress = False
-        self.ZMQmessenger.add_callback(self.command_parser)
-
-    def command_parser(self, message):
-        '''
-        Parses incoming ZMQ message for function name, input arguments and calls that function.
-        '''
-        method_name = message.split(' ')[0]
-        args = message.split(' ')[1:]
-        getattr(self, method_name)(*args)
-        if message != 'close':
-            self.ZMQmessenger.sendMessage('Action Completed: ' + message)
-
-    def start(self):
-        self.Controller.start()
-
-    def start_streaming(self, address, port):
-        address = str(address)
-        port = int(port)
-        self.Controller.start_streaming(address, port)
-
-    def stop(self):
-        self.Controller.stop()
-
-    def close(self):
-        self.KeepCameraControllerAlive = False
-        while self.Controller.ThisThingIsAlive:
-            sleep(0.05)
-        self.ZMQmessenger.sendMessage('Action Completed: close')
-        self.ZMQmessenger.close()
-
-
-def StartStop_CameraController(**kwargs):
-    with CameraController(**kwargs) as Controller:
+def StartStop_CameraController():
+    with CameraController() as Controller:
         _ = raw_input('Press enter to start image acquisition: ')
         Controller.start()
         _ = raw_input('Press enter to stop image acquisition: ')
         Controller.stop()
 
-def load_settings():
-    if os.path.isfile('TrackingSettings.p'):
-        with open('TrackingSettings.p','rb') as file:
-            TrackingSettings = pickle.load(file)
-        # Get RPi Number
-        params = {}
-        params['RPi_number'] = RPiNumber()
-        # Load the Calibration Matrix
-        if str(params['RPi_number']) in TrackingSettings['calibrationData'].keys():
-            calibrationTmatrix = TrackingSettings['calibrationData'][str(params['RPi_number'])]['calibrationTmatrix']
-        else:
-            raise ValueError('Calibration data does not exist for this RPi.')
-        params['calibrationTmatrix'] = calibrationTmatrix
-        # Identify if doubleLED tracking is enabled
-        if TrackingSettings['LEDmode'] == 'double':
-            params['doubleLED'] = True
-        elif TrackingSettings['LEDmode'] == 'single':
-            params['doubleLED'] = False
-        # Get rest of the params
-        params['smoothing_radius'] = TrackingSettings['smoothing_radius']
-        params['pos_port'] = TrackingSettings['pos_port']
-        params['RPiIP'] = TrackingSettings['RPiInfo'][str(params['RPi_number'])]['IP']
-        params['LED_separation'] = TrackingSettings['LED_separation']
-
-        return params
-
 
 def main(args):
-    kwargs = {}
-    if args.tracking:
-        OnlineTrackerParams = load_settings()
-        if not (OnlineTrackerParams is None):
-            kwargs['online_tracking'] = True
-            kwargs['OnlineTrackerParams'] = OnlineTrackerParams
-    if args.video_resolution:
-        kwargs['resolution_option'] = args.video_resolution[0]
     if args.remote:
         if args.port:
-            CameraRemoteController(args.port[0], **kwargs)
+            remote_controlled_class(CameraController, block=True, port=args.port[0])
         else:
             raise ValueError('Port required for remote control.')
     else:
-        StartStop_CameraController(**kwargs)
+        StartStop_CameraController()
 
 
 if __name__ == '__main__':
@@ -899,9 +1006,5 @@ if __name__ == '__main__':
                         help='Expects start and stop commands over ZMQ. Default is keyboard input.')
     parser.add_argument('--port', type=int, nargs=1, 
                         help='The port to use for ZMQ paired_messenger with Recording PC.')
-    parser.add_argument('--tracking', action='store_true', 
-                        help='Initializes RawYUV_Processor with TrackingSettings.p')
-    parser.add_argument('--video_resolution', type=str, nargs=1, 
-                        help='[high] for (1600, 1216). Otherwise (800, 608) is used.')
     args = parser.parse_args()
     main(args)

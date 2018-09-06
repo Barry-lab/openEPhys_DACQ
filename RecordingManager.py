@@ -24,17 +24,7 @@ from scipy.io import savemat
 from tempfile import mkdtemp
 import numpy as np
 import NWBio
-
-def show_message(message, message_more=None):
-    # This function is used to display a message in a separate window
-    msg = QtGui.QMessageBox()
-    msg.setIcon(QtGui.QMessageBox.Information)
-    msg.setText(message)
-    if message_more:
-        msg.setInformativeText(message_more)
-    msg.setWindowTitle('Message')
-    msg.setStandardButtons(QtGui.QMessageBox.Ok)
-    msg.exec_()
+from CameraSettings import CameraSettingsApp
 
 def list_window(items):
     '''
@@ -63,7 +53,6 @@ def list_window(items):
         selected_item = None
 
     return selected_item
-
 
 def findLatestTimeFolder(path):
     # Get subdirectory names and find folder with latest date time as folder name
@@ -111,70 +100,67 @@ def check_if_nwb_recording(dataFilePath):
 
     return file_recording
 
-def update_specific_camera(TrackingSettings, n_rpi, tmpFolder):
+def update_specific_camera(address, username):
+    # Set default variables.
+    path_to_scripts = 'RaspberryPi/'
+    tracking_folder = '/home/pi/Tracking'
     # Use up to date scripts
-    copytree('RaspberryPi', tmpFolder)
-    # Store TrackingSettings
-    with open(os.path.join(tmpFolder, 'TrackingSettings.p'),'wb') as file:
-        pickle.dump(TrackingSettings, file)
-    # Specify RPi number
-    with open(os.path.join(tmpFolder, 'RPiNumber'), 'wb') as file:
-        file.write(str(n_rpi))
-    # Store correct calibration data
-    if str(n_rpi) in TrackingSettings['calibrationData'].keys():
-        calibrationFile = os.path.join(tmpFolder, 'calibrationData.p')
-        with open(calibrationFile, 'wb') as file:
-            pickle.dump(TrackingSettings['calibrationData'][str(n_rpi)], file)
-    # Recreate this folder on the tracking RPi
-    tmp_path = os.path.join(tmpFolder, '')
-    callstr = 'rsync -qavrP -e "ssh -l server" ' + tmp_path + ' ' + \
-              TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
-              TrackingSettings['tracking_folder'] + ' --delete'
+    callstr = 'rsync -qavrP -e "ssh -l server" ' + path_to_scripts + ' ' + \
+              username + '@' + address + ':' + \
+              tracking_folder + ' --delete'
     _ = os.system(callstr)
     # Copy over ZMQcomms.py
     src_file = 'ZMQcomms.py'
-    dst_file = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
-               TrackingSettings['tracking_folder']
+    dst_file = username + '@' + address + ':' + \
+               tracking_folder
     callstr = 'scp -q ' + src_file + ' ' + dst_file
     _ = os.system(callstr)
 
-def update_tracking_camera_files(TrackingSettings):
+def update_tracking_camera_files(CameraSettings):
     # Updates settings and scripts on all tracking cameras in use (based on settings)
     # Create temporary working directory
-    RPiTempFolder = mkdtemp('RPiTempFolder')
     T_updateRPi = []
-    for n_rpi in TrackingSettings['use_RPi_nrs']:
-        RPiTempSubFolder = os.path.join(RPiTempFolder, str(n_rpi))
-        T = threading.Thread(target=update_specific_camera, args=[TrackingSettings, n_rpi, RPiTempSubFolder])
+    for cameraID in CameraSettings['CameraSpecific'].keys():
+        address = CameraSettings['CameraSpecific'][cameraID]['address']
+        username = CameraSettings['General']['username']
+        T = threading.Thread(target=update_specific_camera, args=(address, username))
         T.start()
         T_updateRPi.append(T)
     for T in T_updateRPi:
         T.join()
-    rmtree(RPiTempFolder)
 
-def retrieve_specific_camera_tracking_data(n_rpi, TrackingSettings, RPiTempFolder, data_events, TrackingData, TrackingDataLock):
+def video_file_name_on_RPi():
+    return 'video.h264'
+
+def video_file_name_on_RecordingPC(cameraID):
+    return 'video_' + cameraID + '.h264'
+
+def retrieve_specific_camera_data(cameraID, address, username, temp_folder, 
+                                           TrackingData, TrackingDataLock):
+    # Set default variables.
+    tracking_folder = '/home/pi/Tracking'
     # Get OnlineTrackerData File
-    src_file = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
-               TrackingSettings['tracking_folder'] + '/OnlineTrackerData.csv'
-    OnlineTrackerData_File = os.path.join(RPiTempFolder, 'OnlineTrackerData' + str(n_rpi) + '.csv')
+    src_file = username + '@' + address + ':' + \
+               tracking_folder + '/OnlineTrackerData.csv'
+    OnlineTrackerData_File = os.path.join(temp_folder, 'OnlineTrackerData.csv')
     callstr = 'scp -q ' + src_file + ' ' + OnlineTrackerData_File
     _ = os.system(callstr)
     # Get OnlineTrackerData timestamps File
-    src_file = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
-               TrackingSettings['tracking_folder'] + '/RawVideoEncoderTimestamps.csv'
-    OnlineTrackerData_timestamps_File = os.path.join(RPiTempFolder, 'RawVideoEncoderTimestamps' + str(n_rpi) + '.csv')
+    src_file = username + '@' + address + ':' + \
+               tracking_folder + '/RawVideoEncoderTimestamps.csv'
+    OnlineTrackerData_timestamps_File = os.path.join(temp_folder, 'RawVideoEncoderTimestamps.csv')
     callstr = 'scp -q ' + src_file + ' ' + OnlineTrackerData_timestamps_File
     _ = os.system(callstr)
     # Get VideoData timestamps File
-    src_file = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
-               TrackingSettings['tracking_folder'] + '/VideoEncoderTimestamps.csv'
-    VideoData_timestamps_File = os.path.join(RPiTempFolder, 'VideoEncoderTimestamps' + str(n_rpi) + '.csv')
+    src_file = username + '@' + address + ':' + \
+               tracking_folder + '/VideoEncoderTimestamps.csv'
+    VideoData_timestamps_File = os.path.join(temp_folder, 'VideoEncoderTimestamps.csv')
     callstr = 'scp -q ' + src_file + ' ' + VideoData_timestamps_File
     _ = os.system(callstr)
     # Get GlobalClock timestamps File
-    src_file = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
-               TrackingSettings['tracking_folder'] + '/TTLpulse_CameraTime.csv'
-    GlobalClock_timestamps_File = os.path.join(RPiTempFolder, 'TTLpulse_CameraTime' + str(n_rpi) + '.csv')
+    src_file = username + '@' + address + ':' + \
+               tracking_folder + '/TTLpulseTimestamps.csv'
+    GlobalClock_timestamps_File = os.path.join(temp_folder, 'TTLpulseTimestamps.csv')
     callstr = 'scp -q ' + src_file + ' ' + GlobalClock_timestamps_File
     _ = os.system(callstr)
     # Read data from files into numpy arrays
@@ -182,42 +168,64 @@ def retrieve_specific_camera_tracking_data(n_rpi, TrackingSettings, RPiTempFolde
     OnlineTrackerData_timestamps = np.genfromtxt(OnlineTrackerData_timestamps_File, dtype=int)
     VideoData_timestamps = np.genfromtxt(VideoData_timestamps_File, dtype=int)
     GlobalClock_timestamps = np.genfromtxt(GlobalClock_timestamps_File, delimiter=',', dtype=int)
+    CameraData = {'ColumnLabels': ['X1', 'Y1', 'X2', 'Y2', 'Luminance_1', 'Luminance_2'], 
+                  'OnlineTrackerData': OnlineTrackerData,
+                  'OnlineTrackerData_timestamps': OnlineTrackerData_timestamps,
+                  'VideoData_timestamps': VideoData_timestamps,
+                  'GlobalClock_timestamps': GlobalClock_timestamps, 
+                  'VideoFile': video_file_name_on_RecordingPC(cameraID)}
     with TrackingDataLock:
-        TrackingData[str(n_rpi) + '_OnlineTrackerData'] = OnlineTrackerData
-        TrackingData[str(n_rpi) + '_OnlineTrackerData_timestamps'] = OnlineTrackerData_timestamps
-        TrackingData[str(n_rpi) + '_VideoData_timestamps'] = VideoData_timestamps
-        TrackingData[str(n_rpi) + '_GlobalClock_timestamps'] = GlobalClock_timestamps
+        TrackingData[cameraID] = CameraData
+
+def retrieve_specific_camera_video_data(address, username, filename):
+    # Set default variables.
+    tracking_folder = '/home/pi/Tracking'
     # Copy over video data
-    src = TrackingSettings['username'] + '@' + TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + \
-          TrackingSettings['tracking_folder'] + '/video.h264'
-    dst = os.path.join(RPiTempFolder, 'video_' + str(n_rpi) + '.h264')
-    callstr = 'scp -q -r ' + src + ' ' + dst
+    src = username + '@' + address + ':' + \
+          tracking_folder + '/' + video_file_name_on_RPi()
+    callstr = 'scp -q ' + src + ' ' + filename
+    print('DEBUG')
+    print(callstr)
     _ = os.system(callstr)
 
-def store_frames_to_recording_folder(TrackingSettings, rec_file_path, RPiTempFolder):
-    for n_rpi in TrackingSettings['use_RPi_nrs']:
-        src = os.path.join(RPiTempFolder, 'video_' + str(n_rpi) + '.h264')
-        dst = os.path.join(os.path.dirname(rec_file_path), 'video_' + str(n_rpi) + '.h264')
-        move(src, dst)
-
-def store_tracking_data_to_recording_file(TrackingSettings, rec_file_path):
-    data_events = NWBio.load_events(rec_file_path)
+def store_camera_data_to_recording_file(CameraSettings, rec_file_path):
     # Copy all tracking data from active RPis and load to memory
-    TrackingData = {'ColumnLabels': ['timestamps', 'X1', 'Y1', 'X2', 'Y2', 'Luminance_1', 'Luminance_2']}
+    TrackingData = {}
     RPiTempFolder = mkdtemp('RPiTempFolder')
     T_retrievePosLogsRPi = []
     TrackingDataLock = threading.Lock()
-    T_args = [TrackingSettings, RPiTempFolder, data_events, TrackingData, TrackingDataLock]
-    for n_rpi in TrackingSettings['use_RPi_nrs']:
-        T = threading.Thread(target=retrieve_specific_camera_tracking_data, args=[n_rpi] + T_args)
+    T_args = [RPiTempFolder, TrackingData, TrackingDataLock]
+    for cameraID in CameraSettings['CameraSpecific'].keys():
+        temp_sub_folder = os.path.join(RPiTempFolder, cameraID)
+        os.mkdir(temp_sub_folder)
+        address = CameraSettings['CameraSpecific'][cameraID]['address']
+        username = CameraSettings['General']['username']
+        args = (cameraID, 
+                CameraSettings['CameraSpecific'][cameraID]['address'], 
+                CameraSettings['General']['username'], 
+                temp_sub_folder, 
+                TrackingData, 
+                TrackingDataLock)
+        T = threading.Thread(target=retrieve_specific_camera_data, args=args)
         T.start()
         T_retrievePosLogsRPi.append(T)
     for T in T_retrievePosLogsRPi:
         T.join()
-    store_frames_to_recording_folder(TrackingSettings, rec_file_path, RPiTempFolder)
     rmtree(RPiTempFolder)
     # Save position data from all sources to recording file
     NWBio.save_tracking_data(rec_file_path, TrackingData)
+    # Retrieve video data
+    T_list = []
+    for cameraID in CameraSettings['CameraSpecific'].keys():
+        address = CameraSettings['CameraSpecific'][cameraID]['address']
+        username = CameraSettings['General']['username']
+        filename = os.path.join(os.path.dirname(rec_file_path), video_file_name_on_RecordingPC(cameraID))
+        T = threading.Thread(target=retrieve_specific_camera_video_data, 
+                             args=(address, username, filename))
+        T.start()
+        T_list.append(T)
+    for T in T_list:
+        T.join()
 
 def list_general_settings_history(path):
     '''
@@ -328,50 +336,9 @@ def check_if_devices_available(address_list, device_names=[], output='r'):
             message_more = ''
             for device in disconnected_devices:
                 message_more += device['device_name'] + ' @ ' + device['address'] + '\n'
-        show_message(message, message_more=message_more)
+        hfunct.show_message(message, message_more=message_more)
     if 'r' in output:
         return disconnected_devices
-
-
-class QThread_with_completion_callback(QThread):
-    finishedSignal = pyqtSignal()
-    '''
-    Allows calling funcitons in separate threads with a callback function executed at completion.
-
-    Note! Make sure QThread_with_completion_callback instance does not go out of scope during execution.
-    '''
-    def __init__(self, callback_function, function, *args, **kwargs):
-        '''
-        The callback_function is called when function has finished.
-        The function is called with any input arguments that follow it.
-        '''
-        super(QThread_with_completion_callback, self).__init__()
-        self.finishedSignal.connect(callback_function)
-        self.function = function
-        self.args = args
-        self.kwargs = kwargs
-        self.start()
-
-    def run(self):
-        self.function(*self.args, **self.kwargs)
-        self.finishedSignal.emit()
-
-class QThread_thread(QThread):
-    '''
-    Allows initating a function in a QThread.
-    '''
-    def __init__(self, function, *args, **kwargs):
-        '''
-        The function is called with any input arguments that follow it.
-        '''
-        super(QThread_thread, self).__init__()
-        self.function = function
-        self.args = args
-        self.kwargs = kwargs
-        self.start()
-
-    def run(self):
-        self.function(*self.args, **self.kwargs)
 
 
 class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
@@ -465,48 +432,50 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
     def load_settings(self, filename=None):
         if filename is None: # Get user to select settings to load if not given
             filename = hfunct.openSingleFileDialog('load', suffix='nwb', caption='Select file to load')
-        self.Settings = NWBio.load_settings(filename)
-        # Put Recording Manager General settings into GUI
-        RecGUI_Settings = self.Settings['General']
-        self.pt_experimenter.setPlainText(RecGUI_Settings['experimenter'])
-        self.pt_root_folder.setPlainText(RecGUI_Settings['root_folder'])
-        self.pt_animal.setPlainText(RecGUI_Settings['animal'])
-        self.pt_experiment_id.setPlainText(RecGUI_Settings['experiment_id'])
-        self.pt_arena_size_x.setPlainText(str(RecGUI_Settings['arena_size'][0]))
-        self.pt_arena_size_y.setPlainText(str(RecGUI_Settings['arena_size'][1]))
-        self.pt_badChan.setPlainText(RecGUI_Settings['badChan'])
-        self.pt_rec_file.setPlainText(RecGUI_Settings['rec_file_path'])
-        if RecGUI_Settings['Tracking']:
-            self.rb_tracking_yes.setChecked(True)
-        else:
-            self.rb_tracking_no.setChecked(True)
-        if RecGUI_Settings['TaskActive']:
-            self.rb_task_yes.setChecked(True)
-        else:
-            self.rb_task_no.setChecked(True)
-        channel_locations = RecGUI_Settings['channel_map'].keys()
-        if len(channel_locations) > 0:
-            self.pt_chan_map_1.setPlainText(channel_locations[0])
-            self.pt_chan_map_1_chans.setPlainText(RecGUI_Settings['channel_map'][channel_locations[0]]['string'])
-            if len(RecGUI_Settings['channel_map']) > 1:
-                self.pt_chan_map_2.setPlainText(channel_locations[1])
-                self.pt_chan_map_2_chans.setPlainText(RecGUI_Settings['channel_map'][channel_locations[1]]['string'])
+        if not (filename is None):
+            self.Settings = NWBio.load_settings(filename)
+            # Put Recording Manager General settings into GUI
+            RecGUI_Settings = self.Settings['General']
+            self.pt_experimenter.setPlainText(RecGUI_Settings['experimenter'])
+            self.pt_root_folder.setPlainText(RecGUI_Settings['root_folder'])
+            self.pt_animal.setPlainText(RecGUI_Settings['animal'])
+            self.pt_experiment_id.setPlainText(RecGUI_Settings['experiment_id'])
+            self.pt_arena_size_x.setPlainText(str(RecGUI_Settings['arena_size'][0]))
+            self.pt_arena_size_y.setPlainText(str(RecGUI_Settings['arena_size'][1]))
+            self.pt_badChan.setPlainText(RecGUI_Settings['badChan'])
+            self.pt_rec_file.setPlainText(RecGUI_Settings['rec_file_path'])
+            if RecGUI_Settings['Tracking']:
+                self.rb_tracking_yes.setChecked(True)
             else:
+                self.rb_tracking_no.setChecked(True)
+            if RecGUI_Settings['TaskActive']:
+                self.rb_task_yes.setChecked(True)
+            else:
+                self.rb_task_no.setChecked(True)
+            channel_locations = RecGUI_Settings['channel_map'].keys()
+            if len(channel_locations) > 0:
+                self.pt_chan_map_1.setPlainText(channel_locations[0])
+                self.pt_chan_map_1_chans.setPlainText(RecGUI_Settings['channel_map'][channel_locations[0]]['string'])
+                if len(RecGUI_Settings['channel_map']) > 1:
+                    self.pt_chan_map_2.setPlainText(channel_locations[1])
+                    self.pt_chan_map_2_chans.setPlainText(RecGUI_Settings['channel_map'][channel_locations[1]]['string'])
+                else:
+                    self.pt_chan_map_2.setPlainText('')
+                    self.pt_chan_map_2_chans.setPlainText('')
+            else:
+                self.pt_chan_map_1.setPlainText('')
+                self.pt_chan_map_1_chans.setPlainText('')
                 self.pt_chan_map_2.setPlainText('')
                 self.pt_chan_map_2_chans.setPlainText('')
-        else:
-            self.pt_chan_map_1.setPlainText('')
-            self.pt_chan_map_1_chans.setPlainText('')
-            self.pt_chan_map_2.setPlainText('')
-            self.pt_chan_map_2_chans.setPlainText('')
 
     def save_settings(self, filename=None):
         # Saves current settings into a file
         if filename is None:
             filename = hfunct.openSingleFileDialog('save', suffix='nwb', caption='Save file name and location')
-        self.Settings['General'] = self.get_RecordingGUI_settings()
-        self.Settings['Time'] = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        NWBio.save_settings(filename, self.Settings)
+        if not (filename is None):
+            self.Settings['General'] = self.get_RecordingGUI_settings()
+            self.Settings['Time'] = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+            NWBio.save_settings(filename, self.Settings)
 
     def load_last_settings(self):
         RecGUI_Settings = self.get_RecordingGUI_settings()
@@ -525,7 +494,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             criteria = ''
             for key in sorted(settings.keys()):
                 criteria += str(key) + ': ' + str(settings[key]) + '\n'
-            show_message('No settings found for criteria:', message_more=criteria)
+            hfunct.show_message('No settings found for criteria:', message_more=criteria)
         else:
             self.load_settings(filename=filename)
 
@@ -533,13 +502,16 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Pops up a new window to select a folder and then inserts the path to the text box
         self.pt_root_folder.setPlainText(self.openFolderDialog())
 
+    def update_camera_settings(self, CameraSettings):
+        self.Settings['CameraSettings'] = CameraSettings
+
     def camera_settings(self):
         # Opens up a new window for Camera Settings
-        from CameraSettingsGUI import CameraSettings
-        self.CamSet = CameraSettings(parent=self)
-        # Check if TrackingSettings available, if so Load them.
-        if 'TrackingSettings' in self.Settings.keys():
-            self.CamSet.load(deepcopy(self.Settings['TrackingSettings']))
+        if 'CameraSettings' in self.Settings.keys():
+            CameraSettings = self.Settings['CameraSettings']
+        else:
+            CameraSettings = None
+        self.CameraSettingsApp = CameraSettingsApp(CameraSettings, True, self.update_camera_settings)
 
     def task_settings(self):
         from TaskSettingsGUI import TaskSettingsGUI
@@ -552,11 +524,10 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         address_list = []
         device_names = []
         # Add tracking cameras to list
-        if 'TrackingSettings' in self.Settings.keys():
-            for Camera_ID in sorted(self.Settings['TrackingSettings']['RPiInfo'].keys(), key=int):
-                if self.Settings['TrackingSettings']['RPiInfo'][Camera_ID]['active']:
-                    address_list.append(self.Settings['TrackingSettings']['RPiInfo'][Camera_ID]['IP'])
-                    device_names.append('Tracking Camera ' + str(Camera_ID))
+        if 'CameraSettings' in self.Settings.keys():
+            for cameraID in sorted(self.Settings['CameraSettings']['CameraSpecific'].keys(), key=int):
+                address_list.append(self.Settings['CameraSettings']['CameraSpecific'][cameraID]['address'])
+                device_names.append('Camera ' + str(cameraID))
         # Add feeders to list
         if 'TaskSettings' in self.Settings.keys():
             for FEEDER_type in self.Settings['TaskSettings']['FEEDERs'].keys():
@@ -575,7 +546,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_process_data.setEnabled(False)
         self.pb_sync_server.setEnabled(False)
         # Do background work
-        self.main_worker = QThread_with_completion_callback(self.init_devices_completed, self.init_devices)
+        self.main_worker = hfunct.QThread_with_completion_callback(self.init_devices_completed, self.init_devices)
 
     def init_devices_completed(self):
         # Change Init_devices button style to green and enable start_rec button
@@ -586,36 +557,40 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Load settings
         self.Settings['General'] = self.get_RecordingGUI_settings()
         if self.Settings['General']['Tracking']:
-            if 'TrackingSettings' in self.Settings.keys():
-                self.Settings['TrackingSettings']['arena_size'] = self.Settings['General']['arena_size']
-            else:
-                show_message('No camera settings for Tracking.')
+            if not 'CameraSettings' in self.Settings.keys():
+                hfunct.show_message('No camera settings for Tracking.')
                 raise ValueError('No camera settings for Tracking.')
         if self.Settings['General']['TaskActive']:
             if 'TaskSettings' in self.Settings.keys():
                 self.Settings['TaskSettings']['arena_size'] = self.Settings['General']['arena_size']
             else:
-                show_message('No task settings for active task.')
+                hfunct.show_message('No task settings for active task.')
                 raise ValueError('No task settings for active task.')
             if not self.Settings['General']['Tracking']:
-                show_message('Tracking must be active for task to work')
+                hfunct.show_message('Tracking must be active for task to work')
                 raise ValueError('Tracking must be active for task to work')
         # Initialize tracking
         if self.Settings['General']['Tracking']:
             print('Connecting to GlobalClock RPi...')
-            self.GlobalClockControl = rpiI.GlobalClockControl(self.Settings['TrackingSettings'])
+            args = (self.Settings['CameraSettings']['General']['global_clock_ip'],
+                    self.Settings['CameraSettings']['General']['ZMQcomms_port'], 
+                    self.Settings['CameraSettings']['General']['username'], 
+                    self.Settings['CameraSettings']['General']['password'])
+            self.GlobalClockControl = rpiI.GlobalClockControl(*args)
             print('Connecting to GlobalClock RPi Successful')
             # Connect to tracking RPis
             print('Connecting to tracking RPis...')
-            update_tracking_camera_files(self.Settings['TrackingSettings'])
-            self.trackingControl = rpiI.TrackingControl(self.Settings['TrackingSettings'])
+            update_tracking_camera_files(self.Settings['CameraSettings'])
+            self.trackingControl = rpiI.TrackingControl(self.Settings['CameraSettings'])
             print('Connecting to tracking RPis Successful')
             # Initialize onlineTrackingData class
             print('Initializing Online Tracking Data...')
             self.histogramParameters = {'margins': 10, # histogram data margins in centimeters
                                         'binSize': 2, # histogram binSize in centimeters
                                         'speedLimit': 10}# centimeters of distance in last second to be included
-            self.RPIpos = rpiI.onlineTrackingData(self.Settings['TrackingSettings'], HistogramParameters=deepcopy(self.histogramParameters), SynthData=False)
+            self.RPIpos = rpiI.onlineTrackingData(self.Settings['CameraSettings'], 
+                                                  self.Settings['General']['arena_size'], 
+                                                  HistogramParameters=deepcopy(self.histogramParameters))
             print('Initializing Online Tracking Data Successful')
         # Initialize listening to Open Ephys GUI messages
         print('Connecting to Open Ephys GUI via ZMQ...')
@@ -631,7 +606,8 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
                       'MessageToOE': SendOpenEphysSingleMessage}
             TaskModule = hfunct.import_subdirectory_module('Tasks', self.Settings['TaskSettings']['name'])
             self.current_task = TaskModule.Core(deepcopy(self.Settings['TaskSettings']), TaskIO)
-            print('Initializing Task Successful')  
+            print('Initializing Task Successful')
+        print('Recording Initialization Successful')
 
     def pb_start_rec_callback(self):
         # Change Start button style to red and init_devices button back to default
@@ -670,7 +646,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Start cumulative plot
         if self.Settings['General']['Tracking']:
             print('Starting Position Plot...')
-            self.PosPlot = PosPlot(self.Settings['TrackingSettings'], self.RPIpos, deepcopy(self.histogramParameters))
+            self.PosPlot = PosPlot(self.RPIpos, self.Settings['CameraSettings']['General']['LED_angle'])
             print('Starting Position Plot Successful')
         # Start task
         if self.Settings['General']['TaskActive']:
@@ -682,7 +658,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         # Disable Stop button
         self.pb_stop_rec.setEnabled(False)
         # Do background work
-        self.main_worker = QThread_with_completion_callback(self.stop_rec_completed, self.stop_rec)
+        self.main_worker = hfunct.QThread_with_completion_callback(self.stop_rec_completed, self.stop_rec)
 
     def stop_rec_completed(self):
         # Change start button colors
@@ -696,7 +672,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         if self.Settings['General']['Tracking']:
             # Store tracking  data in recording file
             print('Copying over tracking data to Recording File...')
-            store_tracking_data_to_recording_file(self.Settings['TrackingSettings'], self.Settings['General']['rec_file_path'])
+            store_camera_data_to_recording_file(self.Settings['CameraSettings'], self.Settings['General']['rec_file_path'])
             print('Copying over tracking data to Recording File Successful')
         # Store recording settings to recording file
         self.save_settings(filename=self.Settings['General']['rec_file_path'])
@@ -753,7 +729,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
         self.pb_process_data.setEnabled(False)
         self.pb_sync_server.setEnabled(False)
         # Do background work
-        self.main_worker = QThread_with_completion_callback(self.process_data_completed, self.process_data)
+        self.main_worker = hfunct.QThread_with_completion_callback(self.process_data_completed, self.process_data)
     
     def process_data_completed(self):
         self.pb_init_devices.setEnabled(True)

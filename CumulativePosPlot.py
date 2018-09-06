@@ -1,13 +1,6 @@
 ### This script produces a window where it plots current tracking position
 ### and also history of tracked position.
 
-### Usage:
-### from CumulativePosPlot import PosPlot
-### PosPlotWindow = PosPlot(TrackingSettings=TrackingSettings)
-
-### To close click x on window or:
-### PosPlotWindow.close()
-
 ### By Sander Tanni, January 2018, UCL
 
 import pyqtgraph as pg
@@ -17,6 +10,7 @@ from PyQt4.QtCore import QTimer, QRectF
 import RPiInterface as rpiI
 import time
 from scipy import ndimage
+from copy import copy
 
 def angle_clockwise(p1, p2, invertedY=True):
     # Takes two numpy 2D vectors and computes the angle of their difference
@@ -32,10 +26,10 @@ def angle_clockwise(p1, p2, invertedY=True):
     return angle_deg
 
 class PosPlot(object):
-    def __init__(self, TrackingSettings, RPIPos, HistogramParameters):
-        self.TrackingSettings = TrackingSettings
+    def __init__(self, RPIPos, LED_angle=None):
         self.RPIpos = RPIPos
-        self.histogramParameters = HistogramParameters
+        self.histogramParameters = copy(self.RPIpos.HistogramParameters)
+        self.LED_angle = LED_angle
         # Only continue once first two position datas are obtained
         combPosHistory = []
         while len(combPosHistory) < 2:
@@ -44,7 +38,7 @@ class PosPlot(object):
                 combPosHistory = self.RPIpos.combPosHistory
         # Initialize plot window
         self.PlotGraphicsWidget = pg.GraphicsLayoutWidget()
-        XandYratio = np.float32(self.TrackingSettings['arena_size'][0]) / np.float32(self.TrackingSettings['arena_size'][1])
+        XandYratio = np.float32(self.RPIpos.arena_size[0]) / np.float32(self.RPIpos.arena_size[1])
         self.plotBox = self.PlotGraphicsWidget.addViewBox(enableMouse=False)
         self.plotBox.setAspectLocked(True)
         self.imageItem = pg.ImageItem()
@@ -78,7 +72,7 @@ class PosPlot(object):
         # Put all plots into main window and display
         self.mainWindow = QtGui.QWidget()
         self.mainWindow.setWindowTitle('Cumulative Position Plot')
-        XandYratio = float(self.TrackingSettings['arena_size'][0]) / float(self.TrackingSettings['arena_size'][1])
+        XandYratio = float(self.RPIpos.arena_size[0]) / float(self.RPIpos.arena_size[1])
         self.mainWindow.resize(int(700 * XandYratio) + 200, 700)
         vboxWidget = QtGui.QWidget()
         vboxWidget.setFixedWidth(100)
@@ -125,8 +119,8 @@ class PosPlot(object):
     def updatePlotAxes(self):
         binSize = self.histogramParameters['binSize']
         margins = self.histogramParameters['margins']
-        xRange = (0, (self.TrackingSettings['arena_size'][0] + 2 * margins) / binSize)
-        yRange = (0, (self.TrackingSettings['arena_size'][1] + 2 * margins) / binSize)
+        xRange = (0, (self.RPIpos.arena_size[0] + 2 * margins) / binSize)
+        yRange = (0, (self.RPIpos.arena_size[1] + 2 * margins) / binSize)
         self.plotBox.setRange(xRange=xRange, yRange=yRange)
 
     def prepareColormap(self):
@@ -164,9 +158,9 @@ class PosPlot(object):
     def draw_arena_boundaries(self):
         # Draw boundaries of the arena to the plot
         boundaries = np.array([[0, 0], \
-                               [self.TrackingSettings['arena_size'][0], 0], \
-                               [self.TrackingSettings['arena_size'][0], self.TrackingSettings['arena_size'][1]], \
-                               [0, self.TrackingSettings['arena_size'][1]], \
+                               [self.RPIpos.arena_size[0], 0], \
+                               [self.RPIpos.arena_size[0], self.RPIpos.arena_size[1]], \
+                               [0, self.RPIpos.arena_size[1]], \
                                [0, 0]])
         boundaries = boundaries + self.histogramParameters['margins']
         boundaries = boundaries / float(self.histogramParameters['binSize'])
@@ -231,9 +225,9 @@ class PosPlot(object):
         self.plotBox.removeItem(self.arrow) # Remove previous arrow
         if not (currPos is None) and not (pastPos is None):
             arrowPos = ((currPos[0] + margins) / binSize, (currPos[1] + margins) / binSize)
-            if self.TrackingSettings['LEDmode'] == 'double' and not np.any(np.isnan(currPos[2:])):
+            if not (self.LED_angle is None) and not np.any(np.isnan(currPos[2:])):
                 # Compute arrow angle with to align the line connecting the points
-                head_angle = angle_clockwise(currPos[:2], currPos[2:]) + 90 + self.TrackingSettings['LED_angle']
+                head_angle = angle_clockwise(currPos[:2], currPos[2:]) + 90 + self.LED_angle
                 # Draw the arro with the head/tip at the location of primary LED
                 self.arrow = pg.ArrowItem(pos=arrowPos, 
                                           angle=head_angle, headLen=40, tailLen=20, 
@@ -242,7 +236,7 @@ class PosPlot(object):
                 self.plotBox.addItem(self.arrow)
             else:
                 # If no 2nd LED data, draw arrow based on movement direction
-                head_angle = angle_clockwise(pastPos[:2], currPos[:2]) + 90 + self.TrackingSettings['LED_angle']
+                head_angle = angle_clockwise(pastPos[:2], currPos[:2]) + 90
                 self.arrow = pg.ArrowItem(pos=arrowPos, 
                                           angle=head_angle, headLen=40, tailLen=0, 
                                           headWidth=40, tailWidth=7, 

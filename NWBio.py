@@ -205,7 +205,7 @@ def check_if_path_exists(filename, path):
 
 def recursively_save_dict_contents_to_group(h5file, path, dic):
     """
-    Only works with: numpy arrays, numpy int64 or float64, strings, bytes, lists of strings and dictionaries.
+    Only works with: numpy arrays, numpy int64 or float64, strings, bytes, lists of strings and dictionaries these are contained in.
     """
     for key, item in dic.items():
         if isinstance(item, (np.ndarray, np.int64, np.float64, str, bytes)):
@@ -246,7 +246,7 @@ def save_settings(filename, Settings, path='/'):
     '''
     Writes into an existing file if path is not yet used.
     Creates a new file if filename does not exist.
-    Only works with: numpy arrays, numpy int64 or float64, strings, bytes, lists of strings and dictionaries.
+    Only works with: numpy arrays, numpy int64 or float64, strings, bytes, lists of strings and dictionaries these are contained in.
     To save specific subsetting, e.g. TaskSettings, use:
         Settings=TaskSetttings, path='/TaskSettings/'
     '''
@@ -330,23 +330,11 @@ def save_tracking_data(filename, TrackingData, ProcessedPos=False, overwrite=Fal
                 del h5file[processed_pos_path]
             h5file[processed_pos_path] = TrackingData
 
-def load_raw_tracking_data(filename, n_rpi):
-    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'
-    OnlineTrackerData_path = path + str(n_rpi) + '_OnlineTrackerData'
-    OnlineTrackerData_timestamps_path = path + str(n_rpi) + '_OnlineTrackerData_timestamps'
-    VideoData_timestamps_path = path + str(n_rpi) + '_VideoData_timestamps'
-    GlobalClock_timestamps_path = path + str(n_rpi) + '_GlobalClock_timestamps'
+def load_raw_tracking_data(filename, cameraID):
+    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/' + cameraID
     with h5py.File(filename, 'r') as h5file:
-        if OnlineTrackerData_path in h5file:
-            # This is conditional to allow loading old datasets
-            tracking_data = {'OnlineTrackerData': np.array(h5file[OnlineTrackerData_path].value), 
-                             'OnlineTrackerData_timestamps': np.array(h5file[OnlineTrackerData_timestamps_path].value), 
-                             'VideoData_timestamps': np.array(h5file[VideoData_timestamps_path].value), 
-                             'GlobalClock_timestamps': np.array(h5file[GlobalClock_timestamps_path].value)}
-            return tracking_data
-        else:
-            # This loads the old format
-            return np.array(h5file[path + str(n_rpi)].value)
+        if path in h5file:
+            return recursively_load_dict_contents_from_group(h5file, path)
 
 def load_processed_tracking_data(filename, subset='ProcessedPos'):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'

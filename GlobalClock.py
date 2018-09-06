@@ -28,7 +28,7 @@ class GlobalClock_TTL_emitter(object):
         '''
         Initializes ZMQ communication with Recording PC.
         '''
-        self.ZMQmessenger = paired_messenger(port=port)
+        self.ZMQmessenger = paired_messenger(port=int(port))
         self.ZMQmessenger.add_callback(self.command_parser)
         sleep(1) # This ensures all ZMQ protocols have been properly initated before finishing this process
 
@@ -96,9 +96,14 @@ if __name__ == '__main__':
                                      'only if --remote flag is provided. Class waits for ZMQ commands.')
     parser.add_argument('--remote', action='store_true', 
                         help='Expects start, stop and close commands over ZMQ.')
+    parser.add_argument('--port', type=int, nargs=1, 
+                        help='The port to use for ZMQ paired_messenger with Recording PC.')
     args = parser.parse_args()
     # Only run the GlobalClock_TTL_emitter as a script if --remote flag provided.
     if args.remote:
-        Controller = GlobalClock_TTL_emitter(ZMQcontrol=True)
+        if args.port:
+            Controller = GlobalClock_TTL_emitter(ZMQcontrol=True, ZMQport=args.port[0])
+        else:
+            print('--port was not provided, but is required to start the Class.')
     else:
         print('--remote flag was not used. Class can not be used as script without ZMQ commands.')

@@ -9,6 +9,7 @@ import copy
 import multiprocessing
 from time import sleep
 import psutil
+from PyQt4.QtCore import QThread, pyqtSignal
 
 class multiprocess(object):
     '''
@@ -258,9 +259,18 @@ def openSingleFileDialog(loadsave, directory=os.path.expanduser("~"), suffix='',
         # Get path and file name of selection
         tmp = dialog.selectedFiles()
         selected_file = str(tmp[0])
+        return selected_file
 
-    return selected_file
-
+def show_message(message, message_more=None):
+    # This function is used to display a message in a separate window
+    msg = QtGui.QMessageBox()
+    msg.setIcon(QtGui.QMessageBox.Information)
+    msg.setText(message)
+    if message_more:
+        msg.setInformativeText(message_more)
+    msg.setWindowTitle('Message')
+    msg.setStandardButtons(QtGui.QMessageBox.Ok)
+    msg.exec_()
 
 def test_pinging_address(address='localhost'):
     '''
@@ -272,3 +282,29 @@ def test_pinging_address(address='localhost'):
         return True
     else:
         return False
+
+class QThread_with_completion_callback(QThread):
+    finishedSignal = pyqtSignal()
+    '''
+    Allows calling funcitons in separate threads with a callback function executed at completion.
+
+    Note! Make sure QThread_with_completion_callback instance does not go out of scope during execution.
+    '''
+    def __init__(self, callback_function, function, return_output=False, callback_args=(), function_args=()):
+        '''
+        The callback_function is called when function has finished.
+        The function is called with any input arguments that follow it.
+        '''
+        super(QThread_with_completion_callback, self).__init__()
+        if return_output:
+            self.finishedSignal.connect(lambda: callback_function(self.function_output, *self.callback_args))
+        else:
+            self.finishedSignal.connect(lambda: callback_function(*self.callback_args))
+        self.function = function
+        self.callback_args = callback_args
+        self.function_args = function_args
+        self.start()
+
+    def run(self):
+        self.function_output = self.function(*self.function_args)
+        self.finishedSignal.emit()

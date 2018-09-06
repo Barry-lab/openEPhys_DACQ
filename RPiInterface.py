@@ -11,56 +11,90 @@ import numpy as np
 from scipy.spatial.distance import euclidean
 from itertools import combinations
 from TrackingDataProcessing import combineCamerasData
-from ZMQcomms import paired_messenger
+from ZMQcomms import paired_messenger, remote_object_controller
 from multiprocessing.dummy import Pool as ThreadPool
 
 
 class CameraControl(object):
-    def __init__(self, address, port, username='pi', password='raspberry', retry=6, tracking=False):
-        self._init_successful = False
-        self.Controller_messenger = paired_messenger(address, int(port))
-        self.Controller_messenger.add_callback(self.Controller_message_parser)
-        self.RPiSSH = CameraControl.initRPiController(address, port, username, password, tracking)
-        _init_start_time = time()
-        while not self._init_successful:
-            sleep(0.1)
-            if retry and time() - _init_start_time > retry:
-                self.RPiSSH = CameraControl.initRPiController(address, port, username, password, tracking)
-                _init_start_time = time()
+    def __init__(self, address, port, username='pi', password='raspberry', resolution_option=None, OnlineTrackerParams=None):
+        CameraController_init_successful = False
+        while not CameraController_init_successful:
+            RemoteControl_init_successful = False
+            # Reset remote_object_controller if CameraController has already failed 
+            if hasattr(self, 'RemoteControl'):
+                self.RemoteControl.close()
+            self.RemoteControl = remote_object_controller(address, int(port))
+            while not RemoteControl_init_successful:
+                # Reset RPiSSH if remote_object_controller has already failed
+                if hasattr(self, 'RPiSSH'):
+                    self.RPiSSH.disconnect()
+                self.RPiSSH = CameraControl._init_RPiSSH(address, port, username, password)
+                RemoteControl_init_successful = self.RemoteControl.pair(timeout=10)
+                if not RemoteControl_init_successful:
+                    print('RemoteControl initialization failed, trying again at: ' + address)
+            # Attempt instantiating CameraController
+            CameraController_init_successful = self.RemoteControl.sendInitCommand(10, 
+                                                                                  resolution_option, 
+                                                                                  OnlineTrackerParams)
+            if not CameraController_init_successful:
+                print('Remote CameraController initialization failed, trying again at: ' + address)
 
     @staticmethod
-    def initRPiController(address, port, username='pi', password='raspberry', tracking=False):
+    def _init_RPiSSH(address, port, username='pi', password='raspberry'):
         RPiSSH = ssh(address, username, password)
         RPiSSH.sendCommand('sudo pkill python') # Ensure any past processes have closed
-        if tracking:
-            command = 'cd ' + 'Tracking' + ' && python tracking.py --remote --port ' + str(port) + ' --tracking'
-        else:
-            command = 'cd ' + 'Tracking' + ' && python tracking.py --remote --port ' + str(port)
+        command = 'cd ' + 'Tracking' + ' && python tracking.py --remote --port ' + str(port)
         RPiSSH.sendCommand_threading(command)
 
         return RPiSSH
 
-    def Controller_message_parser(self, message):
-        if message == 'init_successful':
-            self._init_successful = True
+    def calibrate(self, calibration_parameters):
+        '''
+        calibration_parameters - dict - output from CameraControl.enter_calibration_parameters
+        '''
+        return self.RemoteControl.sendCommand('calibrate', True, calibration_parameters)
 
-    def start(self):
-        message = 'start'
-        self.Controller_messenger.sendMessage(message, verify='Action Completed: ' + message)
+    def init_processing(self, OnlineTrackerParams):
+        self.RemoteControl.sendCommand('init_processing', True, OnlineTrackerParams)
 
     def start_streaming(self, address, port):
-        message = ' '.join(('start_streaming', str(address), str(port)))
-        self.Controller_messenger.sendMessage(message, verify='Action Completed: ' + message)
+        self.RemoteControl.sendCommand('start_streaming', True, address, int(port))
+
+    def start_processing(self):
+        self.RemoteControl.sendCommand('start_processing', True)
+
+    def start(self):
+        self.RemoteControl.sendCommand('start', True)
 
     def stop(self):
-        message = 'stop'
-        self.Controller_messenger.sendMessage(message, verify='Action Completed: ' + message)
+        self.RemoteControl.sendCommand('stop', True)
 
     def close(self):
-        message = 'close'
-        self.Controller_messenger.sendMessage(message, verify='Action Completed: ' + message)
+        self.RemoteControl.sendCommand('close', True)
+        self.RemoteControl.close()
         self.RPiSSH.disconnect()
-        self.Controller_messenger.close()
+
+    @staticmethod
+    def dict_OnlineTrackerParams(calibrationTmatrix, tracking_mode, smoothing_radius, 
+                                 OnlineTracker_port, RPiIP, LED_separation):
+        '''
+        Returns camera_parameters in a dictionary.
+        '''
+        return {'calibrationTmatrix': calibrationTmatrix, # (3 x 3 numpy array)
+                'tracking_mode': str(tracking_mode), # str
+                'smoothing_radius': int(smoothing_radius), # int - number of pixels
+                'OnlineTracker_port': str(OnlineTracker_port), # str
+                'RPiIP': str(RPiIP), # str
+                'LED_separation': float(LED_separation)} # LED separation in cm
+
+    @staticmethod
+    def dict_calibration_parameters(ndots_xy, spacing, offset_xy):
+        '''
+        Returns calibration_parameters in a dictionary.
+        '''
+        return {'ndots_xy': ndots_xy, 
+                'spacing': spacing, 
+                'offset_xy': offset_xy}
 
     @staticmethod
     def CameraControl_unpackPool(kwargs):
@@ -71,50 +105,72 @@ class CameraControl(object):
         return CameraControl(**kwargs)
 
     @staticmethod
-    def init_CameraControls_with_TrackingSettings(TrackingSettings, OnlineTracking=False):
+    def init_CameraControls_with_CameraSettings(CameraSettings):
         '''
-        Returns a dictionary where each TrackingSettings['use_RPi_nrs'] element is a key
+        Returns a dictionary where each CameraSettings['use_RPi_nrs'] element is a key
         to corresponding initialized CameraControl object. 
         '''
         kwargs_list = []
-        for n_rpi in TrackingSettings['use_RPi_nrs']:
-            kwargs_list.append({'address': TrackingSettings['RPiInfo'][str(n_rpi)]['IP'], 
-                                'port': TrackingSettings['ZMQcomms_port'], 
-                                'username': TrackingSettings['username'], 
-                                'password': TrackingSettings['password'], 
-                                'tracking': OnlineTracking})
-        pool = ThreadPool(len(TrackingSettings['use_RPi_nrs']))
+        cameraID_list = []
+        for cameraID in CameraSettings['CameraSpecific'].keys():
+            cameraID_list.append(cameraID)
+            args = (CameraSettings['CameraSpecific'][cameraID]['CalibrationData']['low']['calibrationTmatrix'], 
+                    CameraSettings['General']['tracking_mode'], 
+                    CameraSettings['General']['smoothing_radius'], 
+                    CameraSettings['General']['OnlineTracker_port'], 
+                    CameraSettings['CameraSpecific'][cameraID]['address'], 
+                    CameraSettings['General']['LED_separation'])
+            OnlineTrackerParams = CameraControl.dict_OnlineTrackerParams(*args)
+            kwargs_list.append({'address': CameraSettings['CameraSpecific'][cameraID]['address'], 
+                                'port': CameraSettings['General']['ZMQcomms_port'], 
+                                'username': CameraSettings['General']['username'], 
+                                'password': CameraSettings['General']['password'], 
+                                'resolution_option': CameraSettings['General']['resolution_option'], 
+                                'OnlineTrackerParams': OnlineTrackerParams
+                                })
+        pool = ThreadPool(len(kwargs_list))
         CameraControlsList = pool.map(CameraControl.CameraControl_unpackPool, kwargs_list)
         pool.close()
         CameraControls = {}
-        for camera_controller, n_rpi in zip(CameraControlsList, TrackingSettings['use_RPi_nrs']):
-            CameraControls[n_rpi] = camera_controller
+        for camera_controller, cameraID in zip(CameraControlsList, cameraID_list):
+            CameraControls[cameraID] = camera_controller
 
         return CameraControls
 
 
 class TrackingControl(object):
 
-    def __init__(self, TrackingSettings):
-        self.CameraControls = CameraControl.init_CameraControls_with_TrackingSettings(TrackingSettings, 
-                                                                                      OnlineTracking=True)
+    def __init__(self, CameraSettings):
+        self.CameraControls = CameraControl.init_CameraControls_with_CameraSettings(CameraSettings)
 
     def start(self):
-        for n_rpi in self.CameraControls:
-            self.CameraControls[n_rpi].start()
+        T_list = []
+        for cameraID in self.CameraControls.keys():
+            T = Thread(target=self.CameraControls[cameraID].start)
+            T.start()
+        for T in T_list:
+            T.join()
 
     def stop(self):
-        for n_rpi in self.CameraControls:
-            self.CameraControls[n_rpi].stop()
+        T_list = []
+        for cameraID in self.CameraControls.keys():
+            T = Thread(target=self.CameraControls[cameraID].stop)
+            T.start()
+        for T in T_list:
+            T.join()
 
     def close(self):
-        for n_rpi in self.CameraControls:
-            self.CameraControls[n_rpi].close()
+        T_list = []
+        for cameraID in self.CameraControls.keys():
+            T = Thread(target=self.CameraControls[cameraID].close)
+            T.start()
+        for T in T_list:
+            T.join()
 
 
 class onlineTrackingData(object):
     # Constantly updates position data for all RPis currently in use.
-    # Initialize this class as RPIpos = onlineTrackingData(TrackingSettings)
+    # Initialize this class as RPIpos = onlineTrackingData(CameraSettings, arena_size)
     # Check for latest position with combPos = RPIpos.combPosHistory[-1]
 
     # Make sure to use Locks to avoid errors, for example:
@@ -123,96 +179,75 @@ class onlineTrackingData(object):
 
     # Optional arguments during initialization:
     #   HistogramParameters is a list: [margins, binSize, histogram_speed_limit]
-    #   SynthData set to True for debugging using synthetically generated position data
-    def __init__(self, TrackingSettings, HistogramParameters=None, SynthData=False):
-        # Initialise the class with input TrackingSettings
+    def __init__(self, CameraSettings, arena_size, HistogramParameters=None):
+        # Initialise the class with input CameraSettings
         self.combPos_update_interval = 0.05 # in seconds
-        self.SynthData = SynthData
+        self.CameraSettings = CameraSettings
+        self.arena_size = arena_size
+        # Make a list of cameraIDs from CameraSettings for reference to other lists in this class.
+        self.cameraIDs = sorted(self.CameraSettings['CameraSpecific'].keys())
         if HistogramParameters is None:
             HistogramParameters = {'margins': 10, # histogram data margins in centimeters
                                    'binSize': 2, # histogram binSize in centimeters
                                    'speedLimit': 10}# centimeters of distance in last second to be included
         self.HistogramParameters = HistogramParameters
         self.KeepGettingData = True # Set True for endless while loop of updating latest data
-        self.TrackingSettings = TrackingSettings
-        self.posDatas = [None for i in range(len(self.TrackingSettings['use_RPi_nrs']))]
+        self.posDatas = [None for i in range(len(self.cameraIDs))]
         self.combPosHistory = []
-        self.setupSocket() # Set up listening of position data
+        self.sockSUBs = onlineTrackingData.setupSockets(self.cameraIDs, self.CameraSettings)
         # Initialize Locks to avoid errors
         self.posDatasLock = Lock()
         self.combPosHistoryLock = Lock()
         self.histogramLock = Lock()
         # Start updating position data and storing it in history
-        Thread(target=self.updateCombPosHistory).start()
+        self.T_updateCombPosHistory = Thread(target=self.updateCombPosHistory)
+        self.T_updateCombPosHistory.start()
 
-    def setupSocket(self):
+    @staticmethod
+    def setupSocket(address, port):
         # Set ZeroMQ socket to listen on incoming position data from all RPis
         context = zmq.Context()
-        self.sockSUB = context.socket(zmq.SUB)
-        self.sockSUB.setsockopt(zmq.SUBSCRIBE, '')
-        self.sockSUB.RCVTIMEO = 150 # maximum duration to wait for data (in milliseconds)
-        for n_rpi in self.TrackingSettings['use_RPi_nrs']:
-            tmp = 'tcp://' + self.TrackingSettings['RPiInfo'][str(n_rpi)]['IP'] + ':' + self.TrackingSettings['pos_port']
-            self.sockSUB.connect(tmp)
+        sockSUB = context.socket(zmq.SUB)
+        sockSUB.setsockopt(zmq.SUBSCRIBE, '')
+        sockSUB.RCVTIMEO = 150 # maximum duration to wait for data (in milliseconds)
+        sockSUB.connect('tcp://' + address + ':' + str(port))
 
-    def generatePosData(self, n_rpi):
-        # Generates continuous position data and updates self.posDatas for a single RPi
-        data_rate = 0.01 # Seconds per datapoint
-        nRPi = [i for i,x in enumerate(self.TrackingSettings['use_RPi_nrs']) if x == n_rpi][0]
-        oldPos = [0.0, 0.0]
-        currPos = [1.0, 1.0]
-        time_of_last_datapoint = time()
-        while self.KeepGettingData:
-            time_since_last_datapoint = time() - time_of_last_datapoint
-            if time_since_last_datapoint > data_rate:
-                newPos = [-1, -1]
-                p0 = np.array(currPos) - np.array(oldPos)
-                lastDirection = np.arctan2(p0[0], p0[1])
-                while newPos[0] < 0 or newPos[0] > self.TrackingSettings['arena_size'][0] or newPos[1] < 0 or newPos[1] > self.TrackingSettings['arena_size'][1]:
-                    time_since_last_datapoint = time() - time_of_last_datapoint
-                    newDirection = np.random.normal(loc=lastDirection, scale=np.pi / 32)
-                    # Allow circular continuity
-                    newDirection = np.arctan2(np.sin(newDirection), np.cos(newDirection))
-                    # Compute new position based on speed and angle
-                    current_speed = np.random.normal(loc=20.0, scale=20.0) * time_since_last_datapoint
-                    if current_speed < 0.1:
-                        current_speed = 0.1
-                    if time_since_last_datapoint > 0.05:
-                        current_speed = 0.1
-                    posShift = np.array([np.sin(newDirection) * current_speed, np.cos(newDirection) * current_speed])
-                    newPos = np.array(currPos) + posShift
-                    if time_since_last_datapoint > 0.05:
-                        with self.posDatasLock:
-                            self.posDatas[nRPi] = [n_rpi, None, None, None, None, None, None]
-                        lastDirection = (np.random.random() - 0.5) * 2 * np.pi
-                oldPos = currPos
-                currPos = newPos
-                with self.posDatasLock:
-                    self.posDatas[nRPi] = [n_rpi, newPos[0], newPos[1], None, None, None, None]
-                time_of_last_datapoint = time()
-            sleep(0.005)
+        return sockSUB
 
-    def updatePosDatas(self):
+    @staticmethod
+    def setupSocket_unpackPool(kwargs):
+        '''
+        Helper function to allow using pool with argument list.
+        kwargs - dict - key value pairs for input arguments to setupSocket
+        '''
+        return onlineTrackingData.setupSocket(**kwargs)
+
+    @staticmethod
+    def setupSockets(cameraIDs, CameraSettings):
+        kwargs_list = []
+        for cameraID in cameraIDs:
+            kwargs_list.append({'address': CameraSettings['CameraSpecific'][cameraID]['address'], 
+                                'port': CameraSettings['General']['OnlineTracker_port']})
+        pool = ThreadPool(len(cameraIDs))
+        sockSUBs = pool.map(onlineTrackingData.setupSocket_unpackPool, kwargs_list)
+        pool.close()
+
+        return sockSUBs
+
+    def updatePosDatas(self, nRPi):
         # Updates self.posDatas when any new position data is received
         # This loop continues until self.KeepGettingData is set False. This is done by self.close function
         while self.KeepGettingData:
-            if not self.SynthData:
-                # Wait for position data update
-                try:
-                    message = self.sockSUB.recv() # Receive message
-                except:
-                    message = 'no message'
-                if message != 'no message':
-                    posData = json.loads(message) # Convert from string to original format
-                    # Identify the sender of this message as RPi position in list
-                    n_rpi = posData[0]
-                    nRPi = [i for i,x in enumerate(self.TrackingSettings['use_RPi_nrs']) if x == n_rpi][0]
-                    # Update posData for the correct position in the list
-                    with self.posDatasLock:
-                        self.posDatas[nRPi] = posData
-            else:
-                # If synthetic data generated, wait a moment before continuing
-                sleep(0.02)
+            # Wait for position data update
+            try:
+                message = self.sockSUBs[nRPi].recv() # Receive message
+            except:
+                message = 'no message'
+            if message != 'no message':
+                posData = json.loads(message) # Convert from string to original format
+                # Update posData for the correct position in the list
+                with self.posDatasLock:
+                    self.posDatas[nRPi] = posData
 
     def combineCurrentLineData(self, previousCombPos):
         with self.posDatasLock:
@@ -222,12 +257,13 @@ class onlineTrackingData(object):
             # Convert posDatas for use in combineCamerasData function
             cameraPos = []
             for posData in posDatas:
-                cameraPos.append(np.array(posData[1:5], dtype=np.float32))
+                cameraPos.append(np.array(posData[:4], dtype=np.float32))
             # Combine data from cameras
-            lastCombPos = combineCamerasData(cameraPos, previousCombPos, self.TrackingSettings)
+            lastCombPos = combineCamerasData(cameraPos, previousCombPos, self.cameraIDs, 
+                                             self.CameraSettings, self.arena_size)
         else:
             # If only a single camera is used, extract position data from posData into numpy array
-            lastCombPos = np.array(posDatas[0][1:5], dtype=np.float32)
+            lastCombPos = np.array(posDatas[0][:4], dtype=np.float32)
 
         return lastCombPos
 
@@ -235,10 +271,10 @@ class onlineTrackingData(object):
         # Initialise histogram edgesrameters
         margins = HistogramParameters['margins']
         binSize = HistogramParameters['binSize']
-        xHistogram_edges = np.append(np.arange(-margins, self.TrackingSettings['arena_size'][0] + margins, binSize), 
-                                     self.TrackingSettings['arena_size'][0] + margins)
-        yHistogram_edges = np.append(np.arange(-margins, self.TrackingSettings['arena_size'][1] + margins, binSize), 
-                                     self.TrackingSettings['arena_size'][1] + margins)
+        xHistogram_edges = np.append(np.arange(-margins, self.arena_size[0] + margins, binSize), 
+                                     self.arena_size[0] + margins)
+        yHistogram_edges = np.append(np.arange(-margins, self.arena_size[1] + margins, binSize), 
+                                     self.arena_size[1] + margins)
         # If update requested with new parameters, recompute histogram
         if update:
             with self.combPosHistoryLock:
@@ -261,20 +297,20 @@ class onlineTrackingData(object):
             self.positionHistogramEdges = {'x': xHistogram_edges, 'y': yHistogram_edges}
 
     def updateCombPosHistory(self):
-        if not self.SynthData:
-            # Initialize RPi position data listening, unless synthetic data requested
-            Thread(target=self.updatePosDatas).start()
-            # Continue once data is received from each RPi
-            RPi_data_available = np.zeros(len(self.TrackingSettings['use_RPi_nrs']), dtype=bool)
-            while not np.all(RPi_data_available):
-                for nRPi in range(len(self.posDatas)):
-                    if not (self.posDatas[nRPi] is None):
-                        RPi_data_available[nRPi] = True
-            print('All RPi data available')
-        else:
-            # Start generating movement data if synthetic data requested
-            Thread(target=self.generatePosData, args=[self.TrackingSettings['use_RPi_nrs'][0]]).start()
-            sleep(0.5)
+        # Initialize RPi position data listening, unless synthetic data requested
+        self.T_updatePosDatas = []
+        for nRPi in range(len(self.posDatas)):
+            T = Thread(target=self.updatePosDatas, args=(nRPi,))
+            T.start()
+            self.T_updatePosDatas.append(T)
+        # Continue once data is received from each RPi
+        RPi_data_available = np.zeros(len(self.cameraIDs), dtype=bool)
+        while not np.all(RPi_data_available):
+            sleep(0.05)
+            for nRPi in range(len(self.posDatas)):
+                if not (self.posDatas[nRPi] is None):
+                    RPi_data_available[nRPi] = True
+        print('All RPi data available')
         # Set up speed tracking
         one_second_steps = int(np.round(1 / self.combPos_update_interval))
         self.lastSecondDistance = 0 # vector distance from position 1 second in past
@@ -323,9 +359,11 @@ class onlineTrackingData(object):
     def close(self):
         # Closes the updatePosDatas thread and ZeroMQ socket for position listening
         self.KeepGettingData = False
-        sleep(0.25) # Allow the thread to run one last time before closing the socket to avoid error
-        if not self.SynthData:
-            self.sockSUB.close()
+        for T in self.T_updatePosDatas:
+            T.join()
+        self.T_updateCombPosHistory.join()
+        for sockSUB in self.sockSUBs:
+            sockSUB.close()
 
 class RewardControl(object):
     # This class allows control of FEEDERs
@@ -496,28 +534,26 @@ class RewardControl(object):
 
 class GlobalClockControl(object):
 
-    def __init__(self, TrackingSettings):
-        self.TrackingSettings = TrackingSettings
-        self.initController_messenger()
-        self.T_initRPiController = Thread(target=self.initRPiController)
+    def __init__(self, address, port, username='pi', password='raspberry'):
+        self.initController_messenger(address, port)
+        self.T_initRPiController = Thread(target=self.initRPiController, 
+                                          args=(address, port, username, password))
         self.T_initRPiController.start()
         # Wait until all RPis have confirmed to be ready
         self.RPi_init_Successful = False
         while not self.RPi_init_Successful:
             sleep(0.1)
 
-    def initController_messenger(self):
+    def initController_messenger(self, address, port):
         # Set up ZMQ connection
-        self.Controller_messenger = paired_messenger(address=self.TrackingSettings['global_clock_ip'], 
-                                                     port=int(self.TrackingSettings['global_clock_port']))
+        self.Controller_messenger = paired_messenger(address=address, port=int(port))
         self.Controller_messenger.add_callback(self.Controller_message_parser)
         sleep(1)
 
-    def initRPiController(self):
-        self.RPiSSH = ssh(self.TrackingSettings['global_clock_ip'], self.TrackingSettings['username'], 
-                          self.TrackingSettings['password'])
+    def initRPiController(self, address, port, username, password):
+        self.RPiSSH = ssh(address, username, password)
         self.RPiSSH.sendCommand('sudo pkill python') # Ensure any past processes have closed
-        command = 'python GlobalClock.py --remote'
+        command = 'python GlobalClock.py --remote --port ' + str(port)
         self.RPiSSH.sendCommand(command)
 
     def Controller_message_parser(self, message):

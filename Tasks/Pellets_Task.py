@@ -10,6 +10,7 @@ import random
 from PyQt4 import QtGui, QtCore
 from copy import deepcopy
 from sshScripts import ssh
+from HelperFunctions import show_message
 
 def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
     ssh_connection = ssh(str(RPiIPBox.text()), str(RPiUsernameBox.text()), str(RPiPasswordBox.text()))
@@ -132,7 +133,6 @@ def exportSettingsFromGUI(self):
             if any(IDs.count(ID) > 1 for ID in IDs):
                 raise ValueError('Duplicates of IDs in ' + FEEDER_type + ' feeders!')
         else:
-            from RecordingManager import show_message
             show_message('No ' + FEEDER_type + ' FEEDERs entered.')
     TaskSettings['FEEDERs'] = FEEDERs
 
