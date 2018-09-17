@@ -85,7 +85,7 @@ class OnlineTracker(object):
         params - dict - must contain all the parameters used by the class:
             'RPiIP' - str
             'OnlineTracker_port' - str
-            'smoothing_radius' - int
+            'smoothing_box' - int
             'calibrationTmatrix' - array
             'tracking_mode' - str
             'LED_separation' - float
@@ -96,7 +96,12 @@ class OnlineTracker(object):
                                                                              params['frame_shape'])
         self.init_ZMQpublisher(params['RPiIP'], params['OnlineTracker_port'])
         self.csv_writer = csv_writer('OnlineTrackerData.csv')
-        params['cutout'] = self.create_circular_cutout(params)
+        if params['tracking_mode'] == 'dual_led' or params['tracking_mode'] == 'single_led':
+            params['cutout'] = self.create_circular_cutout(params)
+        elif params['tracking_mode'] == 'motion':
+            self.last_frame = None
+        else:
+            raise ValueError('tracking_mode not recognized in params.')
         self.params = params
 
     def init_ZMQpublisher(self, RPiIP, OnlineTracker_port):
@@ -238,7 +243,7 @@ class OnlineTracker(object):
             Values are None for second LED if not requested or not found.
         '''
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) # Convert BGR data to grayscale
-        gray = cv2.GaussianBlur(gray, (params['smoothing_radius'], params['smoothing_radius']), 0) # Smooth the image
+        gray = cv2.blur(gray, ksize=(params['smoothing_box'], params['smoothing_box']))
         led_pix_1, led_cm_1, lum_1 = OnlineTracker.detect_first_led(gray, params['calibrationTmatrix'])
         if params['tracking_mode'] == 'dual_led':
             led_pix_2, led_cm_2, lum_2 = OnlineTracker.detect_second_led(gray, params['calibrationTmatrix'], 
@@ -247,6 +252,25 @@ class OnlineTracker(object):
             linedata = [led_cm_1[0], led_cm_1[1], led_cm_2[0], led_cm_2[1], lum_1, lum_2]
         elif params['tracking_mode'] =='single_led':
             linedata = [led_cm_1[0], led_cm_1[1], None, None, lum_1, None]
+
+        return linedata
+
+    @staticmethod
+    def detect_motion(last_frame, current_frame, params):
+        if last_frame is None:
+            linedata = [None, None, None, None, None, None]
+        else:
+            frame_diff = cv2.absdiff(last_frame, current_frame)
+            frame_diff = cv2.blur(frame_diff, ksize=(params['smoothing_box'], params['smoothing_box']))
+            motion_idx = frame_diff > params['motion_threshold']
+            y_idx, x_idx = np.where(motion_idx)
+            num_motion_pix = len(y_idx)
+            if num_motion_pix > params['motion_size']:
+                pos_pix = (int(np.mean(x_idx)), int(np.mean(y_idx)))
+                pos_cm = OnlineTracker.transform_pix_to_cm(pos_pix[::-1], params['calibrationTmatrix'])
+                linedata = [pos_cm[0], pos_cm[1], None, None, num_motion_pix, None]
+            else:
+                linedata = [None, None, None, None, None, None]
 
         return linedata
 
@@ -263,13 +287,25 @@ class OnlineTracker(object):
         '''
         self.logwriter.writerow(linedata)
 
+    def process_motion(self, frame):
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        linedata = OnlineTracker.detect_motion(self.last_frame, frame, self.params)
+        self.last_frame = frame
+
+        return linedata
+
     def process(self, frame):
         '''
         Processes YUV frame using detect_leds() method.
         Passes output from detect_leds() to be sent via ZMQ and writtend to CSV file.
         '''
         frame = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR)
-        linedata = OnlineTracker.detect_leds(frame, self.params)
+        if self.params['tracking_mode'] == 'dual_led' or self.params['tracking_mode'] == 'single_led':
+            linedata = OnlineTracker.detect_leds(frame, self.params)
+        elif self.params['tracking_mode'] == 'motion':
+            linedata = self.process_motion(frame)
+        else:
+            raise ValueError('tracking_mode not recognized in params.')
         self.send_data_with_ZMQpublisher(linedata)
         self.csv_writer.write(linedata)
 
@@ -763,19 +799,6 @@ class Stream_MJPEG_Output(object):
         self.grabbing_single_frame = False
 
         return frame
-        
-    # def grab_frame(self):
-    #     '''
-    #     Returns next full frame.
-    #     '''
-    #     self.grabbing_single_frame = True
-    #     while not self.single_frame_available:
-    #         sleep(0.005)
-    #     image = Image.open(self.stream)
-    #     frame = np.array(image)
-    #     self.grabbing_single_frame = False
-
-    #     return frame
 
     def close(self):
         self.connection.write(struct.pack('<L', 0))
@@ -804,8 +827,8 @@ class Controller(object):
         self._delete_old_files()
         self._init_camera(resolution_option)
         self.init_processing(OnlineTrackerParams)
-        self._reset_available_ports()
         self.isRecording = False
+        self.isProcessing = False
         self.isStreaming = False
 
     def _init_camera(self, resolution_option=None, warmup=2):
@@ -833,12 +856,6 @@ class Controller(object):
 
     def _get_resolution(self, setting):
         return self.resolutions[setting] if setting in self.resolutions.keys() else self.resolutions['low']
-
-    def _reset_available_ports(self):
-        self._available_ports = [1, 2, 3]
-
-    def _get_available_port(self):
-        return self._available_ports.pop(0)
 
     def init_processing(self, OnlineTrackerParams=None):
         if not (OnlineTrackerParams is None):
@@ -897,10 +914,7 @@ class Controller(object):
                   'high': Calibrator.get_calibration_data()}
         '''
         # Identify if calibration is necessary at both resolutions
-        if self.camera.resolution == self.resolutions['high']:
-            calibration_resolutions = self.resolutions
-        else:
-            calibration_resolutions = {'low': self.resolutions['low']}
+        calibration_resolutions = self.resolutions
         # Get frames at calibration_resolutions
         frames = {}
         for key in calibration_resolutions.keys():
@@ -920,59 +934,62 @@ class Controller(object):
 
             return calibration
 
-    def start_processing(self):
-        self.isRecording = True
-        if self.camera.resolution == self.resolutions['low']:
-            self.camera.start_recording(self.RawYUV_Output, format='yuv', 
-                                        splitter_port=self._get_available_port())
-        else:
-            self.camera.start_recording(self.RawYUV_Output, format='yuv', 
-                                        splitter_port=self._get_available_port(), 
-                                        resize=self.resolutions['low'])
-
     def start_recording_video(self):
         self.isRecording = True
         self.camera.start_recording('video.h264', format='h264', 
-                                    splitter_port=self._get_available_port(), quality=23)
+                                    splitter_port=1, quality=23)
 
-    def start(self):
-        '''
-        Starts recording video and processing frames.
-        '''
-        self.start_recording_video()
-        self.start_processing()
-
-    def stop(self):
-        self.camera.stop_recording()
-        if hasattr(self, 'Stream_MJPEG_Output'):
-            self.Stream_MJPEG_Output.close()
-            del self.Stream_MJPEG_Output
-        self._reset_available_ports()
-        self.isRecording = False
-        self.isStreaming = False
+    def start_processing(self):
+        self.isProcessing = True
+        if self.camera.resolution == self.resolutions['low']:
+            self.camera.start_recording(self.RawYUV_Output, format='yuv', 
+                                        splitter_port=2)
+        else:
+            self.camera.start_recording(self.RawYUV_Output, format='yuv', 
+                                        splitter_port=2, 
+                                        resize=self.resolutions['low'])
 
     def start_streaming(self, address='192.168.0.10', port=8000):
         '''
         Starts MJPEG stream to Recording PC.
         '''
-        self.isRecording = True
         self.isStreaming = True
         self.Stream_MJPEG_Output = Stream_MJPEG_Output(address=address, port=port)
         if self.camera.resolution == self.resolutions['low']:
             self.camera.start_recording(self.Stream_MJPEG_Output, format='mjpeg', 
-                                        splitter_port=self._get_available_port())
+                                        splitter_port=3)
         else:
             self.camera.start_recording(self.Stream_MJPEG_Output, format='mjpeg', 
-                                        splitter_port=self._get_available_port(), 
-                                        resize=self.resolutions['low'])
+                                        splitter_port=3, resize=self.resolutions['low'])
+
+    def stop_recording_video(self):
+        self.camera.stop_recording(splitter_port=1)
+        self.isRecording = False
+
+    def stop_processing(self):
+        self.camera.stop_recording(splitter_port=2)
+        self.isProcessing = False
+
+    def stop_streaming(self):
+        self.camera.stop_recording(splitter_port=3)
+        self.isStreaming = False
+
+    def stop(self):
+        if self.isRecording:
+            self.stop_recording_video()
+        if self.isProcessing:
+            self.stop_processing()
+            self.RawYUV_Output.close()
+        if self.isStreaming:
+            self.stop_streaming()
+            self.Stream_MJPEG_Output.close()
+            del self.Stream_MJPEG_Output
 
     def close(self):
-        if self.isRecording:
-            self.stop()
+        self.stop()
         self.camera.close()
         while self.camera.ThisThingIsAlive:
             sleep(0.05)
-        self.RawYUV_Output.close()
 
     def __enter__(self):
         return self
@@ -982,7 +999,7 @@ class Controller(object):
 
 
 def StartStop_Controller():
-    with Controller() as Controller:
+    with Controller() as controller:
         _ = raw_input('Press enter to start image acquisition: ')
         controller.start()
         _ = raw_input('Press enter to stop image acquisition: ')

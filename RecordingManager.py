@@ -611,7 +611,6 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             print('Closing GlobalClock Controller Successful')
             # Stop tracking
             print('Stopping tracking RPis...')
-            self.trackingControl.stop()
             self.trackingControl.close()
             print('Stopping tracking RPis Successful')
         # Stop reading Open Ephys messages

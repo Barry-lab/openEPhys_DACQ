@@ -169,7 +169,9 @@ class CameraSettingsApp(object):
         Specifies default settigs as well as data types.
         '''
         return {'tracking_mode':          {'value': 'dual_led', 
-                                           'description': ('Tracking mode', ('1 LED', 'single_led'), ('2 LED', 'dual_led'))}, 
+                                           'description': ('Tracking mode', ('1 LED', 'single_led'), 
+                                                                            ('2 LED', 'dual_led'), 
+                                                                            ('Motion', 'motion'))}, 
                 'resolution_option':      {'value': 'low', 
                                            'description': ('Video resolution', ('Low', 'low'), ('High', 'high'))}, 
                 'LED_separation':         {'value': np.float64(5.0), 
@@ -178,8 +180,12 @@ class CameraSettingsApp(object):
                                            'description': 'LED angle'}, 
                 'camera_transfer_radius': {'value': np.float64(40.0), 
                                            'description': 'Camera transfer radius (cm)'}, 
-                'smoothing_radius':       {'value': np.int64(3), 
-                                           'description': 'OnlineTracker smoothing (cm)'}, 
+                'smoothing_box':          {'value': np.int64(3), 
+                                           'description': 'OnlineTracker smoothing (pix)'}, 
+                'motion_threshold':       {'value': np.int64(30), 
+                                           'description': '[Motion] Detection threshold (0-255)'}, 
+                'motion_size':            {'value': np.int64(400), 
+                                           'description': '[Motion] Pixel count threshold'}, 
                 'centralIP':              {'value': '192.168.0.10', 
                                            'description': 'IP address of Recording PC'}, 
                 'global_clock_ip':        {'value': '192.168.0.8', 
@@ -247,19 +253,20 @@ class CameraSettingsApp(object):
 
     def import_settings(self, general_settings, camera_specific_settings):
         # Create new settings dictionaries by copying over description from default settings.
-        default_general_settings = self.default_settings('general_settings')
-        default_single_camera_specific_settings = self.default_single_camera_specific_settings()
-        for key in general_settings.keys():
-            general_settings[key] = {'value': general_settings[key], 
-                            'description': default_general_settings[key]['description']}
+        new_general_settings = self.default_settings('general_settings')
+        for key in new_general_settings.keys():
+            if key in general_settings.keys():
+                new_general_settings[key]['value'] = general_settings[key]
+        new_camera_specific_settings = {}
         for cameraID in camera_specific_settings.keys():
             if 'CalibrationData' in camera_specific_settings[cameraID].keys():
                 self.CalibrationData[cameraID] = camera_specific_settings[cameraID].pop('CalibrationData')
-            for key in camera_specific_settings[cameraID].keys():
-                camera_specific_settings[cameraID][key] = {'value': camera_specific_settings[cameraID][key], 
-                                                           'description': default_single_camera_specific_settings[key]['description']}
-        self.general_settings = general_settings
-        self.camera_specific_settings = camera_specific_settings
+            new_camera_specific_settings[cameraID] = self.default_single_camera_specific_settings()
+            for key in new_camera_specific_settings[cameraID].keys():
+                if key in camera_specific_settings[cameraID].keys():
+                    new_camera_specific_settings[cameraID][key]['value'] = camera_specific_settings[cameraID][key]
+        self.general_settings = new_general_settings
+        self.camera_specific_settings = new_camera_specific_settings
 
     def export_settings(self):
         general = {}
@@ -296,7 +303,7 @@ class CameraSettingsApp(object):
         port = self.general_settings['ZMQcomms_port']['value']
         username = self.general_settings['username']['value']
         password = self.general_settings['password']['value']
-        resolution_option = 'high'
+        resolution_option = 'low'
         self.CameraControllers[cameraID] = CameraControl(address, port, username, 
                                                          password, resolution_option)
 

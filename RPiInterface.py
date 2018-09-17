@@ -92,11 +92,25 @@ class Camera_RPi_file_manager(object):
         rmtree(temp_folder)
 
     def retrieve_OnlineTrackerData(self):
-        temp_folder = mkdtemp('RPiTempFolder')
-        read_files_from_RPi(('OnlineTrackerData.csv',), temp_folder, self.address, self.username, self.verbose)
-        filename = os.path.join(temp_folder, 'OnlineTrackerData.csv')
-        self.OnlineTrackerData = np.genfromtxt(filename, delimiter=',', dtype=float)
-        rmtree(temp_folder)
+        '''
+        Retrieves OnlineTrackerData. The data transfer failes sometimes, 
+        in which case an informing message is printed and retrieval is attempted again.
+
+        Note! OnlineTrackerData_timestamps must be obtained first using retrieve_timestamps() method. 
+        '''
+        if hasattr(self, 'OnlineTrackerData_timestamps'):
+            temp_folder = mkdtemp('RPiTempFolder')
+            self.OnlineTrackerData = np.zeros((0, 0))
+            while self.OnlineTrackerData.shape[0] != self.OnlineTrackerData_timestamps.size:
+                try:
+                    read_files_from_RPi(('OnlineTrackerData.csv',), temp_folder, self.address, self.username, self.verbose)
+                    filename = os.path.join(temp_folder, 'OnlineTrackerData.csv')
+                    self.OnlineTrackerData = np.genfromtxt(filename, delimiter=',', dtype=float)
+                except ValueError:
+                    print('Failed to get OnlineTrackerData, trying again at: ' + self.address)
+            rmtree(temp_folder)
+        else:
+            raise Exception('OnlineTrackerData_timestamps must be obtained first.')
 
     def retrieve_timestamps_and_OnlineTrackerData(self):
         '''
@@ -168,9 +182,6 @@ class CameraControl(object):
         '''
         return self.RemoteControl.sendCommand('calibrate', True, calibration_parameters)
 
-    def init_processing(self, OnlineTrackerParams):
-        self.RemoteControl.sendCommand('init_processing', True, OnlineTrackerParams)
-
     def start_streaming(self, address, port):
         self.RemoteControl.sendCommand('start_streaming', True, address, int(port))
 
@@ -178,7 +189,8 @@ class CameraControl(object):
         self.RemoteControl.sendCommand('start_processing', True)
 
     def start(self):
-        self.RemoteControl.sendCommand('start', True)
+        self.RemoteControl.sendCommand('start_recording_video', True)
+        self.RemoteControl.sendCommand('start_processing', True)
 
     def stop(self):
         self.RemoteControl.sendCommand('stop', True)
@@ -189,14 +201,17 @@ class CameraControl(object):
         self.RPiSSH.disconnect()
 
     @staticmethod
-    def dict_OnlineTrackerParams(calibrationTmatrix, tracking_mode, smoothing_radius, 
+    def dict_OnlineTrackerParams(calibrationTmatrix, tracking_mode, smoothing_box, 
+                                 motion_threshold, motion_size, 
                                  OnlineTracker_port, RPiIP, LED_separation):
         '''
         Returns camera_parameters in a dictionary.
         '''
         return {'calibrationTmatrix': calibrationTmatrix, # (3 x 3 numpy array)
                 'tracking_mode': str(tracking_mode), # str
-                'smoothing_radius': int(smoothing_radius), # int - number of pixels
+                'smoothing_box': int(smoothing_box), # int - number of pixels
+                'motion_threshold': motion_threshold,  # int
+                'motion_size': motion_size,  # int
                 'OnlineTracker_port': str(OnlineTracker_port), # str
                 'RPiIP': str(RPiIP), # str
                 'LED_separation': float(LED_separation)} # LED separation in cm
@@ -230,7 +245,9 @@ class CameraControl(object):
             cameraID_list.append(cameraID)
             args = (CameraSettings['CameraSpecific'][cameraID]['CalibrationData']['low']['calibrationTmatrix'], 
                     CameraSettings['General']['tracking_mode'], 
-                    CameraSettings['General']['smoothing_radius'], 
+                    CameraSettings['General']['smoothing_box'], 
+                    CameraSettings['General']['motion_threshold'], 
+                    CameraSettings['General']['motion_size'], 
                     CameraSettings['General']['OnlineTracker_port'], 
                     CameraSettings['CameraSpecific'][cameraID]['address'], 
                     CameraSettings['General']['LED_separation'])
@@ -359,9 +376,11 @@ class onlineTrackingData(object):
                 message = 'no message'
             if message != 'no message':
                 posData = json.loads(message) # Convert from string to original format
-                # Update posData for the correct position in the list
-                with self.posDatasLock:
-                    self.posDatas[nRPi] = posData
+                # Ignore messages where all elemenets are None
+                if any(posData):
+                    # Update posData for the correct position in the list
+                    with self.posDatasLock:
+                        self.posDatas[nRPi] = posData
 
     def combineCurrentLineData(self, previousCombPos):
         with self.posDatasLock:
