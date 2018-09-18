@@ -1265,14 +1265,24 @@ class Core(object):
                               'complete': timeSinceLastReward >= self.TaskSettings['MaxInactivityDuration'], 
                               'percentage': timeSinceLastReward / float(self.TaskSettings['MaxInactivityDuration'])})
         # Check if animal has been chewing enough since last reward
-        game_progress_names.append('chewing')
-        n_chewings = self.number_of_chewings(lastPelletRewardTime)
-        game_progress.append({'name': 'Chewing', 
-                              'game_states': ['interval'], 
-                              'target': self.TaskSettings['Chewing_Target'], 
-                              'status': n_chewings, 
-                              'complete': n_chewings >= self.TaskSettings['Chewing_Target'], 
-                              'percentage': n_chewings / float(self.TaskSettings['Chewing_Target'])})
+        if self.TaskSettings['Chewing_Target'] > 0:
+            game_progress_names.append('chewing')
+            n_chewings = self.number_of_chewings(lastPelletRewardTime)
+            game_progress.append({'name': 'Chewing', 
+                                  'game_states': ['interval'], 
+                                  'target': self.TaskSettings['Chewing_Target'], 
+                                  'status': n_chewings, 
+                                  'complete': n_chewings >= self.TaskSettings['Chewing_Target'], 
+                                  'percentage': n_chewings / float(self.TaskSettings['Chewing_Target'])})
+        else:
+            game_progress_names.append('chewing')
+            n_chewings = 0
+            game_progress.append({'name': 'Chewing', 
+                                  'game_states': ['interval'], 
+                                  'target': self.TaskSettings['Chewing_Target'], 
+                                  'status': 0, 
+                                  'complete': True, 
+                                  'percentage': 0})
         # Check if enough time as passed since last pellet reward
         game_progress_names.append('time_since_last_pellet')
         game_progress.append({'name': 'Since Pellet', 
