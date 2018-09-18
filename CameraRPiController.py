@@ -228,10 +228,10 @@ class OnlineTracker(object):
         return led_pix, xy_cm, lum
 
     @staticmethod
-    def detect_leds(frame, params):
+    def detect_leds(gray, params):
         '''
         Detects brightest point on grayscaled data after smoothing.
-        If multiple LEDs in use, tries finding the second brithest spot in proximity of the first.
+        If two LEDs in use, tries finding the second brithest spot in proximity of the first.
         Returns a list with values:
             xcoord of first LED
             ycoord of first LED
@@ -242,7 +242,6 @@ class OnlineTracker(object):
 
             Values are None for second LED if not requested or not found.
         '''
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) # Convert BGR data to grayscale
         gray = cv2.blur(gray, ksize=(params['smoothing_box'], params['smoothing_box']))
         led_pix_1, led_cm_1, lum_1 = OnlineTracker.detect_first_led(gray, params['calibrationTmatrix'])
         if params['tracking_mode'] == 'dual_led':
@@ -257,6 +256,34 @@ class OnlineTracker(object):
 
     @staticmethod
     def detect_motion(last_frame, current_frame, params):
+        '''
+        Detects position of a moving object.
+
+        last_frame - grayscale image as (height x width) uint8 numpy array
+        current_frame - grayscale image as (height x width) uint8 numpy array
+        params - dict - {'smoothing box': int, 
+                         'motion_threshold': int, 
+                         'motion_size': int, 
+                         'calibrationTmatrix': 3 x 3 numpy array}
+
+        Returns a list with values (compatible with detect_leds() method):
+            xcoord of moving object
+            ycoord of moving object
+            None
+            None
+            number of pixels above 'motion_threshold'
+            None
+
+            Values are None if not enough motion was detected.
+
+        The absolute difference between two frames is smoothed with box kernel, 
+        with size 'smoothing_box' x 'smoothing_box'. The resulting difference map is
+        thresholded with 'motion_threshold'. If the resulting boolean array has
+        more than 'motion_size' True values, it is used to compute the center of mass
+        (Otherwise, None values are reported).
+        The center of mass is the location of reported after converting from pixel space 
+        to real space using 'calibrationTmatrix'.
+        '''
         if last_frame is None:
             linedata = [None, None, None, None, None, None]
         else:
@@ -288,7 +315,12 @@ class OnlineTracker(object):
         self.logwriter.writerow(linedata)
 
     def process_motion(self, frame):
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        '''
+        Detects motion as difference between input frame and last frame.
+        Overwrites self.last_frame variable to be used at next method call.
+
+        frame - grayscale numpy array
+        '''
         linedata = OnlineTracker.detect_motion(self.last_frame, frame, self.params)
         self.last_frame = frame
 
@@ -296,10 +328,9 @@ class OnlineTracker(object):
 
     def process(self, frame):
         '''
-        Processes YUV frame using detect_leds() method.
+        Processes grayscale frame using detect_leds() method or process_motion() method.
         Passes output from detect_leds() to be sent via ZMQ and writtend to CSV file.
         '''
-        frame = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR)
         if self.params['tracking_mode'] == 'dual_led' or self.params['tracking_mode'] == 'single_led':
             linedata = OnlineTracker.detect_leds(frame, self.params)
         elif self.params['tracking_mode'] == 'motion':
@@ -725,13 +756,14 @@ class RawYUV_Output(picamera.array.PiYUVAnalysis):
         '''
         OnlineTrackerParams = kwargs.pop('OnlineTrackerParams', None)
         if not (OnlineTrackerParams is None):
-            frame_shape = (kwargs['size'][1], kwargs['size'][0], 3)
+            frame_shape = (kwargs['size'][1], kwargs['size'][0])
             self.RawYUV_Output_Processor = RawYUV_Processor(OnlineTrackerParams, frame_shape)
         super(RawYUV_Output, self).__init__(*args, **kwargs)
 
     def analyse(self, frame):
         if hasattr(self, 'RawYUV_Output_Processor'):
-            self.RawYUV_Output_Processor.write(frame)
+            grayscale_frame = frame[:,:,0]
+            self.RawYUV_Output_Processor.write(grayscale_frame)
 
     def close(self, *args, **kwargs):
         super(RawYUV_Output, self).close(*args, **kwargs)
