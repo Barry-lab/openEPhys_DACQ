@@ -322,7 +322,7 @@ class OnlineTracker(object):
         frame - grayscale numpy array
         '''
         linedata = OnlineTracker.detect_motion(self.last_frame, frame, self.params)
-        self.last_frame = frame
+        self.last_frame = copy(frame)
 
         return linedata
 
@@ -517,7 +517,6 @@ class RawYUV_Processor(object):
         '''
         OT = OnlineTracker(params)
         while True:
-            s_t = time()
             item = queue.get(timeout=0.01)
             if isinstance(item, np.ndarray):
                 OT.process(item)
