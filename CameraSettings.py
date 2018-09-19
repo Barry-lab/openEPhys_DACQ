@@ -185,6 +185,8 @@ class CameraSettingsApp(object):
                 'motion_threshold':       {'value': np.int64(10), 
                                            'description': '[Motion] Detection threshold (0-255)'}, 
                 'motion_size':            {'value': np.int64(500), 
+                                           'description': 'Frame rate (Hz)'}, 
+                'framerate':              {'value': np.int64(30), 
                                            'description': '[Motion] Pixel count threshold'}, 
                 'centralIP':              {'value': '192.168.0.10', 
                                            'description': 'IP address of Recording PC'}, 

@@ -140,7 +140,7 @@ class Camera_RPi_file_manager(object):
 
 
 class CameraControl(object):
-    def __init__(self, address, port, username='pi', password='raspberry', resolution_option=None, OnlineTrackerParams=None):
+    def __init__(self, address, port, username='pi', password='raspberry', resolution_option=None, OnlineTrackerParams=None, framerate=30):
         # Make sure files on RPi are up to date
         self.RPi_file_manager = Camera_RPi_file_manager(address, username)
         self.RPi_file_manager.update_files_on_RPi()
@@ -163,7 +163,8 @@ class CameraControl(object):
             # Attempt instantiating CameraController
             CameraController_init_successful = self.RemoteControl.sendInitCommand(10, 
                                                                                   resolution_option, 
-                                                                                  OnlineTrackerParams)
+                                                                                  OnlineTrackerParams, 
+                                                                                  framerate)
             if not CameraController_init_successful:
                 print('Remote CameraController initialization failed, trying again at: ' + address)
 
@@ -257,6 +258,7 @@ class CameraControl(object):
                                 'username': CameraSettings['General']['username'], 
                                 'password': CameraSettings['General']['password'], 
                                 'resolution_option': CameraSettings['General']['resolution_option'], 
+                                'framerate': CameraSettings['General']['framerate'], 
                                 'OnlineTrackerParams': OnlineTrackerParams
                                 })
         pool = ThreadPool(len(kwargs_list))

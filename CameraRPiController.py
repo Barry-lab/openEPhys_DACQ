@@ -850,11 +850,12 @@ class Controller(object):
     '''
     resolutions = {'low': (800, 608), 'high': (1600, 1216)}
 
-    def __init__(self, resolution_option=None, OnlineTrackerParams=None):
+    def __init__(self, resolution_option=None, framerate=30, OnlineTrackerParams=None):
         '''
         resolution - str - 'high' for (1600, 1216). Otherwise (800, 608) is used.
         OnlineTrackerParams - dict - see OnlineTracker input arguments.
         '''
+        self.framerate = framerate
         self._delete_old_files()
         self._init_camera(resolution_option)
         self.init_processing(OnlineTrackerParams)
@@ -868,7 +869,7 @@ class Controller(object):
 
         resolution - str - 'high' for (1600, 1216). Otherwise (800, 608) is used.
         '''
-        self.camera = PiCamera_with_timestamps(clock_mode='raw', sensor_mode=4, framerate=30, 
+        self.camera = PiCamera_with_timestamps(clock_mode='raw', sensor_mode=4, framerate=self.framerate, 
                                                resolution=self._get_resolution(resolution_option), 
                                                TTLpulse_CameraTime_Writer=True)
         self.camera.awb_mode = 'auto'

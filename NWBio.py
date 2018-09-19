@@ -8,6 +8,10 @@ from pprint import pprint
 from copy import copy
 import argparse
 
+def get_filename(folder_path):
+    if not os.path.isfile(folder_path):
+        return os.path.join(folder_path, 'experiment_1.nwb')
+
 def get_recordingKey(filename):
     with h5py.File(filename, 'r') as h5file:
         return h5file['acquisition']['timeseries'].keys()[0]
@@ -262,9 +266,7 @@ def load_settings(filename, path='/'):
     '''
     By default loads all settings from path
         '/general/data_collection/Settings/'
-    To load specific settings, e.g. RPiSettings, use:
-        path='/RPiSettings/'
-    or to load animal ID, use:
+    or for example to load animal ID, use:
         path='/General/animal/'
     '''
     full_path = '/general/data_collection/Settings' + path
@@ -330,8 +332,10 @@ def save_tracking_data(filename, TrackingData, ProcessedPos=False, overwrite=Fal
                 del h5file[processed_pos_path]
             h5file[processed_pos_path] = TrackingData
 
-def load_raw_tracking_data(filename, cameraID):
+def load_raw_tracking_data(filename, cameraID, specific_path=None):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/' + cameraID
+    if not (specific_path is None):
+        path = path + '/' + specific_path
     with h5py.File(filename, 'r') as h5file:
         if path in h5file:
             return recursively_load_dict_contents_from_group(h5file, path)
