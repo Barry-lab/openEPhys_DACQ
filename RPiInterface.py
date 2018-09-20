@@ -217,7 +217,8 @@ class CameraControl(object):
     def close(self):
         self.RemoteControl.sendCommand('close', True)
         self.RemoteControl.close()
-        self.RPiSSH.disconnect()
+        if hasattr(self, 'RPiSSH') and not (self.RPiSSH is None):
+            self.RPiSSH.disconnect()
 
     @staticmethod
     def dict_OnlineTrackerParams(calibrationTmatrix, tracking_mode, smoothing_box, 

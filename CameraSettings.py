@@ -306,8 +306,10 @@ class CameraSettingsApp(object):
         username = self.general_settings['username']['value']
         password = self.general_settings['password']['value']
         resolution_option = 'low'
+        framerate = 10
         self.CameraControllers[cameraID] = CameraControl(address, port, username, 
-                                                         password, resolution_option)
+                                                         password, resolution_option, 
+                                                         framerate=framerate)
 
     def initialize_cameras(self):
         self.CameraControllers = {}
