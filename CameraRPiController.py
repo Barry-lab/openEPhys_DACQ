@@ -855,7 +855,7 @@ class Controller(object):
         resolution - str - 'high' for (1600, 1216). Otherwise (800, 608) is used.
         OnlineTrackerParams - dict - see OnlineTracker input arguments.
         '''
-        self.framerate = framerate
+        self.framerate = int(framerate)
         self._delete_old_files()
         self._init_camera(resolution_option)
         self.init_processing(OnlineTrackerParams)

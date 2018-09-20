@@ -16,6 +16,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 from tempfile import mkdtemp
 from shutil import rmtree
 import os
+from HelperFunctions import test_pinging_address
 
 
 def write_files_to_RPi(files, address, username='pi', verbose=False):
@@ -140,42 +141,59 @@ class Camera_RPi_file_manager(object):
 
 
 class CameraControl(object):
-    def __init__(self, address, port, username='pi', password='raspberry', resolution_option=None, OnlineTrackerParams=None, framerate=30):
+    def __init__(self, address, port, username='pi', password='raspberry', 
+                 resolution_option=None, OnlineTrackerParams=None, framerate=30):
         # Make sure files on RPi are up to date
         self.RPi_file_manager = Camera_RPi_file_manager(address, username)
         self.RPi_file_manager.update_files_on_RPi()
-        # Start initiation protocol
-        CameraController_init_successful = False
-        while not CameraController_init_successful:
-            RemoteControl_init_successful = False
-            # Reset remote_object_controller if CameraController has already failed 
-            if hasattr(self, 'RemoteControl'):
-                self.RemoteControl.close()
-            self.RemoteControl = remote_object_controller(address, int(port))
-            while not RemoteControl_init_successful:
-                # Reset RPiSSH if remote_object_controller has already failed
-                if hasattr(self, 'RPiSSH'):
-                    self.RPiSSH.disconnect()
-                self.RPiSSH = CameraControl._init_RPiSSH(address, port, username, password)
-                RemoteControl_init_successful = self.RemoteControl.pair(timeout=10)
-                if not RemoteControl_init_successful:
-                    print('RemoteControl initialization failed, trying again at: ' + address)
-            # Attempt instantiating CameraController
-            CameraController_init_successful = self.RemoteControl.sendInitCommand(10, 
-                                                                                  resolution_option, 
-                                                                                  OnlineTrackerParams, 
-                                                                                  framerate)
-            if not CameraController_init_successful:
+        # Start initiation protocol and repeat if failed
+        init_successful = False
+        attempts = 0
+        while not init_successful:
+            if attempts > 4:
+                reboot = True
+                attempts = 0
+            else:
+                reboot = False
+            init_successful = self._init_CameraController(address, port, username, password, 
+                                                          resolution_option, OnlineTrackerParams, 
+                                                          framerate, reboot)
+            if not init_successful:
+                attempts += 1
                 print('Remote CameraController initialization failed, trying again at: ' + address)
 
-    @staticmethod
-    def _init_RPiSSH(address, port, username='pi', password='raspberry'):
-        RPiSSH = ssh(address, username, password)
-        RPiSSH.sendCommand('sudo pkill python') # Ensure any past processes have closed
-        command = 'python CameraRPiController.py --remote --port ' + str(port)
-        RPiSSH.sendCommand_threading(command)
+    def _init_CameraController(self, address, port, username, password, 
+                               resolution_option, OnlineTrackerParams, framerate, reboot=False):
+        if hasattr(self, 'RemoteControl'):
+            self.RemoteControl.close()
+        self.RemoteControl = remote_object_controller(address, int(port))
+        self.RPiSSH = self._init_RPiSSH(address, port, username, password, reboot)
+        init_successful = self.RemoteControl.pair(10)
+        if init_successful:
+            init_successful = self.RemoteControl.sendInitCommand(10, 
+                                                                 resolution_option, 
+                                                                 framerate, 
+                                                                 OnlineTrackerParams)
 
-        return RPiSSH
+        return init_successful
+
+    def _init_RPiSSH(self, address, port, username='pi', password='raspberry', reboot=False):
+        if not hasattr(self, 'RPiSSH') or self.RPiSSH is None:
+            self.RPiSSH = ssh(address, username, password)
+        if reboot:
+            print('Rebooting at ' + address)
+            self.RPiSSH.sendCommand('sudo reboot')
+            self.RPiSSH.disconnect()
+            self.RPiSSH = None
+            sleep(30) # Assumed minimum rebooting time for Raspberry Pi
+            pinging_successful = False
+            while not pinging_successful:
+                pinging_successful = test_pinging_address(address)
+            self._init_RPiSSH(address, port, username, password, reboot=False)
+        else:
+            self.RPiSSH.sendCommand('sudo pkill python') # Ensure any past processes have closed
+            command = 'python CameraRPiController.py --remote --port ' + str(port)
+            self.RPiSSH.sendCommand_threading(command)
 
     def calibrate(self, calibration_parameters):
         '''
