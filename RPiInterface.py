@@ -193,7 +193,7 @@ class CameraControl(object):
         else:
             self.RPiSSH.sendCommand('sudo pkill python') # Ensure any past processes have closed
             command = 'python CameraRPiController.py --remote --port ' + str(port)
-            self.RPiSSH.sendCommand_threading(command)
+            self.RPiSSH.sendCommand_threading(command) # TO DO: This seems to kill the ssh instance if command fails.
 
     def calibrate(self, calibration_parameters):
         '''
