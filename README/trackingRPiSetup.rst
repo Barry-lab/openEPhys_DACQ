@@ -1,48 +1,62 @@
 .. _trackingRPiSetup:
 
-==================================================
-Raspberry Pi tracking and related networking setup
-==================================================
+=========================================
+Camera and GlobalClock Raspberry Pi setup
+=========================================
 
-Setting up Raspberry Pi with camera for tracking
-================================================
+The camera system is synchronised with the OpenEphys Acquisition board recording using regular TTL pulses from GlobalClock Raspberry Pi. This allows integrating any number of cameras into the system.
 
-This tutorial is based on setting up `Raspberry Pi 3 Model B <https://www.raspberrypi.org/products/raspberry-pi-3-model-b/>`_ with `Camera Module V2 <https://www.raspberrypi.org/products/camera-module-v2/>`_.
+The following procedures are identical for GlobalClock RPi and Camera RPis, unless specified otherwise.
 
-Assembling Raspberry Pi Camera Module and Coaxial Cable Plug
-------------------------------------------------------------
+Most efficient way to set up multiple RPis is to set up a single Camera RPi using the instructions below and then make copies of it's SD card for other RPis using this guide: :ref:`duplicatingRPis`.
 
-The Raspberry Pi (RPi) Camera Module is usually bought and fitted separately to the RPi board. The Coaxial Cable Plug is necessary to send signals to the Open Ephys Acquisition Board each time a frame is captured.
+This tutorial and related python modules are based on `Raspberry Pi 3 Model B <https://www.raspberrypi.org/products/raspberry-pi-3-model-b/>`_ with `Camera Module V2 <https://www.raspberrypi.org/products/camera-module-v2/>`_.
 
-Preferably the camera should be used with HDMI cable extension sold on `Pimoroni website <https://shop.pimoroni.com/products/pi-camera-hdmi-cable-extension>`_. This allows the camera to be positioned distant from the RPi and the angle manipulated more comfortably. Instructions for its assembly should be available from the provider.
+Hardware setup
+==============
 
-Regardless of whether the HDMI cable extension is used or not, a board with the flat camera cable attached will need to be assembled to the RPi board. Attach the flat cable to the interface right next to the HDMI output. Look at the interface and make sure the metal contacts on the cable touch the metal contact on the RPi interface. See image below. Push down on the clip on the interface to mechanically secure the connection.
+Assembling Raspberry Pi Camera Module
+-------------------------------------
 
-.. image:: RPi_Setup.jpg
+Installing a Camera Module to GlobalClock RPi is not necessary.
 
-The Standard Coaxial Cable plug can be soldered to the RPi GPIO Pinout. See the above image. On Raspberry Pi 3 Model B the Ground from the Coaxial plug should be soldered on the 5th pin on the 2nd row and the Other contact from the Coaxial plug to the 6th pin in the same row. That is if rows and pins are counted from the RPi corner diagonal from the LAN port.
+The Raspberry Pi (RPi) Camera Module is usually bought and fitted separately to the RPi board. Preferably the camera should be used with HDMI cable extension sold on `Pimoroni website <https://shop.pimoroni.com/products/pi-camera-hdmi-cable-extension>`_. This allows the camera to be positioned distant from the RPi and the angle manipulated more comfortably. Instructions for its assembly should be available from the provider.
 
-More clearly, the Ground from Coaxial plug must be soldered to any of the **Ground pins** on RPi and the other contact from the Coaxial plug must be soldered to pin **BCM 18**. If pin is used, then changes should be made in the tracking script (CameraRPiController.py, TTLpulse_CameraTime_Writer class input). To identify the identity of each pin, use the https://pinout.xyz/ information.
+Regardless of whether the HDMI cable extension is used or not, a board with the flat camera cable attached will need to be assembled to the RPi board. Attach the flat cable to the interface right next to the HDMI output. Make sure the metal contacts on the cable touch the metal contact on the RPi interface. See image below. Push down on the clip on the interface to mechanically secure the connection.
+
+Wiring for GlobalClock TTL pulses
+---------------------------------
+
+`Standard GPIO suitable breadboard jumper wires <https://uk.rs-online.com/web/p/breadboard-jumper-wire-kits/7916454/>`_ and a breaboard can be used to conveniently connect Camera and GlobalClock Raspberry Pis and a BNC connector for OpenEphys into a single circuit for synchronization with the GlobalClock TTL pulses.
+
+By default python scripts expect the BCM pin 18 is used on all devices, but this is especially important for the GlobalClock RPi, which can only used a limited selection of RPi pins for producing its very regular signal. See https://pinout.xyz/ for information on which pin is the BCM 18 pin on your Raspberry Pi. Any ground pin on RPi can be used for this circuit. See below for wiring diagram as well as an image of actual setup with GlobalClock RPi and 4 Camera RPis. Any number of Camera RPis can be added to the circuit.
+
+.. image:: GlobalClockWiring.jpg
+
+Software setup
+==============
 
 .. _installingRaspbian:
 
 Installing Raspberry Pi OS: Raspbian
 ------------------------------------
 
-Download **Raspbian Jessie With Pixel** (Here used version 4.4) from `Raspberry website <ttps://www.raspberrypi.org/downloads/raspbian/>`_. Unpack the downloaded *.zip* file with ``Archive Manager`` to get access to the *.img* file.
+Download **Raspbian Stretch Lite** (Here used version kernel version 4.14) from `Raspberry website <ttps://www.raspberrypi.org/downloads/raspbian/>`_. Unpack the downloaded *.zip* file with ``Archive Manager`` to get access to the *.img* file.
 
 Download **Etcher** from this `website <https://etcher.io/>`_. Unpack the downloaded *.zip* and run (double-click) the Etcher *.AppImage*. Select the Raspbian *.img* file and your inserted microSD card. Write the image (*Flash* button).
 
 Insert the microSD card into Raspberry Pi.
 
-Install necessary libraries on Raspberry Pi
--------------------------------------------
+Connect keyboard and monitor to Raspbery Pi.
 
-Connect to RPi a keyboard, mouse and monitor.
+Connect Raspberry Pi to the internet
+------------------------------------
+
+It is not important how the RPi is connected to the internet, but below is one possible set of instructions to follow.
 
 This tutorial instructs you to connect the RPi to the internet using the same network connection as is used for your recording PC, if you used the following method to set it up: :ref:`RecPCnetworkInterfaces`. This means you will not be able to use the Recording PC to access the internet, while you work through the part "Install necessary libraries on Raspberry Pi". If you can use another means of achieving network connection on the RPi, you can ignore steps in this part relating to **interfaces** file. Otherwise, connect the RPi to the network with the same ethernet cable as you were so far using on the Recording PC.
 
-Add :download:`this script (install-opencv.sh) </install-opencv.sh>` and the file ``/etc/network/interfaces`` (as set up on the Recording PC in this guide: :ref:`RecPCnetworkInterfaces`) to the RPi *Home folder* with a USB stick.
+Add ``/etc/network/interfaces`` (as set up on the Recording PC in this guide: :ref:`RecPCnetworkInterfaces`) to the RPi *Home folder* (``/home/pi/``) with a USB stick.
 
 You may need to edit the ``interfaces`` file in your RPi home folder. Run the terminal command ``ifconfig`` on the RPi and make a note of the first device on the list. Devices are aligned to the left column. This is likely ``eth0``. Replace the device name ``enp2s0`` in the ``interfaces file`` with the device you saw in ``ifconfig`` output. You can use a simple text editor by double clicking on the ``interfaces`` file in your home folder, making the changes and saving it.
 
@@ -55,21 +69,101 @@ Apply the newly created ``interfaces`` file in the Raspberry Pi with terminal co
 
 Reboot the Raspberry Pi for network changes to take effect.
 
-Now update the RPi with terminal commands:
+Update all software
+-------------------
+
+Assuming RPi is connected to the internet, update the RPi with terminal commands:
 
 .. code-block:: none
 
-	sudo apt-get update        # Fetches the list of available updates
-	sudo apt-get upgrade       # Strictly upgrades the current packages
-	sudo apt-get dist-upgrade  # Installs updates (new ones)
+	sudo apt-get update
+	sudo apt-get upgrade -y
+	sudo apt-get dist-upgrade -y
 
-Install OpenCV using the ``install-opencv.sh`` script. Right click on ``install-opencv.sh`` and select Properties. Open Permissions tab and make sure all three Access Control settings (View content, Change content, Exectue) are set to Anyone. Click OK to close the window. Now run the script using terminal command ``./install-opencv.sh``.
+Install simple to install packages
+----------------------------------
+
+.. code-block:: none
+
+	wget https://bootstrap.pypa.io/get-pip.py
+	sudo python get-pip.py
+	pip install numpy --user
+	pip install picamera --user
+	sudo apt-get install pigpio python-pygpio
+	sudo systemctl enable pigpiod
+	sudo apt-get install python-scipy
+
+Enable camera module
+--------------------
+
+Camera needs to be enabled in RPi settings. You can do this by accessing RPi settings via terminal command ``sudo raspi-config`` and choosing *Interfacing Options* with arrow keys and pressing Enter. Select *Camera* option and choose to *Enable* it. Reboot the RPi.
+
+Install OpenCV
+--------------
+
+Installing OpenCV is not necessary for GlobalClockRPi.
+
+The following steps are based on `this tutorial <https://www.pyimagesearch.com/2017/10/09/optimizing-opencv-on-the-raspberry-pi/>`_.
+
+To install OpenCV, it is recommended to increase swap space. This will enable you to compile OpenCV with all four cores of the Raspberry Pi without the compile hanging due to memory exhausting. Alternatively avoid using ``-j4`` flag in the make command for OpenCV.
+
+Open up your ``/etc/dphys-swapfile``  file and then edit the ``CONF_SWAPSIZE`` variable to ``1024``. You can do this with command ``sudo nano /etc/dphys-swapfile``. Now make sure to restart the swap service:
+
+.. code-block:: none
+
+	sudo /etc/init.d/dphys-swapfile stop
+	sudo /etc/init.d/dphys-swapfile start
+
+Then run the following commands to download, compile and install OpenCV
+
+.. code-block:: none
+
+	sudo apt-get install -y build-essential cmake pkg-config
+	sudo apt-get install -y libjpeg-dev libtiff5-dev libjasper-dev libpng12-dev
+	sudo apt-get install -y libavcodec-dev libavformat-dev libswscale-dev libv4l-dev
+	sudo apt-get install -y libxvidcore-dev libx264-dev
+	sudo apt-get install -y libgtk2.0-dev libgtk-3-dev
+	sudo apt-get install -y libcanberra-gtk*
+	sudo apt-get install -y libatlas-base-dev gfortran
+	sudo apt-get install -y python2.7-dev python3-dev
+	# OpenCV versions specificed below
+	wget -O opencv.zip https://github.com/opencv/opencv/archive/3.4.1.zip
+	wget -O opencv_contrib.zip https://github.com/opencv/opencv_contrib/archive/3.4.1.zip
+	unzip opencv.zip
+	unzip opencv_contrib.zip
+	cd ~/opencv-3.4.1/ # OpenCV versions specificed
+	mkdir build
+	cd build
+	# OpenCV versions specificed below
+	cmake -D CMAKE_BUILD_TYPE=RELEASE \
+	    -D CMAKE_INSTALL_PREFIX=/usr/local \
+	    -D OPENCV_EXTRA_MODULES_PATH=~/opencv_contrib-3.4.1/modules \ 
+	    -D ENABLE_NEON=ON \
+	    -D ENABLE_VFPV3=ON \
+	    -D BUILD_TESTS=OFF \
+	    -D INSTALL_PYTHON_EXAMPLES=OFF \
+	    -D BUILD_EXAMPLES=OFF ..
+	make -j4
+	sudo make install
+	sudo ldconfig
+
+To test if OpenCV is working, open ``python`` interpreter and check if the output of the following commands is '3.4.1':
+
+.. code-block:: python
+
+	import cv2
+	print(cv2.__version__)
+
+Make sure to revert changes to ``/etc/dphys-swapfile`` by setting ``CONF_SWAPSIZE`` back to ``100``.
+
+Install ZeroMQ
+--------------
 
 To install ZeroMQ use the following terminal commands, as copied from https://github.com/MonsieurV/ZeroMQ-RPi
 
 .. code-block:: none
 
-	sudo apt-get install libtool pkg-config build-essential autoconf automake python-pip
+	sudo apt-get install libtool pkg-config build-essential autoconf automake
 	wget https://github.com/jedisct1/libsodium/releases/download/1.0.3/libsodium-1.0.3.tar.gz
 	tar -zxvf libsodium-1.0.3.tar.gz
 	cd libsodium-1.0.3/
@@ -85,18 +179,8 @@ To install ZeroMQ use the following terminal commands, as copied from https://gi
 	sudo make install
 	sudo ldconfig
 	sudo apt-get install python-dev
-	sudo pip install pyzmq
+	sudo pip install pyzmq --user
 	cd ~/
-
-Install packages necessary to run the tracking and calibration scripts
-
-.. code-block:: none
-
-	sudo apt-get install python-scipy
-
-Camera needs to be enabled in RPi settings. You can do this by accessing RPi settings via terminal command ``sudo raspi-config`` and choosing *Interfacing Options* with arrow keys and pressing Enter. Select *Camera* option and choose to *Enable* it. Reboot the RPi.
-
-Now the RPi is ready to use the tracking scripts. 
 
 Setting up Raspberry Pi networking with recording PC
 ====================================================

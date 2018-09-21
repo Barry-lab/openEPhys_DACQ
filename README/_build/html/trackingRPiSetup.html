@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Raspberry Pi tracking and related networking setup &mdash; Recording PC Setup 0.75 documentation</title>
+  <title>Camera and GlobalClock Raspberry Pi setup &mdash; Recording PC Setup 0.75 documentation</title>
   
 
   
@@ -83,11 +83,20 @@
             
                 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="recordingPCandOpenEphysGUI.html">Recording PC setup for Data Acquisition</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Raspberry Pi tracking and related networking setup</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#setting-up-raspberry-pi-with-camera-for-tracking">Setting up Raspberry Pi with camera for tracking</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#assembling-raspberry-pi-camera-module-and-coaxial-cable-plug">Assembling Raspberry Pi Camera Module and Coaxial Cable Plug</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">Camera and GlobalClock Raspberry Pi setup</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#hardware-setup">Hardware setup</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#assembling-raspberry-pi-camera-module">Assembling Raspberry Pi Camera Module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#wiring-for-globalclock-ttl-pulses">Wiring for GlobalClock TTL pulses</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#software-setup">Software setup</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#installing-raspberry-pi-os-raspbian">Installing Raspberry Pi OS: Raspbian</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install-necessary-libraries-on-raspberry-pi">Install necessary libraries on Raspberry Pi</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#connect-raspberry-pi-to-the-internet">Connect Raspberry Pi to the internet</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#update-all-software">Update all software</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-simple-to-install-packages">Install simple to install packages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#enable-camera-module">Enable camera module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-opencv">Install OpenCV</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-zeromq">Install ZeroMQ</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#setting-up-raspberry-pi-networking-with-recording-pc">Setting up Raspberry Pi networking with recording PC</a><ul>
@@ -132,7 +141,7 @@
   <ul class="wy-breadcrumbs">
     <li><a href="index.html">Docs</a> &raquo;</li>
       
-    <li>Raspberry Pi tracking and related networking setup</li>
+    <li>Camera and GlobalClock Raspberry Pi setup</li>
       <li class="wy-breadcrumbs-aside">
         
           
@@ -146,31 +155,41 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="raspberry-pi-tracking-and-related-networking-setup">
-<span id="trackingrpisetup"></span><h1>Raspberry Pi tracking and related networking setup<a class="headerlink" href="#raspberry-pi-tracking-and-related-networking-setup" title="Permalink to this headline">¶</a></h1>
-<div class="section" id="setting-up-raspberry-pi-with-camera-for-tracking">
-<h2>Setting up Raspberry Pi with camera for tracking<a class="headerlink" href="#setting-up-raspberry-pi-with-camera-for-tracking" title="Permalink to this headline">¶</a></h2>
-<p>This tutorial is based on setting up <a class="reference external" href="https://www.raspberrypi.org/products/raspberry-pi-3-model-b/">Raspberry Pi 3 Model B</a> with <a class="reference external" href="https://www.raspberrypi.org/products/camera-module-v2/">Camera Module V2</a>.</p>
-<div class="section" id="assembling-raspberry-pi-camera-module-and-coaxial-cable-plug">
-<h3>Assembling Raspberry Pi Camera Module and Coaxial Cable Plug<a class="headerlink" href="#assembling-raspberry-pi-camera-module-and-coaxial-cable-plug" title="Permalink to this headline">¶</a></h3>
-<p>The Raspberry Pi (RPi) Camera Module is usually bought and fitted separately to the RPi board. The Coaxial Cable Plug is necessary to send signals to the Open Ephys Acquisition Board each time a frame is captured.</p>
-<p>Preferably the camera should be used with HDMI cable extension sold on <a class="reference external" href="https://shop.pimoroni.com/products/pi-camera-hdmi-cable-extension">Pimoroni website</a>. This allows the camera to be positioned distant from the RPi and the angle manipulated more comfortably. Instructions for its assembly should be available from the provider.</p>
-<p>Regardless of whether the HDMI cable extension is used or not, a board with the flat camera cable attached will need to be assembled to the RPi board. Attach the flat cable to the interface right next to the HDMI output. Look at the interface and make sure the metal contacts on the cable touch the metal contact on the RPi interface. See image below. Push down on the clip on the interface to mechanically secure the connection.</p>
-<img alt="_images/RPi_Setup.jpg" src="_images/RPi_Setup.jpg" />
-<p>The Standard Coaxial Cable plug can be soldered to the RPi GPIO Pinout. See the above image. On Raspberry Pi 3 Model B the Ground from the Coaxial plug should be soldered on the 5th pin on the 2nd row and the Other contact from the Coaxial plug to the 6th pin in the same row. That is if rows and pins are counted from the RPi corner diagonal from the LAN port.</p>
-<p>More clearly, the Ground from Coaxial plug must be soldered to any of the <strong>Ground pins</strong> on RPi and the other contact from the Coaxial plug must be soldered to pin <strong>BCM 18</strong>. If pin is used, then changes should be made in the tracking script (CameraRPiController.py, TTLpulse_CameraTime_Writer class input). To identify the identity of each pin, use the <a class="reference external" href="https://pinout.xyz/">https://pinout.xyz/</a> information.</p>
+  <div class="section" id="camera-and-globalclock-raspberry-pi-setup">
+<span id="trackingrpisetup"></span><h1>Camera and GlobalClock Raspberry Pi setup<a class="headerlink" href="#camera-and-globalclock-raspberry-pi-setup" title="Permalink to this headline">¶</a></h1>
+<p>The camera system is synchronised with the OpenEphys Acquisition board recording using regular TTL pulses from GlobalClock Raspberry Pi. This allows integrating any number of cameras into the system.</p>
+<p>The following procedures are identical for GlobalClock RPi and Camera RPis, unless specified otherwise.</p>
+<p>Most efficient way to set up multiple RPis is to set up a single Camera RPi using the instructions below and then make copies of it&#8217;s SD card for other RPis using this guide: <a class="reference internal" href="#duplicatingrpis"><span>Making copies of Raspberry Pis</span></a>.</p>
+<p>This tutorial and related python modules are based on <a class="reference external" href="https://www.raspberrypi.org/products/raspberry-pi-3-model-b/">Raspberry Pi 3 Model B</a> with <a class="reference external" href="https://www.raspberrypi.org/products/camera-module-v2/">Camera Module V2</a>.</p>
+<div class="section" id="hardware-setup">
+<h2>Hardware setup<a class="headerlink" href="#hardware-setup" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="assembling-raspberry-pi-camera-module">
+<h3>Assembling Raspberry Pi Camera Module<a class="headerlink" href="#assembling-raspberry-pi-camera-module" title="Permalink to this headline">¶</a></h3>
+<p>Installing a Camera Module to GlobalClock RPi is not necessary.</p>
+<p>The Raspberry Pi (RPi) Camera Module is usually bought and fitted separately to the RPi board. Preferably the camera should be used with HDMI cable extension sold on <a class="reference external" href="https://shop.pimoroni.com/products/pi-camera-hdmi-cable-extension">Pimoroni website</a>. This allows the camera to be positioned distant from the RPi and the angle manipulated more comfortably. Instructions for its assembly should be available from the provider.</p>
+<p>Regardless of whether the HDMI cable extension is used or not, a board with the flat camera cable attached will need to be assembled to the RPi board. Attach the flat cable to the interface right next to the HDMI output. Make sure the metal contacts on the cable touch the metal contact on the RPi interface. See image below. Push down on the clip on the interface to mechanically secure the connection.</p>
 </div>
+<div class="section" id="wiring-for-globalclock-ttl-pulses">
+<h3>Wiring for GlobalClock TTL pulses<a class="headerlink" href="#wiring-for-globalclock-ttl-pulses" title="Permalink to this headline">¶</a></h3>
+<p><a class="reference external" href="https://uk.rs-online.com/web/p/breadboard-jumper-wire-kits/7916454/">Standard GPIO suitable breadboard jumper wires</a> and a breaboard can be used to conveniently connect Camera and GlobalClock Raspberry Pis and a BNC connector for OpenEphys into a single circuit for synchronization with the GlobalClock TTL pulses.</p>
+<p>By default python scripts expect the BCM pin 18 is used on all devices, but this is especially important for the GlobalClock RPi, which can only used a limited selection of RPi pins for producing its very regular signal. See <a class="reference external" href="https://pinout.xyz/">https://pinout.xyz/</a> for information on which pin is the BCM 18 pin on your Raspberry Pi. Any ground pin on RPi can be used for this circuit. See below for wiring diagram as well as an image of actual setup with GlobalClock RPi and 4 Camera RPis. Any number of Camera RPis can be added to the circuit.</p>
+<img alt="_images/GlobalClockWiring.jpg" src="_images/GlobalClockWiring.jpg" />
+</div>
+</div>
+<div class="section" id="software-setup">
+<h2>Software setup<a class="headerlink" href="#software-setup" title="Permalink to this headline">¶</a></h2>
 <div class="section" id="installing-raspberry-pi-os-raspbian">
 <span id="installingraspbian"></span><h3>Installing Raspberry Pi OS: Raspbian<a class="headerlink" href="#installing-raspberry-pi-os-raspbian" title="Permalink to this headline">¶</a></h3>
-<p>Download <strong>Raspbian Jessie With Pixel</strong> (Here used version 4.4) from <a class="reference external" href="ttps://www.raspberrypi.org/downloads/raspbian/">Raspberry website</a>. Unpack the downloaded <em>.zip</em> file with <code class="docutils literal"><span class="pre">Archive</span> <span class="pre">Manager</span></code> to get access to the <em>.img</em> file.</p>
+<p>Download <strong>Raspbian Stretch Lite</strong> (Here used version kernel version 4.14) from <a class="reference external" href="ttps://www.raspberrypi.org/downloads/raspbian/">Raspberry website</a>. Unpack the downloaded <em>.zip</em> file with <code class="docutils literal"><span class="pre">Archive</span> <span class="pre">Manager</span></code> to get access to the <em>.img</em> file.</p>
 <p>Download <strong>Etcher</strong> from this <a class="reference external" href="https://etcher.io/">website</a>. Unpack the downloaded <em>.zip</em> and run (double-click) the Etcher <em>.AppImage</em>. Select the Raspbian <em>.img</em> file and your inserted microSD card. Write the image (<em>Flash</em> button).</p>
 <p>Insert the microSD card into Raspberry Pi.</p>
+<p>Connect keyboard and monitor to Raspbery Pi.</p>
 </div>
-<div class="section" id="install-necessary-libraries-on-raspberry-pi">
-<h3>Install necessary libraries on Raspberry Pi<a class="headerlink" href="#install-necessary-libraries-on-raspberry-pi" title="Permalink to this headline">¶</a></h3>
-<p>Connect to RPi a keyboard, mouse and monitor.</p>
+<div class="section" id="connect-raspberry-pi-to-the-internet">
+<h3>Connect Raspberry Pi to the internet<a class="headerlink" href="#connect-raspberry-pi-to-the-internet" title="Permalink to this headline">¶</a></h3>
+<p>It is not important how the RPi is connected to the internet, but below is one possible set of instructions to follow.</p>
 <p>This tutorial instructs you to connect the RPi to the internet using the same network connection as is used for your recording PC, if you used the following method to set it up: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span>Connect to the local network</span></a>. This means you will not be able to use the Recording PC to access the internet, while you work through the part &#8220;Install necessary libraries on Raspberry Pi&#8221;. If you can use another means of achieving network connection on the RPi, you can ignore steps in this part relating to <strong>interfaces</strong> file. Otherwise, connect the RPi to the network with the same ethernet cable as you were so far using on the Recording PC.</p>
-<p>Add <a class="reference download internal" href="_downloads/install-opencv.sh" download=""><code class="xref download docutils literal"><span class="pre">this</span> <span class="pre">script</span> <span class="pre">(install-opencv.sh)</span></code></a> and the file <code class="docutils literal"><span class="pre">/etc/network/interfaces</span></code> (as set up on the Recording PC in this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span>Connect to the local network</span></a>) to the RPi <em>Home folder</em> with a USB stick.</p>
+<p>Add <code class="docutils literal"><span class="pre">/etc/network/interfaces</span></code> (as set up on the Recording PC in this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span>Connect to the local network</span></a>) to the RPi <em>Home folder</em> (<code class="docutils literal"><span class="pre">/home/pi/</span></code>) with a USB stick.</p>
 <p>You may need to edit the <code class="docutils literal"><span class="pre">interfaces</span></code> file in your RPi home folder. Run the terminal command <code class="docutils literal"><span class="pre">ifconfig</span></code> on the RPi and make a note of the first device on the list. Devices are aligned to the left column. This is likely <code class="docutils literal"><span class="pre">eth0</span></code>. Replace the device name <code class="docutils literal"><span class="pre">enp2s0</span></code> in the <code class="docutils literal"><span class="pre">interfaces</span> <span class="pre">file</span></code> with the device you saw in <code class="docutils literal"><span class="pre">ifconfig</span></code> output. You can use a simple text editor by double clicking on the <code class="docutils literal"><span class="pre">interfaces</span></code> file in your home folder, making the changes and saving it.</p>
 <p>Apply the newly created <code class="docutils literal"><span class="pre">interfaces</span></code> file in the Raspberry Pi with terminal commands:</p>
 <div class="highlight-none"><div class="highlight"><pre>sudo mv /etc/network/interfaces /etc/network/interfaces_old        # Makes a copy of the original version
@@ -178,15 +197,84 @@ sudo mv ~/interfaces /etc/network/interfaces       # Replaces the previous inter
 </pre></div>
 </div>
 <p>Reboot the Raspberry Pi for network changes to take effect.</p>
-<p>Now update the RPi with terminal commands:</p>
-<div class="highlight-none"><div class="highlight"><pre>sudo apt-get update        # Fetches the list of available updates
-sudo apt-get upgrade       # Strictly upgrades the current packages
-sudo apt-get dist-upgrade  # Installs updates (new ones)
+</div>
+<div class="section" id="update-all-software">
+<h3>Update all software<a class="headerlink" href="#update-all-software" title="Permalink to this headline">¶</a></h3>
+<p>Assuming RPi is connected to the internet, update the RPi with terminal commands:</p>
+<div class="highlight-none"><div class="highlight"><pre>sudo apt-get update
+sudo apt-get upgrade -y
+sudo apt-get dist-upgrade -y
 </pre></div>
 </div>
-<p>Install OpenCV using the <code class="docutils literal"><span class="pre">install-opencv.sh</span></code> script. Right click on <code class="docutils literal"><span class="pre">install-opencv.sh</span></code> and select Properties. Open Permissions tab and make sure all three Access Control settings (View content, Change content, Exectue) are set to Anyone. Click OK to close the window. Now run the script using terminal command <code class="docutils literal"><span class="pre">./install-opencv.sh</span></code>.</p>
+</div>
+<div class="section" id="install-simple-to-install-packages">
+<h3>Install simple to install packages<a class="headerlink" href="#install-simple-to-install-packages" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-none"><div class="highlight"><pre>wget https://bootstrap.pypa.io/get-pip.py
+sudo python get-pip.py
+pip install numpy --user
+pip install picamera --user
+sudo apt-get install pigpio python-pygpio
+sudo systemctl enable pigpiod
+sudo apt-get install python-scipy
+</pre></div>
+</div>
+</div>
+<div class="section" id="enable-camera-module">
+<h3>Enable camera module<a class="headerlink" href="#enable-camera-module" title="Permalink to this headline">¶</a></h3>
+<p>Camera needs to be enabled in RPi settings. You can do this by accessing RPi settings via terminal command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">raspi-config</span></code> and choosing <em>Interfacing Options</em> with arrow keys and pressing Enter. Select <em>Camera</em> option and choose to <em>Enable</em> it. Reboot the RPi.</p>
+</div>
+<div class="section" id="install-opencv">
+<h3>Install OpenCV<a class="headerlink" href="#install-opencv" title="Permalink to this headline">¶</a></h3>
+<p>Installing OpenCV is not necessary for GlobalClockRPi.</p>
+<p>The following steps are based on <a class="reference external" href="https://www.pyimagesearch.com/2017/10/09/optimizing-opencv-on-the-raspberry-pi/">this tutorial</a>.</p>
+<p>To install OpenCV, it is recommended to increase swap space. This will enable you to compile OpenCV with all four cores of the Raspberry Pi without the compile hanging due to memory exhausting. Alternatively avoid using <code class="docutils literal"><span class="pre">-j4</span></code> flag in the make command for OpenCV.</p>
+<p>Open up your <code class="docutils literal"><span class="pre">/etc/dphys-swapfile</span></code>  file and then edit the <code class="docutils literal"><span class="pre">CONF_SWAPSIZE</span></code> variable to <code class="docutils literal"><span class="pre">1024</span></code>. You can do this with command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">nano</span> <span class="pre">/etc/dphys-swapfile</span></code>. Now make sure to restart the swap service:</p>
+<div class="highlight-none"><div class="highlight"><pre>sudo /etc/init.d/dphys-swapfile stop
+sudo /etc/init.d/dphys-swapfile start
+</pre></div>
+</div>
+<p>Then run the following commands to download, compile and install OpenCV</p>
+<div class="highlight-none"><div class="highlight"><pre>sudo apt-get install -y build-essential cmake pkg-config
+sudo apt-get install -y libjpeg-dev libtiff5-dev libjasper-dev libpng12-dev
+sudo apt-get install -y libavcodec-dev libavformat-dev libswscale-dev libv4l-dev
+sudo apt-get install -y libxvidcore-dev libx264-dev
+sudo apt-get install -y libgtk2.0-dev libgtk-3-dev
+sudo apt-get install -y libcanberra-gtk*
+sudo apt-get install -y libatlas-base-dev gfortran
+sudo apt-get install -y python2.7-dev python3-dev
+# OpenCV versions specificed below
+wget -O opencv.zip https://github.com/opencv/opencv/archive/3.4.1.zip
+wget -O opencv_contrib.zip https://github.com/opencv/opencv_contrib/archive/3.4.1.zip
+unzip opencv.zip
+unzip opencv_contrib.zip
+cd ~/opencv-3.4.1/ # OpenCV versions specificed
+mkdir build
+cd build
+# OpenCV versions specificed below
+cmake -D CMAKE_BUILD_TYPE=RELEASE \
+    -D CMAKE_INSTALL_PREFIX=/usr/local \
+    -D OPENCV_EXTRA_MODULES_PATH=~/opencv_contrib-3.4.1/modules \
+    -D ENABLE_NEON=ON \
+    -D ENABLE_VFPV3=ON \
+    -D BUILD_TESTS=OFF \
+    -D INSTALL_PYTHON_EXAMPLES=OFF \
+    -D BUILD_EXAMPLES=OFF ..
+make -j4
+sudo make install
+sudo ldconfig
+</pre></div>
+</div>
+<p>To test if OpenCV is working, open <code class="docutils literal"><span class="pre">python</span></code> interpreter and check if the output of the following commands is &#8216;3.4.1&#8217;:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="kn">import</span> <span class="nn">cv2</span>
+<span class="k">print</span><span class="p">(</span><span class="n">cv2</span><span class="o">.</span><span class="n">__version__</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Make sure to revert changes to <code class="docutils literal"><span class="pre">/etc/dphys-swapfile</span></code> by setting <code class="docutils literal"><span class="pre">CONF_SWAPSIZE</span></code> back to <code class="docutils literal"><span class="pre">100</span></code>.</p>
+</div>
+<div class="section" id="install-zeromq">
+<h3>Install ZeroMQ<a class="headerlink" href="#install-zeromq" title="Permalink to this headline">¶</a></h3>
 <p>To install ZeroMQ use the following terminal commands, as copied from <a class="reference external" href="https://github.com/MonsieurV/ZeroMQ-RPi">https://github.com/MonsieurV/ZeroMQ-RPi</a></p>
-<div class="highlight-none"><div class="highlight"><pre>sudo apt-get install libtool pkg-config build-essential autoconf automake python-pip
+<div class="highlight-none"><div class="highlight"><pre>sudo apt-get install libtool pkg-config build-essential autoconf automake
 wget https://github.com/jedisct1/libsodium/releases/download/1.0.3/libsodium-1.0.3.tar.gz
 tar -zxvf libsodium-1.0.3.tar.gz
 cd libsodium-1.0.3/
@@ -202,16 +290,10 @@ make
 sudo make install
 sudo ldconfig
 sudo apt-get install python-dev
-sudo pip install pyzmq
+sudo pip install pyzmq --user
 cd ~/
 </pre></div>
 </div>
-<p>Install packages necessary to run the tracking and calibration scripts</p>
-<div class="highlight-none"><div class="highlight"><pre>sudo apt-get install python-scipy
-</pre></div>
-</div>
-<p>Camera needs to be enabled in RPi settings. You can do this by accessing RPi settings via terminal command <code class="docutils literal"><span class="pre">sudo</span> <span class="pre">raspi-config</span></code> and choosing <em>Interfacing Options</em> with arrow keys and pressing Enter. Select <em>Camera</em> option and choose to <em>Enable</em> it. Reboot the RPi.</p>
-<p>Now the RPi is ready to use the tracking scripts.</p>
 </div>
 </div>
 <div class="section" id="setting-up-raspberry-pi-networking-with-recording-pc">
