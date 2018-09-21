@@ -550,17 +550,19 @@ def createAxonaData(OpenEphysDataPath, spike_data, subfolder='AxonaData',
     fname = os.path.join(AxonaDataPath, axona_file_name + '.pos')
     write_file_in_axona_format(fname, header_pos, keyorder_pos, pos_data_dacq)
     # Write EEG data into DACQ format
-    for i, eeg_data in enumerate(eeg_data_dacq):
-        fname = os.path.join(AxonaDataPath, axona_file_name + '.eeg')
-        if i > 0:
-            fname += str(i + 1)
-        write_file_in_axona_format(fname, header_eeg, keyorder_eeg, eeg_data)
+    if not (eegChans is None):
+      for i, eeg_data in enumerate(eeg_data_dacq):
+          fname = os.path.join(AxonaDataPath, axona_file_name + '.eeg')
+          if i > 0:
+              fname += str(i + 1)
+          write_file_in_axona_format(fname, header_eeg, keyorder_eeg, eeg_data)
     # Write EGF data into DACQ format
-    for i, egf_data in enumerate(egf_data_dacq):
-        fname = os.path.join(AxonaDataPath, axona_file_name + '.egf')
-        if i > 0:
-            fname += str(i + 1)
-        write_file_in_axona_format(fname, header_egf, keyorder_egf, egf_data)
+    if not (eegChans is None):
+      for i, egf_data in enumerate(egf_data_dacq):
+          fname = os.path.join(AxonaDataPath, axona_file_name + '.egf')
+          if i > 0:
+              fname += str(i + 1)
+          write_file_in_axona_format(fname, header_egf, keyorder_egf, egf_data)
     # Write CLU files
     print('Writing CLU files')
     for ntet in range(n_tetrodes):
