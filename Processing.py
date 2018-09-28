@@ -16,6 +16,7 @@ import createAxonaData
 import HelperFunctions as hfunct
 from KlustaKwikWrapper import applyKlustaKwik_on_spike_data_tet
 from TrackingDataProcessing import process_tracking_data
+import h5py
 
 class continuous_data_preloader(object):
     '''
@@ -584,7 +585,11 @@ def process_data_tree(root_path, downsample=False):
                 fpath = os.path.join(dirName, fname)
                 if fname == 'experiment_1.nwb':
                     AxonaDataExists = any(['AxonaData' in subdir for subdir in subdirList])
-                    if not AxonaDataExists:
+                    recordingKey = NWBio.get_recordingKey(fpath)
+                    spike_data_path = '/acquisition/timeseries/' + recordingKey + '/spikes/'
+                    with h5py.File(fpath, 'r') as h5file:
+                        spikes_recorded = len(h5file[spike_data_path].items()) > 0
+                    if not AxonaDataExists and spikes_recorded:
                         main(fpath, processing_method='klustakwik', 
                             noise_cut_off=1000, threshold=50, make_AxonaData=True, 
                             axonaDataArgs=(None, False))
