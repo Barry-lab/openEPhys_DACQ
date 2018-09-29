@@ -425,7 +425,7 @@ def write_file_in_axona_format(filename, header, header_keyorder, data):
 
 
 def write_clusterIDs_in_CLU_format(clusterIDs, cluFileName):
-    lines = [str(clusterIDs.size) + '\r\n']
+    lines = []
     for nclu in list(clusterIDs):
         lines.append(str(nclu) + '\r\n')
     with open(cluFileName, 'wb') as file:
