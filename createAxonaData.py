@@ -91,13 +91,11 @@ def create_DACQ_waveform_data_for_single_tetrode(spike_data_tet, pos_edges):
     return waveform_data_dacq
 
 def create_DACQ_waveform_data(spike_data, pos_edges):
-    print('Converting Waveforms...')
     input_args = []
     for spike_data_tet in spike_data:
         input_args.append((spike_data_tet, pos_edges))
     multiprocessor = hfunct.multiprocess()
     waveform_data_dacq = multiprocessor.map(create_DACQ_waveform_data_for_single_tetrode, input_args)
-    print('Converting Waveforms Successful.')
 
     return waveform_data_dacq
 
@@ -425,7 +423,7 @@ def write_file_in_axona_format(filename, header, header_keyorder, data):
 
 
 def write_clusterIDs_in_CLU_format(clusterIDs, cluFileName):
-    lines = []
+    lines = [str(max(clusterIDs)) + '\r\n']
     for nclu in list(clusterIDs):
         lines.append(str(nclu) + '\r\n')
     with open(cluFileName, 'wb') as file:
@@ -622,7 +620,6 @@ if __name__ == "__main__":
         eegChans = [x - 1 for x in args.eegChans]
     else:
         eegChans = None
-    print(eegChans)
     # Get subfolder variable
     if args.subfolder:
         subfolder = args.subfolder[0]
