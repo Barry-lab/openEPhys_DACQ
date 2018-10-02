@@ -568,14 +568,15 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, n
             area_spike_datas.append(process_raw_data_with_kilosort(OpenEphysDataPaths, channels, 
                                                                    noise_cut_off=noise_cut_off, threshold=5))
     # Save data in Axona Format
-    spike_name = NWBio.get_spike_name_for_processing_method(processing_method)
-    for i, area in enumerate(channel_map.keys()):
-        # Define Axona data subfolder name based on specific channels if requested
-        for OpenEphysDataPath, spike_data in zip(OpenEphysDataPaths, area_spike_datas[i]):
-            createAxonaData.createAxonaData(OpenEphysDataPath, spike_data, 
-                                            axona_file_name=area, 
-                                            pixels_per_metre=axonaDataArgs[0], 
-                                            show_output=axonaDataArgs[1])
+    if make_AxonaData:
+        spike_name = NWBio.get_spike_name_for_processing_method(processing_method)
+        for i, area in enumerate(channel_map.keys()):
+            # Define Axona data subfolder name based on specific channels if requested
+            for OpenEphysDataPath, spike_data in zip(OpenEphysDataPaths, area_spike_datas[i]):
+                createAxonaData.createAxonaData(OpenEphysDataPath, spike_data, 
+                                                axona_file_name=area, 
+                                                pixels_per_metre=axonaDataArgs[0], 
+                                                show_output=axonaDataArgs[1])
 
 def process_data_tree(root_path, downsample=False):
     # Commence directory walk
