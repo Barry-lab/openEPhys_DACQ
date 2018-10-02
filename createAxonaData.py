@@ -26,15 +26,25 @@ def AxonaDataEEG_SamplingRate():
 def AxonaDataEGF_SamplingRate():
     return 4800
 
-def interpolate_waveforms(waves, nr_targetbins=50):
-    # Waveforms are interpolated to 50 Hz, assuming the original waveforms were 1000 ms long
-    original_bins = np.linspace(0, 1, num=waves.shape[1], dtype=np.float32)
-    target_bins = np.linspace(0, 1, num=nr_targetbins, dtype=np.float32)
-    new_waves = np.zeros((waves.shape[0], nr_targetbins), dtype=np.int8)
+def interpolate_waveforms(waves, input_sampling_frequency=30000, 
+                          output_sampling_frequency=48000, output_timestemps=50):
+    '''
+    Resamples waves to output_sampling_frequency.
+    Input waves must have enough timesteps to cover output_timesteps.
+    '''
+    input_sample_step = 1000.0 / float(input_sampling_frequency)
+    original_bins = np.arange(0.0, input_sample_step * waves.shape[1], 
+                              input_sample_step).astype(np.float32)
+    output_sample_step = 1000.0 / float(output_sampling_frequency)
+    target_bins = np.arange(0.0, output_sample_step * output_timestemps, 
+                            output_sample_step).astype(np.float32)
+    if target_bins[-1] > original_bins[-1]:
+        raise ValueError('Input waves do not have enough samples to interpolate requested output.')
+    new_waves = np.zeros((waves.shape[0], output_timestemps), dtype=np.int8)
     for nwave in range(waves.shape[0]):
         # Interpolate each waveform
-        interfunct = interpolate.interp1d(original_bins, waves[nwave,:])
-        new_waves[nwave,:] = interfunct(target_bins)
+        interfunct = interpolate.interp1d(original_bins, waves[nwave,:].astype(np.float32))
+        new_waves[nwave,:] = np.int8(np.round(interfunct(target_bins)))
 
     return new_waves
 
@@ -72,7 +82,7 @@ def create_DACQ_waveform_data_for_single_tetrode(spike_data_tet, pos_edges):
     # first spike from all four channels are on consecutive rows.
     waves = np.reshape(np.ravel(np.transpose(waves, (0, 2, 1)), 'C'), (nspikes * 4, waves.shape[1]))
     # Interpolate waveforms to 48000 Hz resolution
-    waves = interpolate_waveforms(waves=waves, nr_targetbins=50)
+    waves = interpolate_waveforms(waves)
     # Create DACQ datatype structured array
     waveform_data_dacq = np.zeros(nspikes * 4, dtype=dacq_waveform_dtype)
     # Input waveform values, leaving a trailing end of zeros due to lower sampling rate
