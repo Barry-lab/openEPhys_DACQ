@@ -873,14 +873,18 @@ class Controller(object):
                                                resolution=self._get_resolution(resolution_option), 
                                                TTLpulse_CameraTime_Writer=True)
         self.camera.awb_mode = 'auto'
-        self.camera.exposure_mode = 'auto'
+        self.camera.exposure_mode = 'sports'
+        self.camera.iso = 800
         self.camera.start_preview()
         sleep(warmup)
         gains = self.camera.awb_gains
+        self.camera.exposure_mode = 'off'
         self.camera.awb_mode = 'off'
         self.camera.awb_gains = gains
         self.camera.shutter_speed = self.camera.exposure_speed
-        self.camera.exposure_mode = 'off'
+        self.camera.image_denoise = False
+        self.camera.video_denoise = False
+        self.camera.stop_preview()
 
     def _delete_old_files(self):
         if os.path.exists('video.h264'):
@@ -981,18 +985,18 @@ class Controller(object):
                                         splitter_port=2, 
                                         resize=self.resolutions['low'])
 
-    def start_streaming(self, address='192.168.0.10', port=8000):
+    def start_streaming(self, address='192.168.0.10', port=8000, resolution_option='low'):
         '''
         Starts MJPEG stream to Recording PC.
         '''
         self.isStreaming = True
         self.Stream_MJPEG_Output = Stream_MJPEG_Output(address=address, port=port)
-        if self.camera.resolution == self.resolutions['low']:
+        if self.camera.resolution == self.resolutions[resolution_option]:
             self.camera.start_recording(self.Stream_MJPEG_Output, format='mjpeg', 
                                         splitter_port=3)
         else:
             self.camera.start_recording(self.Stream_MJPEG_Output, format='mjpeg', 
-                                        splitter_port=3, resize=self.resolutions['low'])
+                                        splitter_port=3, resize=self.resolutions[resolution_option])
 
     def stop_recording_video(self):
         self.camera.stop_recording(splitter_port=1)
