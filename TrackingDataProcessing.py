@@ -35,7 +35,7 @@ def combineCamerasData(cameraPos, lastCombPos, cameraIDs, CameraSettings, arena_
     cameraPos = np.array(cameraPos, dtype=np.float32)
     camera_locations = []
     for cameraID in cameraIDs:
-        camera_locations.append(CameraSettings['CameraSpecific'][cameraID]['address']['location_xy'])
+        camera_locations.append(CameraSettings['CameraSpecific'][cameraID]['location_xy'])
     camera_locations = np.array(camera_locations, dtype=np.float32)
 
     # Only work with camera data from inside the enviornment
