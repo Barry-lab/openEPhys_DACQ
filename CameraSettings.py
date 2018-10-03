@@ -1,5 +1,7 @@
 
 from PyQt4 import QtGui
+from PyQt4.QtCore import QTimer
+from functools import partial
 import sys
 import numpy as np
 from copy import copy
@@ -15,61 +17,31 @@ from threading import Thread, Timer, Lock
 from time import sleep
 import cv2
 
-class PerpetualTimer(object):
+class CameraStreamCapture(object):
     '''
-    Keeps calling a function at specified interval until stop() method called.
+    Listens to MPJEG stream from camera and prepares images for display.
     '''
-    def __init__(self, interval, callback):
+    def __init__(self, stream_port, update_frame, cameraID):
         '''
-        interval - float - seconds between each function call.
-        callback - function that is called each time interval has elapsed.
+        stream_port - int - port at 0.0.0.0 at which to listen to the MJPEG stream
+        update_frame - is called with after receiving each frame with cameraID and prepared frame
+        cameraID - key for images_for_display and image_for_display_Locks correct value
         '''
-        self.callback = callback
-        self.interval = interval
-        self.timer_active = True
-        self.isRunning = False
-        self.start_timer()
-
-    def run(self):
-        self.callback()
-
-    def timeout(self):
-        self.isRunning = False
-        if self.timer_active:
-            Thread(target=self.run).start()
-            self.start_timer()
-
-    def start_timer(self):
-        if self.timer_active:
-            self.isRunning = True
-            self.timer = Timer(self.interval, self.timeout)
-            self.timer.start()
-
-    def stop(self):
-        self.timer_active = False
-        if self.isRunning:
-            self.timer.cancel()
-
-class CameraDisplay(object):
-    def __init__(self, stream_port, image_display_method, cameraID, FPS=10):
-        self.image_display_method = image_display_method
+        self.update_frame = update_frame
         self.cameraID = cameraID
         # Set internal variables
         self.calibration_overlay_on = False
         self.replacement_frame = None
-        self.process_and_display_frame_Lock = Lock()
-        # Start daemon thread for streaming
+        self.prepare_frame_Lock = Lock()
+        # Start thread for streaming
         self.stream_open = True
-        self.T_stream = Thread(target=self.stream, args=(stream_port,))
+        self.T_stream = Thread(target=self._stream, args=(stream_port,))
         self.T_stream.start()
-        # Activate frame timer
-        self.pass_frame = False
-        self.update_frame_timer = PerpetualTimer(float(1.0 / FPS), self.use_frame)
 
-    def use_frame(self):
-        self.pass_frame = True
-
-    def overlay_calibration_on_frame(self, frame):
+    def _overlay_calibration_on_frame(self, frame):
+        '''
+        Adds overlay onto the frame.
+        '''
         pattern = self.calibration_pattern
         ndots_x = self.calibration_ndots_xy[0]
         ndots_y = self.calibration_ndots_xy[1]
@@ -77,22 +49,32 @@ class CameraDisplay(object):
 
         return frame
 
-    def process_and_display_frame(self, image_stream):
-        with self.process_and_display_frame_Lock:
+    def _prepare_frame(self, image_stream):
+        '''
+        Prepares frame from MJPEG stream as a numpy array or uses the replacement frame
+        and adds overlay of calibration if requested.
+        Calls update_frame provided at initialization with self.cameraID and prepared frame.
+        '''
+        with self.prepare_frame_Lock:
             if self.replacement_frame is None:
                 # Rewind the stream, open it as an image with PIL and convert to numpy
                 image_stream.seek(0)
                 image = Image.open(image_stream)
                 frame = np.array(image)
             else:
-                frame = self.replacement_frame
+                frame = copy(self.replacement_frame)
             # Overlay calibration pattern if requested
             if self.calibration_overlay_on:
-                frame = self.overlay_calibration_on_frame(frame)
-            # Display frame
-            self.image_display_method(self.cameraID, frame)
+                frame = self._overlay_calibration_on_frame(frame)
+        # Update images_for_display
+        self.update_frame(self.cameraID, frame)
 
-    def stream(self, port):
+    def _stream(self, port):
+        '''
+        Listens to MJPEG stream at 0.0.0.0 specified port.
+        Calls _prepare_frame() method with fileld BytesIO class for each received frame.
+        Finishes if self.stream_open is False or stream is closed.
+        '''
         # Open connection
         self.server_socket = socket()
         self.server_socket.bind(('0.0.0.0', int(port)))
@@ -109,30 +91,37 @@ class CameraDisplay(object):
                 # data from the connection
                 image_stream = BytesIO()
                 image_stream.write(self.connection.read(image_len))
-                if self.pass_frame:
-                    Thread(target=self.process_and_display_frame, args=(image_stream,)).start()
-                    self.pass_frame = False
-                else:
-                    sleep(0.01)
+                Thread(target=self._prepare_frame, args=(image_stream,)).start()
         except Exception as e:
             if not isinstance(e, struct.error):
                 raise e
 
     def calibration_overlay(self, on_off, pattern=None, ndots_xy=None):
-        with self.process_and_display_frame_Lock:
+        '''
+        Sets calibration overlay.
+
+        on_off - bool
+        pattern - output from CameraRPiController.Calibrator.get_calibration_data
+        ndots_xy - [int - dots in X axis, int - dots in Y axis]
+        '''
+        with self.prepare_frame_Lock:
             self.calibration_pattern = pattern
             self.calibration_ndots_xy = ndots_xy
             self.calibration_overlay_on = on_off
 
     def use_replacement_frame(self, on_off, frame=None):
-        with self.process_and_display_frame_Lock:
+        '''
+        Sets replacement frame.
+        on_off - bool
+        frame - replacement frame as numpy array - required if on_off=True
+        '''
+        with self.prepare_frame_Lock:
             if on_off:
-                self.replacement_frame = frame
+                self.replacement_frame = copy(frame)
             else:
                 self.replacement_frame = None
 
     def close(self):
-        self.update_frame_timer.stop()
         self.stream_open = False
         self.T_stream.join()
         self.connection.close()
@@ -151,7 +140,7 @@ class CameraSettingsApp(object):
         self.display_stream_ports_start = 8000
         # Create internal variables
         self.CameraControllers = {}
-        self.CameraDisplays = {}
+        self.CameraStreamCaptures = {}
         self.CalibrationData = {}
         # Initialize
         self.with_GUI = with_GUI
@@ -254,7 +243,9 @@ class CameraSettingsApp(object):
         self.camera_specific_settings = camera_specific_settings
 
     def import_settings(self, general_settings, camera_specific_settings):
-        # Create new settings dictionaries by copying over description from default settings.
+        '''
+        Creates new settings dictionaries by copying values into default settings.
+        '''
         new_general_settings = self.default_settings('general_settings')
         for key in new_general_settings.keys():
             if key in general_settings.keys():
@@ -271,6 +262,9 @@ class CameraSettingsApp(object):
         self.camera_specific_settings = new_camera_specific_settings
 
     def export_settings(self):
+        '''
+        Creates a simplified dictionary of settings that is compatible with import_settings() method.
+        '''
         general = {}
         for key in self.general_settings.keys():
             general[key] = self.general_settings[key]['value']
@@ -295,12 +289,18 @@ class CameraSettingsApp(object):
         NWBio.save_settings(filename, self.export_settings(), path='/CameraSettings/')
 
     def apply(self):
+        '''
+        Calls the apply_settings_method provided at initialization with export_settings() method output.
+        '''
         if not (self.apply_settings_method is None):
             self.apply_settings_method(self.export_settings())
         else:
             raise ValueError('No method apply_to_parent() provided.')
 
     def _initialize_camera(self, cameraID):
+        '''
+        Initializes control of a specific camera.
+        '''
         address = self.camera_specific_settings[cameraID]['address']['value']
         port = self.general_settings['ZMQcomms_port']['value']
         username = self.general_settings['username']['value']
@@ -312,6 +312,9 @@ class CameraSettingsApp(object):
                                                          framerate=framerate)
 
     def initialize_cameras(self):
+        '''
+        Initializes control of all cameras according to current camera_specific_settings.
+        '''
         self.CameraControllers = {}
         T__initialize_camera = []
         for cameraID in self.camera_specific_settings.keys():
@@ -322,10 +325,16 @@ class CameraSettingsApp(object):
             T.join()
 
     def _close_camera(self, cameraID):
+        '''
+        Closes specific camera controller.
+        '''
         controller = self.CameraControllers.pop(cameraID)
         controller.close()
 
     def close_cameras(self):
+        '''
+        Closes all camera controllers.
+        '''
         T__close_camera = []
         for key in self.CameraControllers.keys():
             T = Thread(target=self._close_camera, args=(key,))
@@ -333,41 +342,52 @@ class CameraSettingsApp(object):
             T__close_camera.append(T)
         for T in T__close_camera:
             T.join()
+        del self.CameraControllers
 
     def ensure_cameras_are_closed(self):
         if hasattr(self, 'CameraControllers'):
             self.close_cameras()
 
-    def camera_display_start(self, image_display_method):
+    def camera_display_start(self, update_frame):
         '''
-        image_display_method - is called with 2 inputs (cameraID, frame) to update displayed image.
+        Starts CameraStreamCapture for all cameras.
+
+        update_frame - is called with after receiving each frame with cameraID and prepared frame
         '''
         # Produce separate ports for streaming from each camera
         display_stream_ports = {}
         for n_cam, cameraID in enumerate(self.camera_specific_settings.keys()):
             display_stream_ports[cameraID] = self.display_stream_ports_start + n_cam
-        # Start CameraDisplay class for each camera
+        # Start CameraStreamCapture class for each camera
         for cameraID in self.camera_specific_settings.keys():
-            self.CameraDisplays[cameraID] = CameraDisplay(display_stream_ports[cameraID], 
-                                                          image_display_method, cameraID)
+            self.CameraStreamCaptures[cameraID] = CameraStreamCapture(display_stream_ports[cameraID], 
+                                                                      update_frame, cameraID)
         # Start streaming from all cameras
         for cameraID in self.camera_specific_settings.keys():
             self.CameraControllers[cameraID].start_streaming(self.general_settings['centralIP']['value'], 
                                                              display_stream_ports[cameraID])
 
     def camera_display_stop(self):
-        for key in copy(self.CameraDisplays.keys()):
-            controller = self.CameraDisplays.pop(key)
+        '''
+        Stops CameraStreamCapture of all cameras.
+        '''
+        for key in copy(self.CameraStreamCaptures.keys()):
+            controller = self.CameraStreamCaptures.pop(key)
             controller.close()
 
-    def initialize_cameras_and_streaming(self, image_display_method):
+    def initialize_cameras_and_streaming(self, update_frame):
         '''
-        image_display_method - is called with 2 inputs (cameraID, frame) to update displayed image.
+        First initializes cameras and then starts CameraStreamCapture for all cameras.
+
+        update_frame - is called with after receiving each frame with cameraID and prepared frame
         '''
         self.initialize_cameras()
-        self.camera_display_start(image_display_method)
+        self.camera_display_start(update_frame)
 
     def stop_cameras_and_streaming(self):
+        '''
+        Stops camera controllers and then CameraStreamCapture of all cameras.
+        '''
         self.close_cameras()
         self.camera_display_stop()
 
@@ -396,27 +416,34 @@ class CameraSettingsApp(object):
                 return False
 
     def overlay_calibration(self, cameraID, on_off):
-        if (cameraID in self.CalibrationData.keys()) and (cameraID in self.CameraDisplays.keys()):
+        '''
+        Sets calibration overlay if CalibrationData available for cameraID.
+        '''
+        if (cameraID in self.CalibrationData.keys()) and (cameraID in self.CameraStreamCaptures.keys()):
             if on_off:
                 pattern = self.CalibrationData[cameraID]['low']['pattern']
                 ndots_xy = self.camera_specific_settings[cameraID]['ndots_xy']['value']
-                self.CameraDisplays[cameraID].calibration_overlay(True, pattern, ndots_xy)
+                self.CameraStreamCaptures[cameraID].calibration_overlay(True, pattern, ndots_xy)
             else:
-                self.CameraDisplays[cameraID].calibration_overlay(False)
+                self.CameraStreamCaptures[cameraID].calibration_overlay(False)
 
     def show_calibration_frame(self, cameraID, on_off):
-        if (cameraID in self.CalibrationData.keys()) and (cameraID in self.CameraDisplays.keys()):
+        '''
+        Sets live view replacement with calibration image, 
+        if CalibrationData available for cameraID.
+        '''
+        if (cameraID in self.CalibrationData.keys()) and (cameraID in self.CameraStreamCaptures.keys()):
             if on_off:
                 frame = self.CalibrationData[cameraID]['low']['frame']
-                self.CameraDisplays[cameraID].use_replacement_frame(True, frame)
+                self.CameraStreamCaptures[cameraID].use_replacement_frame(True, frame)
             else:
-                self.CameraDisplays[cameraID].use_replacement_frame(False)
+                self.CameraStreamCaptures[cameraID].use_replacement_frame(False)
 
     def close(self):
         self.ensure_cameras_are_closed()
-        if hasattr(self, 'CameraDisplays'):
-            for cameraID in self.CameraDisplays.keys():
-                self.CameraDisplays[cameraID].close()
+        if hasattr(self, 'CameraStreamCaptures'):
+            for cameraID in self.CameraStreamCaptures.keys():
+                self.CameraStreamCaptures[cameraID].close()
         if hasattr(self, 'GUI'):
             self.GUI.close()
 
@@ -448,7 +475,10 @@ def setDoubleBoxStretch(box, first, second):
     return box
 
 
-class settings_menu(QtGui.QWidget):
+class SettingsMenu(QtGui.QWidget):
+    '''
+    Widget with multiple editable settings.
+    '''
     def __init__(self, settings, keyorder, primary_orientation, secondary_orientation):
         '''
         settings - dict - from CameraSettings.default_settings()
@@ -458,7 +488,7 @@ class settings_menu(QtGui.QWidget):
         secondary_orientation - str - 'horizontal' or 'vertical' or 'h' or 'v'
                                 orientation of each individual settings layout
         '''
-        super(settings_menu, self).__init__()
+        super(SettingsMenu, self).__init__()
         self.settings = settings
         # Create top layout
         if primary_orientation == 'horizontal' or primary_orientation == 'h':
@@ -487,19 +517,19 @@ class settings_menu(QtGui.QWidget):
                 box.addWidget(QtGui.QLabel(self.settings[key]['description'][0]))
                 self.handles[key] = radio_button_menu(self.settings[key]['description'][1:])
             box.addWidget(self.handles[key])
-            # Add individual setting to settings_menu layout in a frame
+            # Add individual setting to SettingsMenu layout in a frame
             frame = QtGui.QFrame()
             frame.setLayout(setDoubleBoxStretch(box, 2, 1))
             frame.setFrameStyle(0)
             layout.addWidget(frame)
-        # Populate settings_menu values with data from settings
+        # Populate SettingsMenu values with data from settings
         self.put(self.settings)
 
     def put(self, settings):
         '''
-        Populates settings_menu in handles with data from settings.
+        Populates SettingsMenu in handles with data from settings.
 
-        settings - dict - with structure corresponding to create_settings_menu() input.
+        settings - dict - with structure corresponding to SettingsMenu() input.
         '''
         for key in settings.keys():
             value = copy(settings[key]['value'])
@@ -520,7 +550,7 @@ class settings_menu(QtGui.QWidget):
 
     def get(self):
         '''
-        Returns settings values with values extracted from settings_menu in handles.
+        Returns settings values with values extracted from SettingsMenu in handles.
         '''
         for key in self.settings.keys():
             if isinstance(self.handles[key], QtGui.QLineEdit):
@@ -547,19 +577,34 @@ class settings_menu(QtGui.QWidget):
 
 
 class CameraDisplayWidget(QtGui.QWidget):
-    def __init__(self, cameraIDs, frame_shape=(300, 300, 3)):
+    '''
+    Widget that displays images from cameras in a grid.
+
+    Use update_frame() method to update to make new frames available to be displayed.
+    '''
+    def __init__(self, cameraIDs, fps=10):
         '''
         cameraIDs - list - cameraID values to use for accessing individual displays
+        fps - int - image update frequency
         '''
         super(CameraDisplayWidget, self).__init__()
         self.cameraIDs = cameraIDs
-        self.blank_frame = np.uint8(np.random.random(frame_shape) * 255)
+        # Compute viewbox locations and set layout
         view_pos = CameraDisplayWidget.assign_viewbox_locations(len(self.cameraIDs))
         layout = QtGui.QGridLayout()
         self.setLayout(layout)
+        # Prepare variables
+        self.images = {}
+        self.image_Locks = {}
         self.viewboxes = {}
         self.imageItems = {}
+        self.timers = {}
+        # Populate variables for each camera
         for npos, cameraID in enumerate(self.cameraIDs):
+            # Create image and lock
+            self.images[cameraID] = np.uint8(np.random.random((300, 300, 3)) * 255)
+            self.image_Locks[cameraID] = Lock()
+            # Create viewbox
             graphics_view = pyqtgraph.GraphicsView()
             graphics_layout = pyqtgraph.GraphicsLayout()
             graphics_layout.addLabel('Camera ' + str(cameraID), col=0, row=0)
@@ -569,14 +614,19 @@ class CameraDisplayWidget(QtGui.QWidget):
             self.viewboxes[cameraID].invertY()
             self.imageItems[cameraID] = pyqtgraph.ImageItem()
             self.viewboxes[cameraID].addItem(self.imageItems[cameraID])
-            self.update_frame(cameraID, self.blank_frame)
             graphics_view.setCentralItem(graphics_layout)
             layout.addWidget(graphics_view, view_pos['row'][npos], view_pos['col'][npos])
+            # Start updating image in viewbox
+            self.timers[cameraID] = QTimer()
+            self.timers[cameraID].timeout.connect(partial(self._display_frame, cameraID))
+            self.timers[cameraID].start(int(1000 / fps))
 
     @staticmethod
     def assign_viewbox_locations(n_cameras):
-        # Compute the number of columns and rows necessary for number of cameras
-        # with columns having the priority
+        '''
+        Returns the number of columns and rows necessary for number of cameras
+        with columns having the priority.
+        '''
         n_cols = 1
         n_rows = 1
         increase_next = 'cols'
@@ -597,13 +647,34 @@ class CameraDisplayWidget(QtGui.QWidget):
 
     def update_frame(self, cameraID, frame):
         '''
-        frame - numpy.ndarray - np.uint8 - (height, width, channels)
+        Updates the current latest frame for camera cameraID.
+
+        frame - numpy array of shape (height, width, 3)
         '''
-        frame = np.swapaxes(frame,0,1)
+        with self.image_Locks[cameraID]:
+            self.images[cameraID] = frame
+
+    def _display_frame(self, cameraID):
+        '''
+        Uses self.images and self.image_Locks to acquire current image.
+        Then displays it in the correct viewbox.
+        '''
+        with self.image_Locks[cameraID]:
+            frame = self.images[cameraID]
+        frame = np.swapaxes(frame, 0, 1)
         self.imageItems[cameraID].setImage(frame)
+
+    def close(self, *args, **kwargs):
+        for cameraID in self.timers.keys():
+            self.timers[cameraID].stop()
+        super(CameraDisplayWidget, self).close(*args, **kwargs)
+
 
 
 class CameraSettingsGUI(QtGui.QWidget):
+    '''
+    GUI for CameraSettingsApp.
+    '''
     def __init__(self, CameraSettingsApp):
         '''
         CameraSettingsApp - CameraSettingsApp instance
@@ -647,12 +718,12 @@ class CameraSettingsGUI(QtGui.QWidget):
         camera_specific_settings_master_widget = QtGui.QWidget()
         self.camera_specific_settings_layout = QtGui.QVBoxLayout(camera_specific_settings_master_widget)
         # Create General Settings menu layout in a frame
-        self.general_settings_menu_layout = QtGui.QVBoxLayout()
-        general_settings_menu_frame = QtGui.QFrame()
-        general_settings_menu_frame.setLayout(self.general_settings_menu_layout)
-        general_settings_menu_frame.setFrameStyle(0)
+        self.general_SettingsMenu_layout = QtGui.QVBoxLayout()
+        general_SettingsMenu_frame = QtGui.QFrame()
+        general_SettingsMenu_frame.setLayout(self.general_SettingsMenu_layout)
+        general_SettingsMenu_frame.setFrameStyle(0)
         general_settings_scroll_area = QtGui.QScrollArea()
-        general_settings_scroll_area.setWidget(general_settings_menu_frame)
+        general_settings_scroll_area.setWidget(general_SettingsMenu_frame)
         general_settings_scroll_area.setWidgetResizable(True)
         # Create General Settings menu scroll area
         camera_specific_settings_scroll_area = QtGui.QScrollArea()
@@ -675,29 +746,35 @@ class CameraSettingsGUI(QtGui.QWidget):
         main_vbox.addItem(top_hbox)
         main_vbox.addItem(setDoubleBoxStretch(bottom_hbox, 1, 2))
         self.setLayout(setDoubleBoxStretch(main_vbox, 1, 2))
-        # Load settings into settings_menus
+        # Load settings into SettingsMenus
         self.write_settings_into_GUI(self.CameraSettingsApp.general_settings, 
                                      self.CameraSettingsApp.general_settings_keyorder(),
                                      self.CameraSettingsApp.camera_specific_settings, 
                                      self.CameraSettingsApp.single_camera_specific_settings_keyorder())
         self.show()
 
-    def add_camera_specific_settings(self, settings, keyorder):
+    def _add_camera_specific_settings(self, settings, keyorder):
+        '''
+        Creates camera_specific_settings and adds it to the camera_specific_settings_layout.
+
+        settings - as required by SettingsMenu class
+        keyorder - as required by SettingsMenu class
+        '''
         key = copy(self.camera_specific_items_key_counter)
         self.camera_specific_items_key_counter += 1
         self.camera_specific_items[key] = {}
         single_camera_settings_layout = QtGui.QHBoxLayout()
         single_camera_settings_layout.setContentsMargins(2,2,2,2)
         # Add all settings
-        self.camera_specific_items[key]['settings_menu'] = settings_menu(settings, keyorder, 'h', 'v')
-        single_camera_settings_layout.addWidget(self.camera_specific_items[key]['settings_menu'])
+        self.camera_specific_items[key]['SettingsMenu'] = SettingsMenu(settings, keyorder, 'h', 'v')
+        single_camera_settings_layout.addWidget(self.camera_specific_items[key]['SettingsMenu'])
         # Add Buttons
         buttons_layout = QtGui.QGridLayout()
         buttons_layout.setContentsMargins(0,0,0,0)
         single_camera_settings_layout.addItem(buttons_layout)
         # Add button to remove this camera
         self.camera_specific_items[key]['removeButton'] = QtGui.QPushButton('Remove')
-        self.camera_specific_items[key]['removeButton'].clicked.connect(lambda: self.remove_single_camera_settings(key))
+        self.camera_specific_items[key]['removeButton'].clicked.connect(lambda: self._remove_single_camera_settings(key))
         buttons_layout.addWidget(self.camera_specific_items[key]['removeButton'], 0, 0)
         # Add button to calibrate this camera
         self.camera_specific_items[key]['calibrationButton'] = QtGui.QPushButton('Calibrate')
@@ -724,9 +801,11 @@ class CameraSettingsGUI(QtGui.QWidget):
         self.camera_specific_settings_layout.addWidget(single_camera_settings_frame)
         self.camera_specific_items[key]['frame_remover'] = single_camera_settings_frame.deleteLater
 
-    def remove_single_camera_settings(self, key):
-        # Remove camera specific settings from GUI
-        self.camera_specific_items[key]['settings_menu'].close()
+    def _remove_single_camera_settings(self, key):
+        '''
+        Removes single camera specific settings from GUI
+        '''
+        self.camera_specific_items[key]['SettingsMenu'].close()
         self.camera_specific_items[key]['removeButton'].close()
         self.camera_specific_items[key]['calibrationButton'].close()
         self.camera_specific_items[key]['showCalibrationButton'].close()
@@ -734,20 +813,30 @@ class CameraSettingsGUI(QtGui.QWidget):
         self.camera_specific_items[key]['frame_remover']()
         del self.camera_specific_items[key]
 
-    def clear_camera_specific_settings_in_GUI(self):
+    def _clear_camera_specific_settings_in_GUI(self):
+        '''
+        Removes all camera specific settings from GUI
+        '''
         for key in self.camera_specific_items.keys():
-            self.remove_single_camera_settings(key)
+            self._remove_single_camera_settings(key)
 
-    def get_cameraID_from_camera_specific_items(self, key):
-        settings = self.camera_specific_items[key]['settings_menu'].get()
+    def _get_cameraID_from_camera_specific_items(self, key):
+        '''
+        Returns edited cameraID from camera specific SettingsMenu
+        '''
+        settings = self.camera_specific_items[key]['SettingsMenu'].get()
         return settings['ID']['value']
 
-    def read_settings_from_GUI(self):
-        general_settings = self.general_settings_menu.get()
+    def _read_settings_from_GUI(self):
+        '''
+        Returns general and camera specific settings from SettingsMenus in format
+        compatible with CameraSettingsApp.update_settings.
+        '''
+        general_settings = self.general_SettingsMenu.get()
         camera_specific_settings = {}
         cameraIDs = []
         for key in self.camera_specific_items.keys():
-            settings = self.camera_specific_items[key]['settings_menu'].get()
+            settings = self.camera_specific_items[key]['SettingsMenu'].get()
             cameraID = settings.pop('ID')['value']
             cameraIDs.append(cameraID)
             camera_specific_settings[cameraID] = settings
@@ -761,61 +850,98 @@ class CameraSettingsGUI(QtGui.QWidget):
 
     def write_settings_into_GUI(self, general_settings, general_settings_keyorder, 
                                 camera_specific_settings, single_camera_specific_settings_keyorder):
-        if hasattr(self, 'general_settings_menu'):
-            self.general_settings_menu.deleteLater()
-            del self.general_settings_menu
-        self.general_settings_menu = settings_menu(general_settings, general_settings_keyorder, 'v', 'h')
-        self.general_settings_menu_layout.addWidget(self.general_settings_menu)
-        self.clear_camera_specific_settings_in_GUI()
+        '''
+        Updates general and camera specific settings in GUI
+
+        general_settings - CameraSettingsApp.general_settings value
+        general_settings_keyorder - display keyorder for general_settings
+        camera_specific_settings - CameraSettingsApp.camera_specific_settings value
+        single_camera_specific_settings_keyorder - display keyorder for camera_specific_settings
+        '''
+        if hasattr(self, 'general_SettingsMenu'):
+            self.general_SettingsMenu.deleteLater()
+            del self.general_SettingsMenu
+        self.general_SettingsMenu = SettingsMenu(general_settings, general_settings_keyorder, 'v', 'h')
+        self.general_SettingsMenu_layout.addWidget(self.general_SettingsMenu)
+        self._clear_camera_specific_settings_in_GUI()
         keyorder = self.CameraSettingsApp.single_camera_specific_settings_keyorder()
         keyorder = ['ID'] + keyorder
         for cameraID in sorted(camera_specific_settings.keys()):
             settings = copy(camera_specific_settings[cameraID])
             settings['ID'] = {'value': cameraID, 'description': 'ID'}
-            self.add_camera_specific_settings(settings, keyorder)
+            self._add_camera_specific_settings(settings, keyorder)
 
-    def update_settings_on_CameraSettingsApp(self):
-        general_settings, camera_specific_settings = self.read_settings_from_GUI()
+    def _update_settings_on_CameraSettingsApp(self):
+        '''
+        Calls CameraSettingsApp.update_settings with output from _read_settings_from_GUI() method.
+        '''
+        general_settings, camera_specific_settings = self._read_settings_from_GUI()
         self.CameraSettingsApp.update_settings(general_settings, camera_specific_settings)
 
     def loadButton_click(self):
+        '''
+        Attempts to load settings into CameraSettingsApp from selected file.
+        '''
         filename = openSingleFileDialog('load', suffix='nwb', caption='Select file')
         if not (filename is None):
             self.CameraSettingsApp.load_from_file(filename)
             print('Settings loaded.')
 
     def saveButton_click(self):
-        self.update_settings_on_CameraSettingsApp()
+        '''
+        Attempts to save settings from CameraSettingsApp to selected file.
+        '''
+        self._update_settings_on_CameraSettingsApp()
         filename = openSingleFileDialog('save', suffix='nwb', caption='Save file name and location')
         if not (filename is None):
             self.CameraSettingsApp.save_to_file(filename)
             print('Settings saved.')
 
     def applyButton_click(self):
-        self.update_settings_on_CameraSettingsApp()
+        '''
+        Calls CameraSettingsApp.apply method.
+        '''
+        self._update_settings_on_CameraSettingsApp()
         self.CameraSettingsApp.apply()
 
     def closeButton_click(self):
+        '''
+        Calls CameraSettingsApp.close, which in turn calls the close() method in CameraSettingsGUI.
+        '''
         self.CameraSettingsApp.close()
 
     def addCameraButton_click(self):
+        '''
+        Calls _add_camera_specific_settings() method with 
+        default_single_camera_specific_settings from CameraSettingsApp.
+        '''
         default_cameraID = '0'
         settings = self.CameraSettingsApp.default_single_camera_specific_settings()
         keyorder = self.CameraSettingsApp.single_camera_specific_settings_keyorder()
         settings['ID'] = {'value': default_cameraID, 'description': 'ID'}
         keyorder = ['ID'] + keyorder
-        self.add_camera_specific_settings(settings, keyorder)
+        self._add_camera_specific_settings(settings, keyorder)
 
     def initializeCamerasButton_click(self):
+        '''
+        Enables and disables correct functions on GUI.
+        If toggled on:
+            Initializes CameraDisplayWidget
+            calls _update_settings_on_CameraSettingsApp() method
+            calls CameraSettingsApp.initialize_cameras_and_streaming
+        If toggled off:
+            calls CameraSettingsApp.stop_cameras_and_streaming
+            calls CameraDisplayWidget.close
+        '''
         # Disable or enable GUI interactions
         if not hasattr(self, 'initializeCamerasButtonDefaultStyleSheet'):
             self.initializeCamerasButtonDefaultStyleSheet = self.initializeCamerasButton.styleSheet()
         initializeCamerasButton_state = self.initializeCamerasButton.isChecked()
         self.initializeCamerasButton.setEnabled(False)
         self.addCameraButton.setEnabled(not initializeCamerasButton_state)
-        self.general_settings_menu.setEnabled(not initializeCamerasButton_state)
+        self.general_SettingsMenu.setEnabled(not initializeCamerasButton_state)
         for key in self.camera_specific_items.keys():
-            self.camera_specific_items[key]['settings_menu'].setEnabled(not initializeCamerasButton_state)
+            self.camera_specific_items[key]['SettingsMenu'].setEnabled(not initializeCamerasButton_state)
             self.camera_specific_items[key]['removeButton'].setEnabled(not initializeCamerasButton_state)
             self.camera_specific_items[key]['calibrationButton'].setEnabled(initializeCamerasButton_state)
             self.camera_specific_items[key]['showCalibrationButton'].setEnabled(initializeCamerasButton_state)
@@ -823,13 +949,13 @@ class CameraSettingsGUI(QtGui.QWidget):
         if initializeCamerasButton_state:
             self.initializeCamerasButton.setStyleSheet('background-color: red')
             # Initialize CameraDisplayWidget class based on camera_specific_settings
-            general_settings, camera_specific_settings = self.read_settings_from_GUI()
+            general_settings, camera_specific_settings = self._read_settings_from_GUI()
             cameraIDs = camera_specific_settings.keys()
             self.CameraDisplayWidget = CameraDisplayWidget(sorted(cameraIDs))
             self.camera_display_layout.addWidget(self.CameraDisplayWidget)
             # Call camera_display_start() method on CameraSettingsApp after updating CameraSettings
-            self.update_settings_on_CameraSettingsApp()
-            self.main_worker = QThread_with_completion_callback(self.initializeCameras_finished_callback, 
+            self._update_settings_on_CameraSettingsApp()
+            self.main_worker = QThread_with_completion_callback(self._initializeCameras_finished_callback, 
                                                                 self.CameraSettingsApp.initialize_cameras_and_streaming, 
                                                                 function_args=(self.CameraDisplayWidget.update_frame,))
         else:
@@ -839,16 +965,23 @@ class CameraSettingsGUI(QtGui.QWidget):
             self.initializeCamerasButton.setStyleSheet(self.initializeCamerasButtonDefaultStyleSheet)
             self.initializeCamerasButton.setEnabled(True)
 
-    def initializeCameras_finished_callback(self):
+    def _initializeCameras_finished_callback(self):
+        '''
+        Is called once CameraSettingsApp.initialize_cameras_and_streaming call is finished.
+        Enables initializeCamerasButton and sets it green.
+        '''
         self.initializeCamerasButton.setEnabled(True)
         self.initializeCamerasButton.setStyleSheet('background-color: green')
 
     def calibrationButton_click(self, key):
+        '''
+        Calls CameraSettingsApp.calibrate for the correct cameraID.
+        '''
         self.camera_specific_items[key]['calibrationButton'].setEnabled(False)
         if not hasattr(self, 'calibrationButtonDefaultStyleSheet'):
             self.calibrationButtonDefaultStyleSheet = self.camera_specific_items[key]['calibrationButton'].styleSheet()
         self.camera_specific_items[key]['calibrationButton'].setStyleSheet('background-color: red')
-        cameraID = self.get_cameraID_from_camera_specific_items(key)
+        cameraID = self._get_cameraID_from_camera_specific_items(key)
         self.main_worker = QThread_with_completion_callback(self.calibration_finished_callback, 
                                                             self.CameraSettingsApp.calibrate, 
                                                             return_output=True, 
@@ -857,6 +990,10 @@ class CameraSettingsGUI(QtGui.QWidget):
 
 
     def calibration_finished_callback(self, outcome, key):
+        '''
+        Is called once CameraSettingsApp.calibrate call is finished.
+        Enables calibrationButton and sets it green or default, depending on outcome.
+        '''
         self.camera_specific_items[key]['calibrationButton'].setEnabled(True)
         if outcome == True:
             self.camera_specific_items[key]['calibrationButton'].setStyleSheet('background-color: green')
@@ -864,14 +1001,20 @@ class CameraSettingsGUI(QtGui.QWidget):
             self.camera_specific_items[key]['calibrationButton'].setStyleSheet(self.calibrationButtonDefaultStyleSheet)
 
     def showCalibrationButton_click(self, key):
+        '''
+        Calls CameraSettingsApp.show_calibration_frame.
+        '''
         isChecked = self.camera_specific_items[key]['showCalibrationButton'].isChecked()
-        cameraID = self.get_cameraID_from_camera_specific_items(key)
+        cameraID = self._get_cameraID_from_camera_specific_items(key)
         Thread(target=self.CameraSettingsApp.show_calibration_frame, 
                    args=(cameraID, isChecked)).start()
 
     def calibrationOverlayButton_click(self, key):
+        '''
+        Calls CameraSettingsApp.overlay_calibration.
+        '''
         isChecked = self.camera_specific_items[key]['calibrationOverlayButton'].isChecked()
-        cameraID = self.get_cameraID_from_camera_specific_items(key)
+        cameraID = self._get_cameraID_from_camera_specific_items(key)
         Thread(target=self.CameraSettingsApp.overlay_calibration, 
                    args=(cameraID, isChecked)).start()
 
