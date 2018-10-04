@@ -972,8 +972,14 @@ class Controller(object):
 
     def start_recording_video(self):
         self.isRecording = True
-        self.camera.start_recording('video.h264', format='h264', 
-                                    splitter_port=1, quality=23)
+        if self.camera.resolution == self.resolutions['high']:
+            quality = 27
+            bitrate = 15000000
+        else:
+            quality = 23
+            bitrate = 15000000
+        self.camera.start_recording('video.h264', format='h264', splitter_port=1, 
+                                    quality=quality, bitrate=bitrate)
 
     def start_processing(self):
         self.isProcessing = True
