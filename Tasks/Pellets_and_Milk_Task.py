@@ -1288,6 +1288,8 @@ class Core(object):
         # Reset GUI signal of trial process
         feeder_button = self.getButton('buttonMilkTrial', self.feederID_milkTrial)
         feeder_button['button_pressed'] = False
+        # Update next milk_trial feeder
+        self.feederID_milkTrial = self.chooseMilkTrialFeeder()
 
     def find_closest_feeder_ID(self):
         # Get animal position history
@@ -1550,8 +1552,6 @@ class Core(object):
                 # Set new variable timer limits
                 self.updatePelletMinSepratation()
                 self.updateMilkTrialMinSepratation()
-                # Update next milk_trial feeder
-                self.feederID_milkTrial = self.chooseMilkTrialFeeder()
                 # Recompute game state to with new parameters
                 game_progress, game_progress_names = self.get_game_progress()
 
