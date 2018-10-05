@@ -116,6 +116,7 @@ def exportSettingsFromGUI(self):
                     'LastTravelDist': np.int64(float(str(self.settings['LastTravelDist'].text()))), 
                     'PelletMilkRatio': np.float64(str(self.settings['PelletMilkRatio'].text())), 
                     'Chewing_TTLchan': np.int64(float(str(self.settings['Chewing_TTLchan'].text()))), 
+                    'MilkGoalRepetition': np.int64(float(str(self.settings['MilkGoalRepetition'].text()))), 
                     'Username': str(self.settings['Username'].text()), 
                     'Password': str(self.settings['Password'].text()), 
                     'lightSignalIntensity': np.int64(str(self.settings['lightSignalIntensity'].text())), 
@@ -233,6 +234,11 @@ def SettingsGUI(self):
     self.settings['Chewing_TTLchan'] = QtGui.QLineEdit('5')
     hbox.addWidget(self.settings['Chewing_TTLchan'])
     self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),4,0)
+    hbox = QtGui.QHBoxLayout()
+    hbox.addWidget(QtGui.QLabel('Milk goal repetitions'))
+    self.settings['MilkGoalRepetition'] = QtGui.QLineEdit('0')
+    hbox.addWidget(self.settings['MilkGoalRepetition'])
+    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),5,0)
     hbox = QtGui.QHBoxLayout()
     hbox.addWidget(QtGui.QLabel('Raspberry Pi usernames'))
     self.settings['Username'] = QtGui.QLineEdit('pi')
@@ -472,6 +478,94 @@ def draw_rect_with_border(surface, fill_color, outline_color, position, border=1
     surface.fill(outline_color, rect)
     surface.fill(fill_color, rect.inflate(-border*2, -border*2))
 
+
+class MilkGoalChoice(object):
+    '''
+    Determines the sequence of milk feeder goal decisions.
+    '''
+    def __init__(self, activeMfeeders, choice_method='random', repetitions=0):
+        '''
+        activeMfeeders - list - elements are returned with next() method as choices
+        choice_method - str - 'random' or 'random_cycle'
+        repetitions - int - number of repetitions to do per each feeder in 'random_cycle' method
+        '''
+        self.activeMfeeders = activeMfeeders
+        self.choice_method = choice_method
+        self.repetitions = repetitions
+        self._initialize_sequence()
+
+    def _initialize_sequence(self):
+        '''
+        Initializes the sequence of feeders and initial position.
+        '''
+        if self.choice_method == 'random_cycle':
+            self.sequence = range(len(self.activeMfeeders))
+            np.random.shuffle(self.sequence)
+            # Set repetition counter and position to very last in sequence,
+            # so that first call to next() method would start sequence from beginning.
+            self.repetition_counter = self.repetitions
+            self.sequence_position = len(self.activeMfeeders)
+
+    def re_init(self, activeMfeeders=None, choice_method=None, repetitions=None):
+        '''
+        Allows re-initializing the class with any subset of input variables.
+        '''
+        if not (activeMfeeders is None):
+            self.activeMfeeders = activeMfeeders
+        if not (choice_method is None):
+            self.choice_method = choice_method
+        if not (repetitions is None):
+            self.repetitions = repetitions
+        if self.choice_method == 'random_cycle':
+            self._initialize_sequence()
+
+    @staticmethod
+    def choose_with_weighted_randomness(activeMfeeders, game_counters):
+        '''
+        Chooses feeder from list with weighted randomness that is based on
+        performance in the task. Feeders that where there has been
+        fewer successful trials are more likely to be chosen.
+        '''
+        # Find number of successful trials for each feeder
+        n_successful_trials = []
+        for ID in activeMfeeders:
+            idx = game_counters['Successful']['ID'].index(ID)
+            n_successful_trials.append(game_counters['Successful']['count'][idx])
+        n_successful_trials = np.array(n_successful_trials, dtype=np.float64)
+        # Choose feeder with weighted randomness if any trial has been successful
+        if np.any(n_successful_trials > 0):
+            feederProbabilityWeights = np.sum(n_successful_trials) - n_successful_trials
+            feederProbability = feederProbabilityWeights / np.sum(feederProbabilityWeights)
+            n_feeder = np.random.choice(len(activeMfeeders), p=feederProbability)
+        else:
+            # If not trial has been successful, pick feeder randomly
+            n_feeder = np.random.choice(len(activeMfeeders))
+
+    def next(self, game_counters=None):
+        '''
+        Returns the next feeder chosen from the activeMfeeders list elements, 
+        using the choice method provided during initialization.
+
+        game_counters - dict with specific structure (see choose_with_weighted_randomness() method)
+                        only required for weighted random choice.
+        '''
+        if self.choice_method == 'random':
+            if game_counters is None:
+                n_feeder = np.random.choice(len(self.activeMfeeders))
+            else:
+                n_feeder = MilkGoalChoice.choose_with_weighted_randomness(self.activeMfeeders, 
+                                                                          game_counters)
+        elif self.choice_method == 'random_cycle':
+            self.repetition_counter += 1
+            if self.repetition_counter > self.repetitions:
+                # If counter has maxed out, roll position back to beginning and reset counter
+                self.sequence_position = np.mod(self.sequence_position + 1, len(self.sequence))
+                self.repetition_counter = 0
+            n_feeder = self.sequence[self.sequence_position]
+
+        return self.activeMfeeders[n_feeder]
+
+
 class Core(object):
     def __init__(self, TaskSettings, TaskIO):
         self.TaskIO = TaskIO
@@ -529,6 +623,13 @@ class Core(object):
         self.responseRate = 60 # Hz
         self.gameRate = 10 # Hz
         # Initialize game
+        if self.TaskSettings['MilkGoalRepetition'] > 0:
+            milk_goal_choice_method = 'random_cycle'
+        else:
+            milk_goal_choice_method = 'random'
+        self.MilkGoalChoice = MilkGoalChoice(self.activeMfeeders, 
+                                             choice_method=milk_goal_choice_method, 
+                                             repetitions=self.TaskSettings['MilkGoalRepetition'])
         self.feederID_milkTrial = self.chooseMilkTrialFeeder()
         self.lastRewardLock = threading.Lock()
         self.lastReward = time()
@@ -633,6 +734,8 @@ class Core(object):
             self.old_PelletHistogramParameters = None
         elif FEEDER_type == 'milk':
             self.activeMfeeders.remove(ID)
+            # If milk feeder, reinitialise MilkGoalChoice
+            self.MilkGoalChoice.re_init(activeMfeeders=self.activeMfeeders)
         # Get FEEDER button on GUI
         if FEEDER_type == 'pellet':
             feeder_button = self.getButton('buttonReleasePellet', ID)
@@ -1104,24 +1207,10 @@ class Core(object):
         '''
         Uses performance to weight probability of selecting a feeder
         '''
-        N_feeders = len(self.activeMfeeders)
-        if N_feeders > 1:
-            # Find number of successful trials for each feeder
-            n_successful_trials = []
-            for ID in self.activeMfeeders:
-                idx = self.game_counters['Successful']['ID'].index(ID)
-                n_successful_trials.append(self.game_counters['Successful']['count'][idx])
-            n_successful_trials = np.array(n_successful_trials, dtype=np.float64)
-            # Choose feeder with weighted randomness
-            if np.any(n_successful_trials > 0):
-                feederProbabilityWeights = np.sum(n_successful_trials) - n_successful_trials
-                feederProbability = feederProbabilityWeights / np.sum(feederProbabilityWeights)
-                n_feeder = np.random.choice(N_feeders, p=feederProbability)
-            else:
-                n_feeder = np.random.choice(N_feeders)
+        if len(self.activeMfeeders) > 1:
+            ID = self.MilkGoalChoice.next(self.game_counters)
         else:
-            n_feeder = 0
-        ID = self.activeMfeeders[n_feeder]
+            ID = self.activeMfeeders[0]
 
         return ID
 
