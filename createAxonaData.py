@@ -212,8 +212,6 @@ def create_DACQ_eeg_or_egf_data(eeg_or_egf, fpath, pos_edges, eegChan, bitVolts=
         if lowpass_data_filter_frequency > lowpass_frequency:
             data = hfunct.butter_lowpass_filter(data, sampling_rate=float(input_SamplingRate), 
                                                 lowpass_frequency=lowpass_frequency, filt_order=4)
-    # Invert data
-    data = -data * bitVolts
     # Crop data outside position data
     idx_outside_pos_data = timestamps < pos_edges[0]
     idx_outside_pos_data = np.logical_or(idx_outside_pos_data, timestamps > pos_edges[1])
@@ -221,9 +219,11 @@ def create_DACQ_eeg_or_egf_data(eeg_or_egf, fpath, pos_edges, eegChan, bitVolts=
     data = np.delete(data, idx_outside_pos_data, 0)
     # Resample data to dacq_eeg sampling rate
     data = data[::int(np.round(input_SamplingRate / output_SamplingRate))]
+    # Invert data
+    data = -data
     # Adjust EEG data format and range
     data = data - np.mean(data)
-    data = data / 4000 # Set data range to between 4000 microvolts
+    data = -data / (1000 / bitVolts)# Set data range to between 1000 microvolts
     data = data * 127
     data[data > 127] = 127
     data[data < -127] = -127
