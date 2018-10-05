@@ -48,7 +48,27 @@ def interpolate_waveforms(waves, input_sampling_frequency=30000,
 
     return new_waves
 
-def create_DACQ_waveform_data_for_single_tetrode(spike_data_tet, pos_edges):
+def create_DACQ_waveform_data_for_single_tetrode(spike_data_tet, pos_edges, 
+                                                 input_sampling_frequency=30000, 
+                                                 output_sampling_frequency=48000, 
+                                                 output_timestemps=50):
+    '''
+    spike_data - dict - with fields:
+                 'waveforms' - numpy array of shape (n_spikes, 4, n_datapoints)
+                               waveforms for all spikes on the 4 channels of the tetrode.
+                 'timestamps' - numpy one dimensional array with spike times in seconds
+    pos_edges - tuple with two elements: start and end time of position data (in seconds).
+                This is used with timestamps to discard spikes outside position data range.
+
+    Default values of the following are compatible with AxonaData:
+        input_sampling_frequency - int or float - sampling frequency of input waveforms
+        output_sampling_frequency - int or float - target sampling frequency of waveforms
+        output_timestemps - int or float - number of timesteps required in output data
+
+    Note: The length of input waveforms must be at least as long as output waveforms.
+          In case of default values for output sampling frequency and timesteps, 
+          the input waveforms need to be at least 1.03 milliseconds long.
+    '''
     # Create DACQ data tetrode format
     waveform_data_dacq = []
     dacq_waveform_dtype = [('ts', '>i'), ('waveform', '50b')]
@@ -82,7 +102,8 @@ def create_DACQ_waveform_data_for_single_tetrode(spike_data_tet, pos_edges):
     # first spike from all four channels are on consecutive rows.
     waves = np.reshape(np.ravel(np.transpose(waves, (0, 2, 1)), 'C'), (nspikes * 4, waves.shape[1]))
     # Interpolate waveforms to 48000 Hz resolution
-    waves = interpolate_waveforms(waves)
+    waves = interpolate_waveforms(waves, input_sampling_frequency, 
+                                  output_sampling_frequency, output_timestemps)
     # Create DACQ datatype structured array
     waveform_data_dacq = np.zeros(nspikes * 4, dtype=dacq_waveform_dtype)
     # Input waveform values, leaving a trailing end of zeros due to lower sampling rate
@@ -100,10 +121,20 @@ def create_DACQ_waveform_data_for_single_tetrode(spike_data_tet, pos_edges):
     
     return waveform_data_dacq
 
-def create_DACQ_waveform_data(spike_data, pos_edges):
+def create_DACQ_waveform_data(spike_data, pos_edges, 
+                              input_sampling_frequency=30000, 
+                              output_sampling_frequency=48000, 
+                              output_timestemps=50):
+    '''
+    This is a function to create_AxonaData waveforms using multiprocessing.
+    See create_DACQ_waveform_data_for_single_tetrode() for description of input arguments.
+
+    spike_data - list of spike_data_tet - see create_DACQ_waveform_data_for_single_tetrode()
+    '''
     input_args = []
     for spike_data_tet in spike_data:
-        input_args.append((spike_data_tet, pos_edges))
+        input_args.append((spike_data_tet, pos_edges, input_sampling_frequency, 
+                           output_sampling_frequency, output_timestemps))
     multiprocessor = hfunct.multiprocess()
     waveform_data_dacq = multiprocessor.map(create_DACQ_waveform_data_for_single_tetrode, input_args)
 
@@ -550,15 +581,25 @@ def createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name='spikes', channel_
                 eegData = load_eegData(OpenEphysDataPath, eegChansInArea)
             else:
                 eegData = None
-        createAxonaData(AxonaDataPath, spike_data, posdata=posdata, 
-                        experiment_info=experiment_info, subfolder=subfolder, 
-                        axona_file_name=area, eegData=eegData, 
-                        pixels_per_metre=pixels_per_metre, 
-                        show_output=show_output, pos_edges=pos_edges)
+        createAxonaData(AxonaDataPath, spike_data, posdata=posdata, pos_edges=pos_edges, 
+                        experiment_info=experiment_info, axona_file_name=area, 
+                        eegData=eegData, pixels_per_metre=pixels_per_metre, 
+                        show_output=show_output)
 
-def createAxonaData(AxonaDataPath, spike_data, posdata=None, experiment_info=None, 
-                    subfolder='AxonaData', axona_file_name='datafile', eegData=None, 
-                    pixels_per_metre=None, show_output=False, pos_edges=None):
+def createAxonaData(AxonaDataPath, spike_data, posdata=None, pos_edges=None, 
+                    experiment_info=None, axona_file_name='datafile', eegData=None, 
+                    pixels_per_metre=None, show_output=False):
+    '''
+    AxonaDataPath - folder path where to store AxonaData files
+    spike_data - see create_DACQ_waveform_data() for description
+    posdata - create_DACQ_pos_data() for description
+    pos_edges - see create_DACQ_waveform_data() and create_DACQ_pos_data() for description
+    experiment_info - see getExperimentInfo() for description
+    axona_file_name - str - filename prefix for output AxonaData files
+    eegData - see create_DACQ_eeg_or_egf_data() for description
+    pixels_per_metre - see create_DACQ_pos_data() for description
+    show_output - bool - if True, destination folder is opened with xdg-open when finished
+    '''
     n_tetrodes = len(spike_data)
     # Ensure idx_keep has been applied to incoming data
     spike_data = ensure_idx_keep_has_been_applied_to_spike_data(spike_data)
@@ -618,11 +659,10 @@ def createAxonaData(AxonaDataPath, spike_data, posdata=None, experiment_info=Non
     if not os.path.exists(AxonaDataPath):
         os.mkdir(AxonaDataPath)
     # Write WAVEFORM data for each tetrode into DACQ format
-    hfunct.print_progress(0, n_tetrodes, prefix = 'Writing tetrode files:', initiation=True)
+    print('Writing files to disk')
     for ntet in range(n_tetrodes):
         fname = os.path.join(AxonaDataPath, axona_file_name + '.' + str(ntet + 1))
         write_file_in_axona_format(fname, headers_wave[ntet], keyorder_wave, waveform_data_dacq[ntet])
-        hfunct.print_progress(ntet + 1, n_tetrodes, prefix = 'Writing tetrode files:')
     # Write POSITION data into DACQ format
     fname = os.path.join(AxonaDataPath, axona_file_name + '.pos')
     write_file_in_axona_format(fname, header_pos, keyorder_pos, pos_data_dacq)
@@ -641,7 +681,6 @@ def createAxonaData(AxonaDataPath, spike_data, posdata=None, experiment_info=Non
               fname += str(i + 1)
           write_file_in_axona_format(fname, header_egf, keyorder_egf, egf_data)
     # Write CLU files
-    print('Writing CLU files')
     for ntet in range(n_tetrodes):
         cluFileName = os.path.join(AxonaDataPath, axona_file_name + '.clu.' + str(ntet + 1))
         write_clusterIDs_in_CLU_format(spike_data[ntet]['clusterIDs'], cluFileName)
@@ -653,6 +692,7 @@ def createAxonaData(AxonaDataPath, spike_data, posdata=None, experiment_info=Non
     # Opens recording folder with Ubuntu file browser
     if show_output:
         subprocess.Popen(['xdg-open', AxonaDataPath])
+    print('Finished creating AxonaData.')
 
 # The following is the default ending for a QtGui application script
 if __name__ == "__main__":
