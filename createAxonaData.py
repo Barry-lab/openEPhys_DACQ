@@ -448,14 +448,6 @@ def get_first_available_spike_data(OpenEphysDataPath, tetrode_nrs, use_idx_keep,
 
     return spike_data, spike_name
 
-def ensure_idx_keep_has_been_applied_to_spike_data(spike_data):
-    for spike_data_tet in spike_data:
-        if spike_data_tet['idx_keep'].size == spike_data_tet['waveforms'].shape[0]:
-            spike_data_tet['waveforms'] = spike_data_tet['waveforms'][spike_data_tet['idx_keep'], :, :]
-            spike_data_tet['timestamps'] = spike_data_tet['timestamps'][spike_data_tet['idx_keep']]
-
-    return spike_data
-
 def write_file_in_axona_format(filename, header, header_keyorder, data):
     '''
     Writes data in axona format
@@ -601,8 +593,6 @@ def createAxonaData(AxonaDataPath, spike_data, posdata=None, pos_edges=None,
     show_output - bool - if True, destination folder is opened with xdg-open when finished
     '''
     n_tetrodes = len(spike_data)
-    # Ensure idx_keep has been applied to incoming data
-    spike_data = ensure_idx_keep_has_been_applied_to_spike_data(spike_data)
     # Convert data to DACQ format
     print('Converting spike data')
     waveform_data_dacq = create_DACQ_waveform_data(spike_data, pos_edges)
