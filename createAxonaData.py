@@ -158,7 +158,7 @@ def convert_position_data_from_cm_to_pixels(xy_pos):
 
     return xy_pos, pixels_per_metre
 
-def create_DACQ_pos_data(posdata, pos_edges=None, pixels_per_metre=None):
+def create_DACQ_pos_data(posdata, pos_edges=None, pixels_per_metre=None, dacq_pos_samplingRate=50):
     '''
     posdata - numpy array as type np.float32 with shape (N x 5) - 
               where there are N samples and colums are:
@@ -170,9 +170,11 @@ def create_DACQ_pos_data(posdata, pos_edges=None, pixels_per_metre=None):
     If pixels_per_metre is entered, it is assumed that ProcessedPos data is
     in pixel values, not centimeters. Otherwise, position data values are scaled 
     into range [0, AxonaData_max_pix_value()] and pixels_per_metre set to AxonaData_max_pix_value().
+
+    dacq_pos_samplingRate - float or int - sampling rate of AxonaData position data
+                            default value is compatible with AxonaData.
     '''
     # Create DACQ data pos format
-    dacq_pos_samplingRate = 50.0 # Sampling rate in Hz
     dacq_pos_dtype = [('ts', '>i'), ('pos', '>8h')]
     # dacq_pos_timestamp_dtype = '>i4'
     dacq_pos_xypos_dtype = '>i2'
@@ -182,18 +184,25 @@ def create_DACQ_pos_data(posdata, pos_edges=None, pixels_per_metre=None):
         if pos_edges is None:
             raise ValueError('pos_edges as start and end of recording in seconds \n' + \
                              'is required to create synthetic data')
-        countstamps = np.arange(np.floor((pos_edges[1] - pos_edges[0]) * dacq_pos_samplingRate))
-        dacq_timestamps = np.float64(countstamps) / dacq_pos_samplingRate
+        countstamps = np.arange(np.floor((pos_edges[1] - pos_edges[0]) * float(dacq_pos_samplingRate)))
+        dacq_timestamps = np.float64(countstamps) / float(dacq_pos_samplingRate)
         xy_pos = np.repeat(np.linspace(0, 100, dacq_timestamps.size)[:, None], 4, axis=1).astype(np.float32)
     else:
-        # Interpolate ProcessedPos to AxonaData sampling rate
+        # Extract xy values and timestamps from posdata
         xy_pos = posdata[:,1:5].astype(np.float32)
         timestamps = posdata[:,0].astype(np.float32)
+        # Set minumum value of x and y to be 0
+        x_min = min([np.nanmin(xy_pos[:, 0]), np.nanmin(xy_pos[:, 2])])
+        y_min = min([np.nanmin(xy_pos[:, 1]), np.nanmin(xy_pos[:, 3])])
+        xy_pos[:, 0] = xy_pos[:, 0] - x_min
+        xy_pos[:, 2] = xy_pos[:, 2] - x_min
+        xy_pos[:, 1] = xy_pos[:, 1] - y_min
+        xy_pos[:, 3] = xy_pos[:, 3] - y_min
         # Realign position data start to 0
         timestamps = timestamps - timestamps[0]
         # Interpolate position data to 50Hz
-        countstamps = np.arange(np.floor(timestamps[-1] * dacq_pos_samplingRate))
-        dacq_timestamps = np.float64(countstamps) / dacq_pos_samplingRate
+        countstamps = np.arange(np.floor(timestamps[-1] * float(dacq_pos_samplingRate)))
+        dacq_timestamps = np.float64(countstamps) / float(dacq_pos_samplingRate)
         xy_pos_interp = np.zeros((dacq_timestamps.size, xy_pos.shape[1]), dtype=np.float32)
         for ncoord in range(xy_pos.shape[1]):
             xy_pos_interp[:,ncoord] = np.interp(dacq_timestamps, timestamps, xy_pos[:,ncoord])
