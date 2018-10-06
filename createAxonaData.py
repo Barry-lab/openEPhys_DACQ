@@ -202,11 +202,17 @@ def create_DACQ_pos_data(posdata, pos_edges=None, pixels_per_metre=None):
     # and calculate pixels_per_metre for range 600
     if pixels_per_metre is None:
         xy_pos, pixels_per_metre = convert_position_data_from_cm_to_pixels(xy_pos)
+    # Round values and turn into integers
+    xy_pos = np.int16(np.round(xy_pos))
+    # Find minimum and maximum values for x and y values
+    limits = {'x_max': max([np.nanmax(xy_pos[:, 0]), np.nanmax(xy_pos[:, 2])]), 
+              'x_min': min([np.nanmin(xy_pos[:, 0]), np.nanmin(xy_pos[:, 2])]), 
+              'y_max': max([np.nanmax(xy_pos[:, 1]), np.nanmax(xy_pos[:, 3])]), 
+              'y_min': min([np.nanmin(xy_pos[:, 1]), np.nanmin(xy_pos[:, 3])])}
     # Set NaN values to 1023
     xy_pos[np.isnan(xy_pos)] = 1023
     # Convert datatypes to DACQ data type
     dacq_timestamps = dacq_timestamps.astype(dtype=dacq_pos_timestamp_dtype)
-    xy_pos = np.int16(np.round(xy_pos))
     xy_pos = xy_pos.astype(dtype=dacq_pos_xypos_dtype)
     # Arrange xy_pos as in the DACQ data matrix including the dot size values
     xy_pos = np.concatenate((xy_pos, 20 * np.ones((xy_pos.shape[0], 1), dtype=dacq_pos_xypos_dtype)), axis=1)
@@ -219,7 +225,7 @@ def create_DACQ_pos_data(posdata, pos_edges=None, pixels_per_metre=None):
     pos_data_dacq['ts'] = dacq_timestamps
     pos_data_dacq['pos'] = xy_pos
 
-    return pos_data_dacq, pixels_per_metre
+    return pos_data_dacq, pixels_per_metre, limits
 
 def create_DACQ_eeg_or_egf_data(eeg_or_egf, data, pos_edges, target_range=1000):
     '''
@@ -597,7 +603,8 @@ def createAxonaData(AxonaDataPath, spike_data, posdata=None, pos_edges=None,
     print('Converting spike data')
     waveform_data_dacq = create_DACQ_waveform_data(spike_data, pos_edges)
     print('Converting position data')
-    pos_data_dacq, pixels_per_metre = create_DACQ_pos_data(posdata, pos_edges, pixels_per_metre)
+    pos_data_dacq, pixels_per_metre, limits = create_DACQ_pos_data(posdata, pos_edges, 
+                                                                   pixels_per_metre)
     if not (eegData is None):
         print('Converting LFP to EEG data')
         eeg_data_dacq = create_DACQ_eeg_data(eegData, pos_edges)
@@ -634,7 +641,16 @@ def createAxonaData(AxonaDataPath, spike_data, posdata=None, pos_edges=None,
         headers_wave.append(header_wave)
     # Get position file header templates and update with recording specific data
     header_pos, keyorder_pos = header_templates('pos')
-    new_values_dict = {'num_pos_samples': nvds['num_pos_samples'], 'pixels_per_metre': nvds['pixels_per_metre']}
+    new_values_dict = {'num_pos_samples': nvds['num_pos_samples'], 
+                       'pixels_per_metre': nvds['pixels_per_metre'], 
+                       'max_x': str(int(limits['x_max'])), 
+                       'max_y': str(int(limits['y_max'])), 
+                       'window_max_x': str(int(limits['x_max'])), 
+                       'window_max_y': str(int(limits['y_max'])), 
+                       'min_x': str(int(limits['x_min'])), 
+                       'min_y': str(int(limits['y_min'])), 
+                       'window_min_x': str(int(limits['x_min'])), 
+                       'window_min_y': str(int(limits['y_min']))}
     header_pos = update_header(header_pos, experiment_info, new_values_dict)
     # Get EEG file header templates and update with recording specific data
     header_eeg, keyorder_eeg = header_templates('eeg')
