@@ -48,7 +48,7 @@ def interpolate_waveforms(waves, input_sampling_frequency=30000,
 
     return new_waves
 
-def create_DACQ_waveform_data_for_single_tetrode(spike_data_tet, pos_edges, 
+def create_DACQ_waveform_data_for_single_tetrode(spike_data_tet, data_time_edges, 
                                                  input_sampling_frequency=30000, 
                                                  output_sampling_frequency=48000, 
                                                  output_timestemps=50):
@@ -57,8 +57,8 @@ def create_DACQ_waveform_data_for_single_tetrode(spike_data_tet, pos_edges,
                  'waveforms' - numpy array of shape (n_spikes, 4, n_datapoints)
                                waveforms for all spikes on the 4 channels of the tetrode.
                  'timestamps' - numpy one dimensional array with spike times in seconds
-    pos_edges - tuple with two elements: start and end time of position data (in seconds).
-                This is used with timestamps to discard spikes outside position data range.
+    data_time_edges - tuple with two elements: start and end time of data (in seconds).
+                      This is used with timestamps to discard spikes outside data range.
 
     Default values of the following are compatible with AxonaData:
         input_sampling_frequency - int or float - sampling frequency of input waveforms
@@ -75,8 +75,8 @@ def create_DACQ_waveform_data_for_single_tetrode(spike_data_tet, pos_edges,
     dacq_waveform_waves_dtype = '>i1'
     dacq_waveform_timestamps_dtype = '>i'
     dacq_sampling_rate = 96000
-    # Align timestamps to beginning of position data
-    spike_data_tet['timestamps'] = spike_data_tet['timestamps'] - pos_edges[0]
+    # Align timestamps to start from 0 at data_time_edges[0]
+    spike_data_tet['timestamps'] = spike_data_tet['timestamps'] - data_time_edges[0]
     # Get waveforms
     waves = np.array(spike_data_tet['waveforms'], dtype=np.float32)
     waves = -waves
@@ -121,7 +121,7 @@ def create_DACQ_waveform_data_for_single_tetrode(spike_data_tet, pos_edges,
     
     return waveform_data_dacq
 
-def create_DACQ_waveform_data(spike_data, pos_edges, 
+def create_DACQ_waveform_data(spike_data, data_time_edges, 
                               input_sampling_frequency=30000, 
                               output_sampling_frequency=48000, 
                               output_timestemps=50):
@@ -133,7 +133,7 @@ def create_DACQ_waveform_data(spike_data, pos_edges,
     '''
     input_args = []
     for spike_data_tet in spike_data:
-        input_args.append((spike_data_tet, pos_edges, input_sampling_frequency, 
+        input_args.append((spike_data_tet, data_time_edges, input_sampling_frequency, 
                            output_sampling_frequency, output_timestemps))
     multiprocessor = hfunct.multiprocess()
     waveform_data_dacq = multiprocessor.map(create_DACQ_waveform_data_for_single_tetrode, input_args)
@@ -158,14 +158,14 @@ def convert_position_data_from_cm_to_pixels(xy_pos):
 
     return xy_pos, pixels_per_metre
 
-def create_DACQ_pos_data(posdata, pos_edges=None, pixels_per_metre=None, dacq_pos_samplingRate=50):
+def create_DACQ_pos_data(posdata, data_time_edges=None, pixels_per_metre=None, dacq_pos_samplingRate=50):
     '''
     posdata - numpy array as type np.float32 with shape (N x 5) - 
               where there are N samples and colums are:
               timestamp (s), xpos1, ypos1, xpos2, ypos2
               Missing datapoints should be NaN. If no second LED, then NaN columns.
 
-    pos_edges - tuple with two elements: start and end time of synthetic position data (in seconds)
+    data_time_edges - tuple with two elements: start and end time of synthetic position data (in seconds)
     
     If pixels_per_metre is entered, it is assumed that ProcessedPos data is
     in pixel values, not centimeters. Otherwise, position data values are scaled 
@@ -181,16 +181,24 @@ def create_DACQ_pos_data(posdata, pos_edges=None, pixels_per_metre=None, dacq_po
     dacq_pos_timestamp_dtype = '>i'
     if posdata is None:
         print('Warning! No position data provided, creating fake position data for AxonaData.')
-        if pos_edges is None:
-            raise ValueError('pos_edges as start and end of recording in seconds \n' + \
+        if data_time_edges is None:
+            raise ValueError('data_time_edges as start and end of recording in seconds \n' + \
                              'is required to create synthetic data')
-        countstamps = np.arange(np.floor((pos_edges[1] - pos_edges[0]) * float(dacq_pos_samplingRate)))
+        countstamps = np.arange(np.floor((data_time_edges[1] - data_time_edges[0]) * float(dacq_pos_samplingRate)))
         dacq_timestamps = np.float64(countstamps) / float(dacq_pos_samplingRate)
         xy_pos = np.repeat(np.linspace(0, 100, dacq_timestamps.size)[:, None], 4, axis=1).astype(np.float32)
     else:
         # Extract xy values and timestamps from posdata
         xy_pos = posdata[:,1:5].astype(np.float32)
         timestamps = posdata[:,0].astype(np.float32)
+        # Crop position data outside data_time_edges
+        idx_outside_data_time = timestamps < data_time_edges[0]
+        idx_outside_data_time = np.logical_or(idx_outside_data_time, timestamps > data_time_edges[1])
+        idx_outside_data_time = np.where(idx_outside_data_time)[0]
+        timestamps = np.delete(timestamps, idx_outside_data_time, 0)
+        xy_pos = np.delete(xy_pos, idx_outside_data_time, 0)
+        # Realign position data start to 0 at data_time_edges[0]
+        timestamps = timestamps - data_time_edges[0]
         # Set minumum value of x and y to be 0
         x_min = min([np.nanmin(xy_pos[:, 0]), np.nanmin(xy_pos[:, 2])])
         y_min = min([np.nanmin(xy_pos[:, 1]), np.nanmin(xy_pos[:, 3])])
@@ -198,8 +206,6 @@ def create_DACQ_pos_data(posdata, pos_edges=None, pixels_per_metre=None, dacq_po
         xy_pos[:, 2] = xy_pos[:, 2] - x_min
         xy_pos[:, 1] = xy_pos[:, 1] - y_min
         xy_pos[:, 3] = xy_pos[:, 3] - y_min
-        # Realign position data start to 0
-        timestamps = timestamps - timestamps[0]
         # Interpolate position data to 50Hz
         countstamps = np.arange(np.floor(timestamps[-1] * float(dacq_pos_samplingRate)))
         dacq_timestamps = np.float64(countstamps) / float(dacq_pos_samplingRate)
@@ -236,7 +242,7 @@ def create_DACQ_pos_data(posdata, pos_edges=None, pixels_per_metre=None, dacq_po
 
     return pos_data_dacq, pixels_per_metre, limits
 
-def create_DACQ_eeg_or_egf_data(eeg_or_egf, data, pos_edges, target_range=1000):
+def create_DACQ_eeg_or_egf_data(eeg_or_egf, data, data_time_edges, target_range=1000):
     '''
     EEG is lowpass filtered to half the target sampling rate, 
     downsampled to dacq_eeg_samplingrate and 
@@ -252,8 +258,8 @@ def create_DACQ_eeg_or_egf_data(eeg_or_egf, data, pos_edges, target_range=1000):
            'timestamps' - numpy one dimensional array in dtype=numpy.float32 - 
                         timestamps in seconds for each of the datapoints in data
            'sampling_rate' - int or float - sampling rate of data
-    pos_edges - tuple with two elements: start and end time of position data (in seconds).
-                This is used with timestamps to crop EEG data outside position data range.
+    data_time_edges - tuple with two elements: start and end time of data (in seconds).
+                      This is used with timestamps to crop EEG data outside data range.
     target_range - int or float - EEG data with voltage values above this will be clipped.
     '''
     # AxonaData eeg data parameters
@@ -271,12 +277,12 @@ def create_DACQ_eeg_or_egf_data(eeg_or_egf, data, pos_edges, target_range=1000):
                                                                sampling_rate=float(data['sampling_rate']), 
                                                                lowpass_frequency=lowpass_frequency, 
                                                                filt_order=4))
-    # Crop data outside position data
-    idx_outside_pos_data = data['timestamps'] < pos_edges[0]
-    idx_outside_pos_data = np.logical_or(idx_outside_pos_data, data['timestamps'] > pos_edges[1])
-    idx_outside_pos_data = np.where(idx_outside_pos_data)[0]
+    # Crop data outside data_time_edges
+    idx_outside_data_time = data['timestamps'] < data_time_edges[0]
+    idx_outside_data_time = np.logical_or(idx_outside_data_time, data['timestamps'] > data_time_edges[1])
+    idx_outside_data_time = np.where(idx_outside_data_time)[0]
     for n_chan in range(len(data_in_processing)):
-        data_in_processing[n_chan] = np.delete(data_in_processing[n_chan], idx_outside_pos_data, 0)
+        data_in_processing[n_chan] = np.delete(data_in_processing[n_chan], idx_outside_data_time, 0)
     # Resample data to dacq_eeg sampling rate
     for n_chan in range(len(data_in_processing)):
         data_in_processing[n_chan] = data_in_processing[n_chan][::int(np.round(data['sampling_rate'] / output_SamplingRate))]
@@ -308,12 +314,12 @@ def create_DACQ_eeg_or_egf_data(eeg_or_egf, data, pos_edges, target_range=1000):
 
     return eeg_data_dacq
 
-def create_DACQ_eeg_data(data, pos_edges, target_range=1000):
-    return create_DACQ_eeg_or_egf_data('eeg', data, pos_edges, 
+def create_DACQ_eeg_data(data, data_time_edges, target_range=1000):
+    return create_DACQ_eeg_or_egf_data('eeg', data, data_time_edges, 
                                        target_range=target_range)
 
-def create_DACQ_egf_data(data, pos_edges, target_range=1000):
-    return create_DACQ_eeg_or_egf_data('egf', data, pos_edges, 
+def create_DACQ_egf_data(data, data_time_edges, target_range=1000):
+    return create_DACQ_eeg_or_egf_data('egf', data, data_time_edges, 
                                        target_range=target_range)
 
 def header_templates(htype):
@@ -461,7 +467,7 @@ def get_first_available_spike_data(OpenEphysDataPath, tetrode_nrs, use_idx_keep,
     if not spike_data_available:
         raise Exception('Spike data is not available in file: ' + OpenEphysDataPath + '\nChecked for following spike_name: ' + str(spike_names))
 
-    return spike_data, spike_name
+    return spike_data
 
 def write_file_in_axona_format(filename, header, header_keyorder, data):
     '''
@@ -527,13 +533,13 @@ def load_eegData(fpath, eegChans, bitVolts=0.195):
     # Load EEG data of selected channel
     continuous_data = NWBio.load_continuous(fpath)
     if not (continuous_data is None):
-        timestamps = np.array(continuous_data['timestamps'])# Lowpass filter data
+        timestamps = np.array(continuous_data['timestamps'])
         data = np.array(continuous_data['continuous'][:,eegChans]).astype(np.float32)
         sampling_rate = OpenEphys_SamplingRate()
     else:
         # If no raw data available, load downsampled data for that tetrode
         lowpass_data = NWBio.load_tetrode_lowpass(fpath)
-        timestamps = lowpass_data['tetrode_lowpass_timestamps']
+        timestamps = np.array(lowpass_data['tetrode_lowpass_timestamps'])
         sampling_rate = OpenEphys_SamplingRate() / float(lowpass_downsampling)
         if not isinstance(eegChans, list):
             eegChans = [eegChans]
@@ -546,14 +552,12 @@ def load_eegData(fpath, eegChans, bitVolts=0.195):
 
     return {'data': data, 'timestamps': timestamps, 'sampling_rate': sampling_rate}
 
-def createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name='spikes', channel_map=None, 
+def createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name='first_available', channel_map=None, 
                                 subfolder='AxonaData', eegChans=None, pixels_per_metre=None, 
                                 show_output=False):
+    # Construct path for AxonaData and get experiment info
     AxonaDataPath = os.path.join(os.path.dirname(OpenEphysDataPath), subfolder)
     experiment_info = getExperimentInfo(OpenEphysDataPath)
-    # Static variables
-    use_idx_keep = True
-    use_badChan = True
     # Get channel_map for this dataset
     if channel_map is None:
         if NWBio.check_if_settings_available(OpenEphysDataPath,'/General/channel_map/'):
@@ -561,7 +565,7 @@ def createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name='spikes', channel_
         else:
             raise ValueError('Channel map could not be generated. Enter channels to process.')
     # Get position data for this recording
-    pos_edges = NWBio.get_processed_tracking_data_timestamp_edges(OpenEphysDataPath)
+    data_time_edges = NWBio.get_processed_tracking_data_timestamp_edges(OpenEphysDataPath)
     if NWBio.check_if_processed_position_data_available(OpenEphysDataPath):
         posdata = NWBio.load_processed_tracking_data(OpenEphysDataPath)
     else:
@@ -572,11 +576,12 @@ def createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name='spikes', channel_
         tetrode_nrs = hfunct.get_tetrode_nrs(channel_map[area]['list'])
         print('Loading spikes for tetrodes nr: ' +  ', '.join(map(str, tetrode_nrs)))
         if spike_name == 'first_available':
-            spike_data, spike_name = get_first_available_spike_data(OpenEphysDataPath, tetrode_nrs, use_idx_keep, use_badChan)
+            spike_data = get_first_available_spike_data(OpenEphysDataPath, tetrode_nrs, 
+                                                        use_idx_keep=True, use_badChan=True)
         else:
             spike_data = NWBio.load_spikes(OpenEphysDataPath, tetrode_nrs=tetrode_nrs, 
-                                           spike_name=spike_name, use_idx_keep=use_idx_keep, 
-                                           use_badChan=use_badChan)
+                                           spike_name=spike_name, use_idx_keep=True, 
+                                           use_badChan=True)
         # Load eeg data
         if eegChans is None:
             eegData = None
@@ -588,45 +593,175 @@ def createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name='spikes', channel_
                 eegData = load_eegData(OpenEphysDataPath, eegChansInArea)
             else:
                 eegData = None
-        createAxonaData(AxonaDataPath, spike_data, posdata=posdata, pos_edges=pos_edges, 
+        createAxonaData(AxonaDataPath, spike_data, data_time_edges, posdata=posdata, 
                         experiment_info=experiment_info, axona_file_name=area, 
                         eegData=eegData, pixels_per_metre=pixels_per_metre, 
                         show_output=show_output)
 
-def createAxonaData(AxonaDataPath, spike_data, posdata=None, pos_edges=None, 
+def concatenate_posdata_across_recordings(posdata, data_time_edges, recording_edges):
+    # Only keep timestamps and x,y for led1 and led2
+    posdata = [x[:, :5] for x in posdata]
+    for n_rec in range(len(posdata)):
+        # Crop data outside data_time_edges and transform timestamps to continuous recording
+        idx_outside_data_time = posdata[n_rec][:, 0] < data_time_edges[n_rec][0]
+        idx_outside_data_time = np.logical_or(idx_outside_data_time, 
+                                              posdata[n_rec][:, 0] > data_time_edges[n_rec][1])
+        idx_outside_data_time = np.where(idx_outside_data_time)[0]
+        posdata[n_rec] = np.delete(posdata[n_rec], idx_outside_data_time, axis=0)
+        posdata[n_rec][:, 0] = posdata[n_rec][:, 0] - data_time_edges[n_rec][0] + recording_edges[n_rec][0]
+    # Concatenate posdata
+    posdata = np.concatenate(posdata, axis=0)
+
+    return posdata
+
+def concatenate_spike_data_across_recordings(spike_data, data_time_edges, recording_edges):
+    new_spike_data = range(len(spike_data[0]))
+    for n_tet in range(len(new_spike_data)):
+        waveforms = [data[n_tet]['waveforms'] for data in spike_data]
+        clusterIDs = [data[n_tet]['clusterIDs'] for data in spike_data]
+        timestamps = [data[n_tet]['timestamps'] for data in spike_data]
+        for n_rec in range(len(timestamps)):
+            # Transform timestamps to continuous recording
+            timestamps[n_rec] = timestamps[n_rec] - data_time_edges[n_rec][0] + recording_edges[n_rec][0]
+        new_spike_data[n_tet] = {'waveforms': np.concatenate(waveforms, axis=0), 
+                                 'clusterIDs': np.concatenate(clusterIDs, axis=0), 
+                                 'timestamps': np.concatenate(timestamps, axis=0)}
+
+    return new_spike_data
+
+def concatenate_eegData_across_recordings(eegData, data_time_edges, recording_edges):
+    for n_rec in range(len(eegData)):
+        # Crop data outside data_time_edges and transform timestamps to continuous recording
+        idx_outside_data_time = eegData[n_rec]['timestamps'] < data_time_edges[n_rec][0]
+        idx_outside_data_time = np.logical_or(idx_outside_data_time, 
+                                              eegData[n_rec]['timestamps'] > data_time_edges[n_rec][1])
+        idx_outside_data_time = np.where(idx_outside_data_time)[0]
+        eegData[n_rec]['timestamps'] = np.delete(eegData[n_rec]['timestamps'], idx_outside_data_time, axis=0)
+        eegData[n_rec]['timestamps'] = eegData[n_rec]['timestamps'] - data_time_edges[n_rec][0] + recording_edges[n_rec][0]
+        eegData[n_rec]['data'] = np.delete(eegData[n_rec]['data'], idx_outside_data_time, axis=0)
+    # Concatenate data and timestamps
+    new_eegData = {'data': np.concatenate([x['data'] for x in eegData], axis=0), 
+                   'timestamps': np.concatenate([x['timestamps'] for x in eegData], axis=0), 
+                   'sampling_rate': eegData[0]['sampling_rate']}
+
+    return new_eegData
+
+def createAxonaData_for_multiple_NWBfiles(OpenEphysDataPaths, AxonaDataPath, 
+                                          spike_name='first_available', channel_map=None, 
+                                          eegChans=None, pixels_per_metre=None, 
+                                          show_output=False):
+    # Get experiment info
+    if len(OpenEphysDataPaths) > 1:
+        print('Using experiment_info from first recording only.')
+    experiment_info = getExperimentInfo(OpenEphysDataPaths[0])
+    # Get channel_map for this dataset
+    if channel_map is None:
+        if len(OpenEphysDataPaths) > 1:
+            print('Using channel_map from first recording only.')
+        if NWBio.check_if_settings_available(OpenEphysDataPaths[0],'/General/channel_map/'):
+            channel_map = NWBio.load_settings(OpenEphysDataPaths[0],'/General/channel_map/')
+        else:
+            raise ValueError('Channel map could not be generated. Enter channels to process.')
+    # Compute start and end times of each segment of the recording
+    data_time_edges = []
+    for OpenEphysDataPath in OpenEphysDataPaths:
+        data_time_edges.append(NWBio.get_processed_tracking_data_timestamp_edges(OpenEphysDataPath))
+    recording_edges = []
+    recording_duration = 0
+    for dte in data_time_edges:
+        end_of_this_recording = recording_duration + (dte[1] - dte[0])
+        recording_edges.append([recording_duration, end_of_this_recording])
+        recording_duration = end_of_this_recording
+    # Get position data for these recordings
+    posdata = []
+    for OpenEphysDataPath in OpenEphysDataPaths:
+        if NWBio.check_if_processed_position_data_available(OpenEphysDataPath):
+            posdata.append(NWBio.load_processed_tracking_data(OpenEphysDataPath))
+        else:
+            posdata.append(None)
+    if any([x is None for x in posdata]):
+        posdata = None
+    else:
+        posdata = concatenate_posdata_across_recordings(posdata, data_time_edges, 
+                                                        recording_edges)
+    # Create AxonaData separately for each recording area
+    for area in channel_map.keys():
+        # Load spike data
+        tetrode_nrs = hfunct.get_tetrode_nrs(channel_map[area]['list'])
+        print('Loading spikes for tetrodes nr: ' +  ', '.join(map(str, tetrode_nrs)))
+        spike_data = []
+        for OpenEphysDataPath in OpenEphysDataPaths:
+            if spike_name == 'first_available':
+                spike_data.append(get_first_available_spike_data(OpenEphysDataPath, tetrode_nrs, 
+                                                                 use_idx_keep=True, use_badChan=True))
+            else:
+                spike_data.append(NWBio.load_spikes(OpenEphysDataPath, tetrode_nrs=tetrode_nrs, 
+                                                    spike_name=spike_name, use_idx_keep=True, 
+                                                    use_badChan=True))
+        spike_data = concatenate_spike_data_across_recordings(spike_data, data_time_edges, 
+                                                              recording_edges)
+        # Load eeg data
+        if eegChans is None:
+            eegData = None
+        else:
+            eegChansInArea_Bool = [x in channel_map[area]['list'] for x in eegChans]
+            if any(eegChansInArea_Bool):
+                eegChansInArea = [x for (x,y) in zip(eegChans, eegChansInArea_Bool) if y]
+                print('Loading LFP data for channels: ' +  ', '.join(map(str, eegChansInArea)))
+                eegData = []
+                for OpenEphysDataPath in OpenEphysDataPaths:
+                    eegData.append(load_eegData(OpenEphysDataPath, eegChansInArea))
+                eegData = concatenate_eegData_across_recordings(eegData, data_time_edges, 
+                                                                recording_edges)
+            else:
+                eegData = None
+        # Create data_time_edges for the concatenated recording
+        data_time_edges = [recording_edges[0][0], recording_edges[-1][1]]
+        createAxonaData(AxonaDataPath, spike_data, data_time_edges, posdata=posdata, 
+                        experiment_info=experiment_info, axona_file_name=area, 
+                        eegData=eegData, pixels_per_metre=pixels_per_metre, 
+                        show_output=show_output)
+    with open(os.path.join(AxonaDataPath, 'recording_edges'), 'w') as file:
+        for edges, OpenEphysDataPath in zip(recording_edges, OpenEphysDataPaths):
+            file.write(str(edges) + ' path: ' + OpenEphysDataPath + '\n')
+
+def createAxonaData(AxonaDataPath, spike_data, data_time_edges, posdata=None, 
                     experiment_info=None, axona_file_name='datafile', eegData=None, 
                     pixels_per_metre=None, show_output=False):
     '''
     AxonaDataPath - folder path where to store AxonaData files
     spike_data - see create_DACQ_waveform_data() for description
     posdata - create_DACQ_pos_data() for description
-    pos_edges - see create_DACQ_waveform_data() and create_DACQ_pos_data() for description
+    data_time_edges - beginning and end time of data to convert to AxonaData. Rest is discarded.
+                      posdata and eegData, if provided, must cover this range entirely.
     experiment_info - see getExperimentInfo() for description
     axona_file_name - str - filename prefix for output AxonaData files
     eegData - see create_DACQ_eeg_or_egf_data() for description
     pixels_per_metre - see create_DACQ_pos_data() for description
     show_output - bool - if True, destination folder is opened with xdg-open when finished
+
+    Note! - timestamps info in spike_data, posdata and eegData must be aligned.
     '''
     n_tetrodes = len(spike_data)
     # Convert data to DACQ format
     print('Converting spike data')
-    waveform_data_dacq = create_DACQ_waveform_data(spike_data, pos_edges)
+    waveform_data_dacq = create_DACQ_waveform_data(spike_data, data_time_edges)
     print('Converting position data')
-    pos_data_dacq, pixels_per_metre, limits = create_DACQ_pos_data(posdata, pos_edges, 
+    pos_data_dacq, pixels_per_metre, limits = create_DACQ_pos_data(posdata, data_time_edges, 
                                                                    pixels_per_metre)
     if not (eegData is None):
         print('Converting LFP to EEG data')
-        eeg_data_dacq = create_DACQ_eeg_data(eegData, pos_edges)
+        eeg_data_dacq = create_DACQ_eeg_data(eegData, data_time_edges)
         print('Converting LFP to EGF data')
-        egf_data_dacq = create_DACQ_egf_data(eegData, pos_edges)
+        egf_data_dacq = create_DACQ_egf_data(eegData, data_time_edges)
     else:
-        EEG_samples_per_position = (pos_edges[1] - pos_edges[0]) / len(pos_data_dacq)
-        num_EEG_samples = int(np.round(AxonaDataEEG_SamplingRate() * (pos_edges[1] - pos_edges[0])))
-        num_EGF_samples = int(np.round(AxonaDataEGF_SamplingRate() * (pos_edges[1] - pos_edges[0])))
+        EEG_samples_per_position = (data_time_edges[1] - data_time_edges[0]) / len(pos_data_dacq)
+        num_EEG_samples = int(np.round(AxonaDataEEG_SamplingRate() * (data_time_edges[1] - data_time_edges[0])))
+        num_EGF_samples = int(np.round(AxonaDataEGF_SamplingRate() * (data_time_edges[1] - data_time_edges[0])))
     # Get recording specific header data for both datatypes
     if experiment_info is None:
         experiment_info = getExperimentInfo()
-    experiment_info['duration'] = str(int(np.ceil(pos_edges[1] - pos_edges[0])))
+    experiment_info['duration'] = str(data_time_edges[1] - data_time_edges[0])
     nvds = {'num_spikes': []}
     num_spikes = []
     for ntet in range(n_tetrodes):
@@ -725,6 +860,8 @@ if __name__ == "__main__":
                         help='enter the name of spike set in NWB file to use for AxonaData')
     parser.add_argument('--ppm', type=int, nargs = 1, 
                         help='enter pixels_per_metre to assume position data is in pixels')
+    parser.add_argument('--concatenatedDataPath', type=str, nargs = 1, 
+                        help='enter the path to folder where to write data concatenated from all specified recordings')
     parser.add_argument('--show_output', action='store_true', 
                         help='to open AxonaData output folder after processing')
     args = parser.parse_args()
@@ -769,14 +906,25 @@ if __name__ == "__main__":
         pixels_per_metre = args.ppm[0]
     else:
         pixels_per_metre = None
+    # Get concatenatedDataPath variable
+    if args.concatenatedDataPath:
+        concatenatedDataPath = args.concatenatedDataPath[0]
+    else:
+        concatenatedDataPath = None
     # Get show_output variable
     if args.show_output:
         show_output = True
     else:
         show_output = False
-    # Run main script
-    for OpenEphysDataPath in OpenEphysDataPaths:
-        createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name=spike_name, 
-                                    channel_map=channel_map, subfolder=subfolder, 
-                                    eegChans=eegChans, pixels_per_metre=pixels_per_metre, 
-                                    show_output=show_output)
+    # Run main script for each NWB file or to concatenate them if requested
+    if concatenatedDataPath is None:
+        for OpenEphysDataPath in OpenEphysDataPaths:
+            createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name=spike_name, 
+                                        channel_map=channel_map, subfolder=subfolder, 
+                                        eegChans=eegChans, pixels_per_metre=pixels_per_metre, 
+                                        show_output=show_output)
+    else:
+        createAxonaData_for_multiple_NWBfiles(OpenEphysDataPaths, concatenatedDataPath, 
+                                              spike_name=spike_name, channel_map=channel_map, 
+                                              eegChans=eegChans, pixels_per_metre=pixels_per_metre, 
+                                              show_output=show_output)
