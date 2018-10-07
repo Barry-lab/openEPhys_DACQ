@@ -621,7 +621,7 @@ def concatenate_spike_data_across_recordings(spike_data, data_time_edges, record
         clusterIDs = [data[n_tet]['clusterIDs'] for data in spike_data]
         timestamps = [data[n_tet]['timestamps'] for data in spike_data]
         for n_rec in range(len(timestamps)):
-            # Transform timestamps to continuous recording
+            # Transform timestamps to continuous recordings
             timestamps[n_rec] = timestamps[n_rec] - data_time_edges[n_rec][0] + recording_edges[n_rec][0]
         new_spike_data[n_tet] = {'waveforms': np.concatenate(waveforms, axis=0), 
                                  'clusterIDs': np.concatenate(clusterIDs, axis=0), 
@@ -672,7 +672,9 @@ def createAxonaData_for_multiple_NWBfiles(OpenEphysDataPaths, AxonaDataPath,
         end_of_this_recording = recording_duration + (dte[1] - dte[0])
         recording_edges.append([recording_duration, end_of_this_recording])
         recording_duration = end_of_this_recording
+    combined_data_time_edges = [recording_edges[0][0], recording_edges[-1][1]]
     # Get position data for these recordings
+    print('Loading position data.')
     posdata = []
     for OpenEphysDataPath in OpenEphysDataPaths:
         if NWBio.check_if_processed_position_data_available(OpenEphysDataPath):
@@ -715,12 +717,10 @@ def createAxonaData_for_multiple_NWBfiles(OpenEphysDataPaths, AxonaDataPath,
                                                                 recording_edges)
             else:
                 eegData = None
-        # Create data_time_edges for the concatenated recording
-        data_time_edges = [recording_edges[0][0], recording_edges[-1][1]]
-        createAxonaData(AxonaDataPath, spike_data, data_time_edges, posdata=posdata, 
-                        experiment_info=experiment_info, axona_file_name=area, 
-                        eegData=eegData, pixels_per_metre=pixels_per_metre, 
-                        show_output=show_output)
+        createAxonaData(AxonaDataPath, spike_data, combined_data_time_edges, 
+                        posdata=posdata, experiment_info=experiment_info, 
+                        axona_file_name=area, eegData=eegData, 
+                        pixels_per_metre=pixels_per_metre, show_output=show_output)
     with open(os.path.join(AxonaDataPath, 'recording_edges'), 'w') as file:
         for edges, OpenEphysDataPath in zip(recording_edges, OpenEphysDataPaths):
             file.write(str(edges) + ' path: ' + OpenEphysDataPath + '\n')
