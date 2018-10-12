@@ -188,6 +188,8 @@ def extract_spikes_from_tetrode(continuous_tetrode_data, spike_indices, waveform
     idx_delete = np.any(np.logical_or(tooearly, toolate), axis=1)
     windows = np.delete(windows, np.where(idx_delete)[0], axis=0)
     spike_indices = np.delete(spike_indices, np.where(idx_delete)[0], axis=0)
+    # Prepare idx_keep array to return
+    idx_keep = np.logical_not(idx_delete).squeeze()
     # Create indexing for channels and spikes
     # windows and windows_channels shape must be  nspikes x nchans x windowsize
     windows = np.repeat(windows[:,:,np.newaxis], 4, axis=2)
@@ -197,7 +199,7 @@ def extract_spikes_from_tetrode(continuous_tetrode_data, spike_indices, waveform
                                (windows.shape[0], 1, windows.shape[2]))
     waveforms = continuous_tetrode_data[windows_channels,windows]
     
-    return waveforms, spike_indices
+    return waveforms, spike_indices, idx_keep
 
 def filter_spike_data(spike_data_tet, pos_edges, threshold, noise_cut_off, verbose=True):
     '''
@@ -429,7 +431,7 @@ def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels, 
                                                               referenced=True, filter_freqs=[300, 6000])
             spike_indices = detect_threshold_crossings_on_tetrode(data_tet, threshold, tooclose, 
                                                                   detection_method='negative')
-            waveforms, spike_indices = extract_spikes_from_tetrode(data_tet, spike_indices, 
+            waveforms, spike_indices, _ = extract_spikes_from_tetrode(data_tet, spike_indices, 
                                                                    waveform_length=[6, 34])
             # Arrange waveforms, timestamps and tetrode number into a dictionary
             timestamps = preloaded_datas[n_dataset].timestamps[spike_indices].squeeze()
@@ -510,8 +512,10 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
         for n_dataset in range(len(OpenEphysDataPaths)):
             data_tet = preloaded_datas[n_dataset].get_channels(hfunct.tetrode_channels(tetrode_nr), referenced=True, 
                                                                filter_freqs=[300, 6000], no_badChan=False)
-            waveforms, spike_indices = extract_spikes_from_tetrode(data_tet, datas_spike_indices[n_dataset], 
-                                                                   waveform_length=[6, 34])
+            waveforms, spike_indices, idx_keep = extract_spikes_from_tetrode(data_tet, datas_spike_indices[n_dataset], 
+                                                                             waveform_length=[6, 34])
+            # Only keep clusterIDs for clusters that were included by extract_spikes_from_tetrode
+            datas_clusterIDs[n_dataset] = (datas_clusterIDs[n_dataset][idx_keep]).squeeze()
             # Arrange waveforms, timestamps and tetrode number into a dictionary
             timestamps = preloaded_datas[n_dataset].timestamps[spike_indices].squeeze()
             spike_data_tet = {'waveforms': np.int16(waveforms), 
