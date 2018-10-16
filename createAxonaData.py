@@ -269,11 +269,13 @@ def create_DACQ_eeg_or_egf_data(eeg_or_egf, data, data_time_edges, target_range=
         output_SamplingRate = AxonaDataEGF_SamplingRate()
     if output_SamplingRate > data['sampling_rate']:
         raise ValueError('Input data sampling rate is lower than requested output data.')
+    if data['data'].dtype  != np.float32:
+        raise ValueError('Input data dtype is not numpy.float32.')
     lowpass_frequency = output_SamplingRate / 2.0
     # Filter data with lowpass butter filter
     data_in_processing = []
     for n_chan in range(data['data'].shape[1]):
-        data_in_processing.append(hfunct.butter_lowpass_filter(data['data'][:, n_chan], 
+        data_in_processing.append(hfunct.butter_lowpass_filter(data['data'][:, n_chan].copy(), 
                                                                sampling_rate=float(data['sampling_rate']), 
                                                                lowpass_frequency=lowpass_frequency, 
                                                                filt_order=4))
@@ -281,11 +283,15 @@ def create_DACQ_eeg_or_egf_data(eeg_or_egf, data, data_time_edges, target_range=
     idx_outside_data_time = data['timestamps'] < data_time_edges[0]
     idx_outside_data_time = np.logical_or(idx_outside_data_time, data['timestamps'] > data_time_edges[1])
     idx_outside_data_time = np.where(idx_outside_data_time)[0]
+    cropped_timestamps = np.delete(data['timestamps'].copy(), idx_outside_data_time, 0)
     for n_chan in range(len(data_in_processing)):
         data_in_processing[n_chan] = np.delete(data_in_processing[n_chan], idx_outside_data_time, 0)
     # Resample data to dacq_eeg sampling rate
+    original_timestamps = (cropped_timestamps - cropped_timestamps[0])
+    target_timestamps = np.arange(0, original_timestamps[-1], 1.0 / float(output_SamplingRate))
     for n_chan in range(len(data_in_processing)):
-        data_in_processing[n_chan] = data_in_processing[n_chan][::int(np.round(data['sampling_rate'] / output_SamplingRate))]
+        interfunct = interpolate.interp1d(original_timestamps, data_in_processing[n_chan])
+        data_in_processing[n_chan] = interfunct(target_timestamps)
     # Invert data
     for n_chan in range(len(data_in_processing)):
         data_in_processing[n_chan] = -data_in_processing[n_chan]
