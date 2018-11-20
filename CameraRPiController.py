@@ -1042,9 +1042,9 @@ class Controller(object):
 
 def StartStop_Controller():
     with Controller() as controller:
-        _ = raw_input('Press enter to start image acquisition: ')
-        controller.start()
-        _ = raw_input('Press enter to stop image acquisition: ')
+        _ = raw_input('Press enter to start video acquisition: ')
+        controller.start_recording_video()
+        _ = raw_input('Press enter to stop video acquisition: ')
         controller.stop()
 
 
