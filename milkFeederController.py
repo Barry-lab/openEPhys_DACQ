@@ -127,16 +127,17 @@ class Controller(object):
     This class controls the operation of the pinch valve, speaker and an LED on the milkFeeder.
     '''
 
-    def __init__(self, pinchValve=False, trialAudioSignalParams=None, lightSignalIntensity=None, negativeAudioSignal=None, init_feedback=False):
+    def __init__(self, pinchValve=False, trialAudioSignalParams=None, lightSignalIntensity=None, 
+                 lightSignalPins=[0], negativeAudioSignal=None, init_feedback=False):
         '''
-        Initializes milkFeeder Controller with specified parameters.
-        pinchValve - bool - makes pinch valve release available
+        pinchValve             - bool - makes pinch valve release available
         trialAudioSignalParams - tuple(signal_frequency,frequency_band_width,modulation_frequency) -
-                            Initializes audioSignal controller with specified parameters.
-        lightSignalIntensity - int - Initializes lightSignal controller with specified intensity (0 - 100).
-        negativeAudioSignal - float - allows playing a full-range white noise for specified duration if > 0
-        init_feedback - bool - Sends ZMQ message to localhost if initialization successful: init_successful
-                        When using this, ensure a ZMQ device is paired to the IP of the device running this script.
+                                 Initializes audioSignal controller with specified parameters.
+        lightSignalIntensity   - int - Initializes lightSignal controller with specified intensity (0 - 100).
+        lightSignalPins        - list of int - number for picon zero pins to use for LED signalling.
+        negativeAudioSignal    - float - allows playing a full-range white noise for specified duration if > 0
+        init_feedback          - bool - Sends ZMQ message to localhost if initialization successful: init_successful
+                                 When using this, ensure a ZMQ device is paired to the IP of the device running this script.
         '''
         self.pinchValve = bool(pinchValve)
         # Initialize ZMQcomms in a separate thread
@@ -146,7 +147,9 @@ class Controller(object):
         if self.pinchValve:
             self.pinchValveController = pinchValveController()
         if not (lightSignalIntensity is None) and lightSignalIntensity > 0:
-            self.LEDcontroller = LEDcontroller(lightSignalIntensity)
+            self.LEDcontrollers = []
+            for pin in lightSignalPins:
+                self.LEDcontrollers.append(LEDcontroller(lightSignalIntensity, pin))
         if not (trialAudioSignalParams is None) or not (negativeAudioSignal is None):
             self.audioSignalController = audioSignalController()
             if not (trialAudioSignalParams is None):
@@ -188,10 +191,12 @@ class Controller(object):
                 self.ZMQmessenger.sendMessage('releaseMilk successful')
 
     def startLightSignal(self):
-        self.LEDcontroller.turnLEDon()
+        for LEDcontroller in self.LEDcontrollers:
+            LEDcontroller.turnLEDon()
 
     def stopLightSignal(self):
-        self.LEDcontroller.turnLEDoff()
+        for LEDcontroller in self.LEDcontrollers:
+            LEDcontroller.turnLEDoff()
 
     def startTrialAudioSignal(self):
         self.audioSignalController.playAudioSignal('trialAudioSignal')
@@ -209,13 +214,13 @@ class Controller(object):
         self.audioSignalController.stopAudioSignal('negativeAudioSignal')
 
     def startAllSignals(self):
-        if hasattr(self, 'LEDcontroller'):
+        if hasattr(self, 'LEDcontrollers'):
             self.startLightSignal()
         if hasattr(self, 'audioSignalController'):
             self.audioSignalController.startAllSounds()
 
     def stopAllSignals(self):
-        if hasattr(self, 'LEDcontroller'):
+        if hasattr(self, 'LEDcontrollers'):
             self.stopLightSignal()
         if hasattr(self, 'audioSignalController'):
             self.audioSignalController.stopAllSounds()
@@ -240,8 +245,9 @@ class Controller(object):
         self.ZMQmessenger.close()
         if hasattr(self, 'pinchValveController'):
             self.pinchValveController.close()
-        if hasattr(self, 'LEDcontroller'):
-            self.LEDcontroller.close()
+        if hasattr(self, 'LEDcontrollers'):
+            for LEDcontroller in self.LEDcontrollers:
+                LEDcontroller.close()
         if hasattr(self, 'audioSignalController'):
             self.audioSignalController.close()
 
