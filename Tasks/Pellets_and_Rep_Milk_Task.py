@@ -11,7 +11,7 @@ from PyQt4 import QtGui, QtCore
 from copy import deepcopy
 from audioSignalGenerator import createAudioSignal
 from sshScripts import ssh
-from HelperFunctions import show_message
+from HelperFunctions import show_message, clearLayout
 
 def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
     ssh_connection = ssh(str(RPiIPBox.text()), str(RPiUsernameBox.text()), str(RPiPasswordBox.text()))
@@ -22,206 +22,13 @@ def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quanti
     ssh_connection.sendCommand(command)
     ssh_connection.disconnect()
 
-def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
-    if FEEDER_settings is None:
-        FEEDER_settings = {'ID': '1', 
-                           'Present': True, 
-                           'Active': True, 
-                           'IP': '192.168.0.40', 
-                           'Position': np.array([100,50]), 
-                           'Angle': np.array(0), 
-                           'Spacing': np.array(60), 
-                           'Clearence': np.array(20), 
-                           'SignalHz': np.array(10000), 
-                           'SignalHzWidth': np.array(500), 
-                           'ModulHz': np.array(4)}
-    # Create interface for interacting with this FEEDER
-    FEEDER = {'Type': FEEDER_type}
-    vbox = QtGui.QVBoxLayout()
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('ID:'))
-    FEEDER['ID'] = QtGui.QLineEdit(FEEDER_settings['ID'])
-    FEEDER['ID'].setMaximumWidth(40)
-    hbox.addWidget(FEEDER['ID'])
-    hbox.addWidget(QtGui.QLabel('IP:'))
-    FEEDER['IP'] = QtGui.QLineEdit(FEEDER_settings['IP'])
-    FEEDER['IP'].setMinimumWidth(105)
-    hbox.addWidget(FEEDER['IP'])
-    activateButton = QtGui.QPushButton('Activate')
-    activateButton.setMinimumWidth(70)
-    activateButton.setMaximumWidth(70)
-    FEEDER['ReleaseQuantity'] = QtGui.QLineEdit('1')
-    FEEDER['ReleaseQuantity'].setMaximumWidth(40)
-    activateButton.clicked.connect(lambda: activateFEEDER(FEEDER_type, FEEDER['IP'], 
-                                                          self.settings['Username'], 
-                                                          self.settings['Password'], 
-                                                          FEEDER['ReleaseQuantity']))
-    hbox.addWidget(activateButton)
-    hbox.addWidget(FEEDER['ReleaseQuantity'])
-    vbox.addLayout(hbox)
-    hbox = QtGui.QHBoxLayout()
-    FEEDER['Present'] = QtGui.QCheckBox('Present')
-    FEEDER['Present'].setChecked(FEEDER_settings['Present'])
-    hbox.addWidget(FEEDER['Present'])
-    FEEDER['Active'] = QtGui.QCheckBox('Active')
-    FEEDER['Active'].setChecked(FEEDER_settings['Active'])
-    hbox.addWidget(FEEDER['Active'])
-    hbox.addWidget(QtGui.QLabel('Position:'))
-    FEEDER['Position'] = QtGui.QLineEdit(','.join(map(str,FEEDER_settings['Position'])))
-    FEEDER['Position'].setMinimumWidth(70)
-    FEEDER['Position'].setMaximumWidth(70)
-    hbox.addWidget(FEEDER['Position'])
-    vbox.addLayout(hbox)
-    if FEEDER_type == 'milk':
-        hbox = QtGui.QHBoxLayout()
-        # Add minimum spacing betwen feeders
-        hbox.addWidget(QtGui.QLabel('Spacing:'))
-        FEEDER['Spacing'] = QtGui.QLineEdit(str(FEEDER_settings['Spacing']))
-        FEEDER['Spacing'].setMinimumWidth(40)
-        FEEDER['Spacing'].setMaximumWidth(40)
-        hbox.addWidget(FEEDER['Spacing'])
-        # Add minimum clearence from boundaries
-        hbox.addWidget(QtGui.QLabel('Clearence:'))
-        FEEDER['Clearence'] = QtGui.QLineEdit(str(FEEDER_settings['Clearence']))
-        FEEDER['Clearence'].setMinimumWidth(40)
-        FEEDER['Clearence'].setMaximumWidth(40)
-        hbox.addWidget(FEEDER['Clearence'])
-        # Add angular position to specify feeder orientation
-        hbox.addWidget(QtGui.QLabel('Angle:'))
-        FEEDER['Angle'] = QtGui.QLineEdit(str(FEEDER_settings['Angle']))
-        FEEDER['Angle'].setMinimumWidth(60)
-        FEEDER['Angle'].setMaximumWidth(60)
-        hbox.addWidget(FEEDER['Angle'])
-        # Add a button to automatically select feeder orientation and angle
-        autoPosButton = QtGui.QPushButton('AutoPos')
-        autoPosButton.setMinimumWidth(70)
-        autoPosButton.setMaximumWidth(70)
-        # autoPosButton.clicked.connect(lambda: activateFEEDER(FEEDER_type))
-        hbox.addWidget(autoPosButton)
-        # Finish this row of options
-        vbox.addLayout(hbox)
-        # Add sound signal values
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Signal (Hz):'))
-        FEEDER['SignalHz'] = QtGui.QLineEdit(str(FEEDER_settings['SignalHz']))
-        hbox.addWidget(FEEDER['SignalHz'])
-        hbox.addWidget(QtGui.QLabel('W:'))
-        if not 'SignalHzWidth' in FEEDER_settings.keys():
-            print('Remove this section in Pellets_and_Milk_Task.py when settings resaved!')
-            FEEDER_settings['SignalHzWidth'] = np.array(500)
-        FEEDER['SignalHzWidth'] = QtGui.QLineEdit(str(FEEDER_settings['SignalHzWidth']))
-        hbox.addWidget(FEEDER['SignalHzWidth'])
-        hbox.addWidget(QtGui.QLabel('M:'))
-        FEEDER['ModulHz'] = QtGui.QLineEdit(str(FEEDER_settings['ModulHz']))
-        hbox.addWidget(FEEDER['ModulHz'])
-        playSignalButton = QtGui.QPushButton('Play')
-        playSignalButton.setMaximumWidth(40)
-        playSignalButton.clicked.connect(lambda: playSiginal(FEEDER['SignalHz'], 
-                                                             FEEDER['SignalHzWidth'], 
-                                                             FEEDER['ModulHz']))
-        hbox.addWidget(playSignalButton)
-        vbox.addLayout(hbox)
-    frame = QtGui.QFrame()
-    frame.setLayout(vbox)
-    frame.setFrameStyle(3)
-    if FEEDER_type == 'milk':
-        frame.setMaximumHeight(160)
-    else:
-        frame.setMaximumHeight(90)
-    if FEEDER_type == 'pellet':
-        self.pellet_feeder_settings_layout.addWidget(frame)
-    elif FEEDER_type == 'milk':
-        self.milk_feeder_settings_layout.addWidget(frame)
-    self.settings['FEEDERs'][FEEDER_type].append(FEEDER)
-
 def setDoubleHBoxStretch(hbox):
     hbox.setStretch(0,2)
     hbox.setStretch(1,1)
 
     return hbox
 
-def exportSettingsFromGUI(self):
-    # Get task settings from text boxes
-    TaskSettings = {'LastTravelTime': np.float64(str(self.settings['LastTravelTime'].text())), 
-                    'LastTravelSmooth': np.int64(float(str(self.settings['LastTravelSmooth'].text()))), 
-                    'LastTravelDist': np.int64(float(str(self.settings['LastTravelDist'].text()))), 
-                    'PelletMilkRatio': np.float64(str(self.settings['PelletMilkRatio'].text())), 
-                    'Chewing_TTLchan': np.int64(float(str(self.settings['Chewing_TTLchan'].text()))), 
-                    'MilkGoalRepetition': np.int64(float(str(self.settings['MilkGoalRepetition'].text()))), 
-                    'Username': str(self.settings['Username'].text()), 
-                    'Password': str(self.settings['Password'].text()), 
-                    'lightSignalIntensity': np.int64(str(self.settings['lightSignalIntensity'].text())), 
-                    'lightSignalDelay': np.float64(str(self.settings['lightSignalDelay'].text())), 
-                    'NegativeAudioSignal': np.float64(str(self.settings['NegativeAudioSignal'].text())), 
-                    'InitPellets': np.int64(float(str(self.settings['InitPellets'].text()))), 
-                    'PelletQuantity': np.int64(float(str(self.settings['PelletQuantity'].text()))), 
-                    'PelletRewardMinSeparationMean': np.int64(float(str(self.settings['PelletRewardMinSeparationMean'].text()))), 
-                    'PelletRewardMinSeparationVariance': np.float64(str(self.settings['PelletRewardMinSeparationVariance'].text())), 
-                    'Chewing_Target': np.int64(float(str(self.settings['Chewing_Target'].text()))), 
-                    'MaxInactivityDuration': np.int64(float(str(self.settings['MaxInactivityDuration'].text()))), 
-                    'MilkTrialFailPenalty': np.int64(float(str(self.settings['MilkTrialFailPenalty'].text()))), 
-                    'InitMilk': np.float64(str(self.settings['InitMilk'].text())), 
-                    'MilkQuantity': np.float64(str(self.settings['MilkQuantity'].text())), 
-                    'MilkTrialMinSeparationMean': np.int64(float(str(self.settings['MilkTrialMinSeparationMean'].text()))), 
-                    'MilkTrialMinSeparationVariance': np.float64(str(self.settings['MilkTrialMinSeparationVariance'].text())), 
-                    'MilkTaskMinStartDistance': np.int64(float(str(self.settings['MilkTaskMinStartDistance'].text()))), 
-                    'MilkTaskMinGoalDistance': np.int64(float(str(self.settings['MilkTaskMinGoalDistance'].text()))), 
-                    'MilkTaskMinGoalAngularDistance': np.int64(float(str(self.settings['MilkTaskMinGoalAngularDistance'].text()))), 
-                    'MilkTaskGoalAngularDistanceTime': np.float64(float(str(self.settings['MilkTaskGoalAngularDistanceTime'].text()))), 
-                    'MilkTrialMaxDuration': np.int64(float(str(self.settings['MilkTrialMaxDuration'].text())))}
-    # Get radio button selection
-    for key in self.settings['AudioSignalMode'].keys():
-        if self.settings['AudioSignalMode'][key].isChecked():
-            TaskSettings['AudioSignalMode'] = key
-    # Get FEEDER specific information
-    FEEDERs = {}
-    for FEEDER_type in self.settings['FEEDERs'].keys():
-        if len(self.settings['FEEDERs'][FEEDER_type]) > 0:
-            FEEDERs[FEEDER_type] = {}
-            IDs = []
-            for feeder in self.settings['FEEDERs'][FEEDER_type]:
-                IDs.append(str(int(str(feeder['ID'].text()))))
-                FEEDERs[FEEDER_type][IDs[-1]] = {'ID': IDs[-1], 
-                                                 'Present': np.array(feeder['Present'].isChecked()), 
-                                                 'Active': np.array(feeder['Active'].isChecked()), 
-                                                 'IP': str(feeder['IP'].text()), 
-                                                 'Position': np.array(map(int, str(feeder['Position'].text()).split(',')))}
-                if FEEDER_type == 'milk':
-                    FEEDERs[FEEDER_type][IDs[-1]]['SignalHz'] = np.int64(float(str(feeder['SignalHz'].text())))
-                    FEEDERs[FEEDER_type][IDs[-1]]['SignalHzWidth'] = np.int64(float(str(feeder['SignalHzWidth'].text())))
-                    FEEDERs[FEEDER_type][IDs[-1]]['ModulHz'] = np.int64(float(str(feeder['ModulHz'].text())))
-            # Check if there are duplicates of FEEDER IDs
-            if any(IDs.count(ID) > 1 for ID in IDs):
-                raise ValueError('Duplicates of IDs in ' + FEEDER_type + ' feeders!')
-        else:
-            show_message('No ' + FEEDER_type + ' FEEDERs entered.')
-    TaskSettings['FEEDERs'] = FEEDERs
-
-    return TaskSettings
-
-def importSettingsToGUI(self, TaskSettings):
-    # First remove all FEEDERs
-    self.clearLayout(self.pellet_feeder_settings_layout, keep=1)
-    self.clearLayout(self.milk_feeder_settings_layout, keep=1)
-    # Load all settings
-    for key in TaskSettings.keys():
-        if isinstance(TaskSettings[key], np.ndarray) and TaskSettings[key].dtype == 'bool':
-            self.settings[key].setChecked(TaskSettings[key])
-        elif key == 'AudioSignalMode':
-            for mode_key in self.settings['AudioSignalMode'].keys():
-                if TaskSettings['AudioSignalMode'] == mode_key:
-                    self.settings['AudioSignalMode'][mode_key].setChecked(True)
-                else:
-                    self.settings['AudioSignalMode'][mode_key].setChecked(False)
-        elif key == 'FEEDERs':
-            for FEEDER_type in TaskSettings['FEEDERs'].keys():
-                for ID in sorted(TaskSettings['FEEDERs'][FEEDER_type].keys(), key=int):
-                    FEEDER_settings = TaskSettings['FEEDERs'][FEEDER_type][ID]
-                    addFeedersToList(self, FEEDER_type, FEEDER_settings)
-        elif key in self.settings.keys():
-            self.settings[key].setText(str(TaskSettings[key]))
-
-def playSiginal(frequency, frequency_band_width, modulation_frequency):
+def playSignal(frequency, frequency_band_width, modulation_frequency):
     if type(frequency) == QtGui.QLineEdit:
         frequency = np.int64(float(str(frequency.text())))
     if type(frequency_band_width) == QtGui.QLineEdit:
@@ -236,200 +43,414 @@ def playSiginal(frequency, frequency_band_width, modulation_frequency):
     # Play 2 seconds of the sound
     sound.play(-1, maxtime=2000)
 
-def SettingsGUI(self):
-    self.settings = {}
-    self.settings['FEEDERs'] = {'pellet': [], 'milk': []}
-    # Create General settings menu
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Last travel time (s)'))
-    self.settings['LastTravelTime'] = QtGui.QLineEdit('2')
-    hbox.addWidget(self.settings['LastTravelTime'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),0,0)
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Last travel smoothing (cm)'))
-    self.settings['LastTravelSmooth'] = QtGui.QLineEdit('3')
-    hbox.addWidget(self.settings['LastTravelSmooth'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),1,0)
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Last travel min distance (cm)'))
-    self.settings['LastTravelDist'] = QtGui.QLineEdit('50')
-    hbox.addWidget(self.settings['LastTravelDist'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),2,0)
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Pellet vs Milk Reward ratio'))
-    self.settings['PelletMilkRatio'] = QtGui.QLineEdit('0.25')
-    hbox.addWidget(self.settings['PelletMilkRatio'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),3,0)
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Chewing TTL channel'))
-    self.settings['Chewing_TTLchan'] = QtGui.QLineEdit('5')
-    hbox.addWidget(self.settings['Chewing_TTLchan'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),4,0)
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Milk goal repetitions'))
-    self.settings['MilkGoalRepetition'] = QtGui.QLineEdit('0')
-    hbox.addWidget(self.settings['MilkGoalRepetition'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),5,0)
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Raspberry Pi usernames'))
-    self.settings['Username'] = QtGui.QLineEdit('pi')
-    hbox.addWidget(self.settings['Username'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),0,1)
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Raspberry Pi passwords'))
-    self.settings['Password'] = QtGui.QLineEdit('raspberry')
-    hbox.addWidget(self.settings['Password'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),1,1)
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Audio Signal Mode'))
-    self.settings['AudioSignalMode'] = {'ambient': QtGui.QRadioButton('Ambient'), 
-                                        'localised': QtGui.QRadioButton('Localised')}
-    self.settings['AudioSignalMode']['ambient'].setChecked(True)
-    hbox.addWidget(self.settings['AudioSignalMode']['ambient'])
-    hbox.addWidget(self.settings['AudioSignalMode']['localised'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),2,1)
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Light Signal intensity (0 - 100)'))
-    self.settings['lightSignalIntensity'] = QtGui.QLineEdit('100')
-    hbox.addWidget(self.settings['lightSignalIntensity'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),3,1)
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Light Signal delay (s)'))
-    self.settings['lightSignalDelay'] = QtGui.QLineEdit('0')
-    hbox.addWidget(self.settings['lightSignalDelay'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),4,1)
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Negative Audio Feedback (s)'))
-    self.settings['NegativeAudioSignal'] = QtGui.QLineEdit('0')
-    hbox.addWidget(self.settings['NegativeAudioSignal'])
-    self.task_general_settings_layout.addLayout(setDoubleHBoxStretch(hbox),5,1)
-    # Create Pellet task specific menu items
-    vbox = QtGui.QVBoxLayout()
-    font = QtGui.QFont('SansSerif', 15)
-    string = QtGui.QLabel('Pellet Game Settings')
-    string.setFont(font)
-    vbox.addWidget(string)
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Initial Pellets'))
-    self.settings['InitPellets'] = QtGui.QLineEdit('5')
-    hbox.addWidget(self.settings['InitPellets'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Reward Quantity'))
-    self.settings['PelletQuantity'] = QtGui.QLineEdit('1')
-    hbox.addWidget(self.settings['PelletQuantity'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Min Separation (s)'))
-    self.settings['PelletRewardMinSeparationMean'] = QtGui.QLineEdit('10')
-    hbox.addWidget(self.settings['PelletRewardMinSeparationMean'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Min Separation variance (%)'))
-    self.settings['PelletRewardMinSeparationVariance'] = QtGui.QLineEdit('0.5')
-    hbox.addWidget(self.settings['PelletRewardMinSeparationVariance'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Chewing Target count'))
-    self.settings['Chewing_Target'] = QtGui.QLineEdit('4')
-    hbox.addWidget(self.settings['Chewing_Target'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Inactivity pellet time (s)'))
-    self.settings['MaxInactivityDuration'] = QtGui.QLineEdit('90')
-    hbox.addWidget(self.settings['MaxInactivityDuration'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Milk Trial Fail Penalty (s)'))
-    self.settings['MilkTrialFailPenalty'] = QtGui.QLineEdit('10')
-    hbox.addWidget(self.settings['MilkTrialFailPenalty'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    # Create Pellet FEEDER items
-    scroll_widget = QtGui.QWidget()
-    self.pellet_feeder_settings_layout = QtGui.QVBoxLayout(scroll_widget)
-    self.addPelletFeederButton = QtGui.QPushButton('Add FEEDER')
-    self.addPelletFeederButton.clicked.connect(lambda: addFeedersToList(self, 'pellet'))
-    self.pellet_feeder_settings_layout.addWidget(self.addPelletFeederButton)
-    scroll = QtGui.QScrollArea()
-    scroll.setWidget(scroll_widget)
-    scroll.setWidgetResizable(True)
-    vbox.addWidget(scroll)
-    # Add Pellet Task settings to task specific settings layout
-    frame = QtGui.QFrame()
-    frame.setLayout(vbox)
-    frame.setFrameStyle(3)
-    self.task_specific_settings_layout.addWidget(frame)
-    # Create Milk task specific menu items
-    vbox = QtGui.QVBoxLayout()
-    font = QtGui.QFont('SansSerif', 15)
-    string = QtGui.QLabel('Milk Game Settings')
-    string.setFont(font)
-    vbox.addWidget(string)
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Initial Milk'))
-    self.settings['InitMilk'] = QtGui.QLineEdit('2')
-    hbox.addWidget(self.settings['InitMilk'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Reward Quantity'))
-    self.settings['MilkQuantity'] = QtGui.QLineEdit('1')
-    hbox.addWidget(self.settings['MilkQuantity'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Min Separation (s)'))
-    self.settings['MilkTrialMinSeparationMean'] = QtGui.QLineEdit('40')
-    hbox.addWidget(self.settings['MilkTrialMinSeparationMean'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Min Separation variance (%)'))
-    self.settings['MilkTrialMinSeparationVariance'] = QtGui.QLineEdit('0.5')
-    hbox.addWidget(self.settings['MilkTrialMinSeparationVariance'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Minimum Start Distance (cm)'))
-    self.settings['MilkTaskMinStartDistance'] = QtGui.QLineEdit('50')
-    hbox.addWidget(self.settings['MilkTaskMinStartDistance'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Minimum Goal Distance (cm)'))
-    self.settings['MilkTaskMinGoalDistance'] = QtGui.QLineEdit('10')
-    hbox.addWidget(self.settings['MilkTaskMinGoalDistance'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Minimum Goal angular distance (deg)'))
-    self.settings['MilkTaskMinGoalAngularDistance'] = QtGui.QLineEdit('45')
-    hbox.addWidget(self.settings['MilkTaskMinGoalAngularDistance'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Goal angular distance time (s)'))
-    self.settings['MilkTaskGoalAngularDistanceTime'] = QtGui.QLineEdit('2')
-    hbox.addWidget(self.settings['MilkTaskGoalAngularDistanceTime'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    hbox = QtGui.QHBoxLayout()
-    hbox.addWidget(QtGui.QLabel('Maximum Trial Duration (s)'))
-    self.settings['MilkTrialMaxDuration'] = QtGui.QLineEdit('9')
-    hbox.addWidget(self.settings['MilkTrialMaxDuration'])
-    vbox.addLayout(setDoubleHBoxStretch(hbox))
-    # Create Milk FEEDER items
-    scroll_widget = QtGui.QWidget()
-    self.milk_feeder_settings_layout = QtGui.QVBoxLayout(scroll_widget)
-    self.addMilkFeederButton = QtGui.QPushButton('Add FEEDER')
-    self.addMilkFeederButton.clicked.connect(lambda: addFeedersToList(self, 'milk'))
-    self.milk_feeder_settings_layout.addWidget(self.addMilkFeederButton)
-    scroll = QtGui.QScrollArea()
-    scroll.setWidget(scroll_widget)
-    scroll.setWidgetResizable(True)
-    vbox.addWidget(scroll)
-    # Add Milk Task settings to task specific settings layout
-    frame = QtGui.QFrame()
-    frame.setLayout(vbox)
-    frame.setFrameStyle(3)
-    self.task_specific_settings_layout.addWidget(frame)
-    # Add necessary functions to TaskSettingsGUI
-    self.exportSettingsFromGUI = exportSettingsFromGUI
-    self.importSettingsToGUI = importSettingsToGUI
 
-    return self
+class SettingsGUI(object):
+
+    def __init__(self, top_grid_layout, bottom_hbox_layout):
+        # Create empty settings variables
+        self.settings = {}
+        self.settings['FEEDERs'] = {'pellet': [], 'milk': []}
+        # Create settings menu
+        self.populate_top_grid_layout(top_grid_layout)
+        self.populate_bottom_hbox_layout(bottom_hbox_layout)
+
+    def populate_top_grid_layout(self, top_grid_layout):
+        # Add option to specify how far into past to check travel distance
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Last travel time (s)'))
+        self.settings['LastTravelTime'] = QtGui.QLineEdit('2')
+        hbox.addWidget(self.settings['LastTravelTime'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),0,0)
+        # Add smoothing factor for calculating last travel distance
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Last travel smoothing (dp)'))
+        self.settings['LastTravelSmooth'] = QtGui.QLineEdit('3')
+        hbox.addWidget(self.settings['LastTravelSmooth'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),1,0)
+        # Add minimum distance for last travel
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Last travel min distance (cm)'))
+        self.settings['LastTravelDist'] = QtGui.QLineEdit('50')
+        hbox.addWidget(self.settings['LastTravelDist'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),2,0)
+        # Specify pellet vs milk reward ratio
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Pellet vs Milk Reward ratio'))
+        self.settings['PelletMilkRatio'] = QtGui.QLineEdit('0.25')
+        hbox.addWidget(self.settings['PelletMilkRatio'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),3,0)
+        # Specify chewing signal TTL channel
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Chewing TTL channel'))
+        self.settings['Chewing_TTLchan'] = QtGui.QLineEdit('5')
+        hbox.addWidget(self.settings['Chewing_TTLchan'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),4,0)
+        # Specify number of repretitions of each milk trial goal
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Milk goal repetitions'))
+        self.settings['MilkGoalRepetition'] = QtGui.QLineEdit('0')
+        hbox.addWidget(self.settings['MilkGoalRepetition'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),5,0)
+        # Specify raspberry pi username
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Raspberry Pi usernames'))
+        self.settings['Username'] = QtGui.QLineEdit('pi')
+        hbox.addWidget(self.settings['Username'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),0,1)
+        # Specify raspberry pi password
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Raspberry Pi passwords'))
+        self.settings['Password'] = QtGui.QLineEdit('raspberry')
+        hbox.addWidget(self.settings['Password'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),1,1)
+        # Specify audio signal mode
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Audio Signal Mode'))
+        self.settings['AudioSignalMode'] = {'ambient': QtGui.QRadioButton('Ambient'), 
+                                            'localised': QtGui.QRadioButton('Localised')}
+        self.settings['AudioSignalMode']['ambient'].setChecked(True)
+        hbox.addWidget(self.settings['AudioSignalMode']['ambient'])
+        hbox.addWidget(self.settings['AudioSignalMode']['localised'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),2,1)
+        # Specify light signal intensity
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Light Signal intensity (0 - 100)'))
+        self.settings['lightSignalIntensity'] = QtGui.QLineEdit('100')
+        hbox.addWidget(self.settings['lightSignalIntensity'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),3,1)
+        # Specify light signal delay relative to trial start
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Light Signal delay (s)'))
+        self.settings['lightSignalDelay'] = QtGui.QLineEdit('0')
+        hbox.addWidget(self.settings['lightSignalDelay'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),4,1)
+        # Option to set duration of negative audio feedback
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Negative Audio Feedback (s)'))
+        self.settings['NegativeAudioSignal'] = QtGui.QLineEdit('0')
+        hbox.addWidget(self.settings['NegativeAudioSignal'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),5,1)
+
+    def populate_bottom_hbox_layout(self, bottom_hbox_layout):
+        # Create Pellet task specific menu items
+        vbox = QtGui.QVBoxLayout()
+        font = QtGui.QFont('SansSerif', 15)
+        string = QtGui.QLabel('Pellet Game Settings')
+        string.setFont(font)
+        vbox.addWidget(string)
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Initial Pellets'))
+        self.settings['InitPellets'] = QtGui.QLineEdit('5')
+        hbox.addWidget(self.settings['InitPellets'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Reward Quantity'))
+        self.settings['PelletQuantity'] = QtGui.QLineEdit('1')
+        hbox.addWidget(self.settings['PelletQuantity'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Min Separation (s)'))
+        self.settings['PelletRewardMinSeparationMean'] = QtGui.QLineEdit('10')
+        hbox.addWidget(self.settings['PelletRewardMinSeparationMean'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Min Separation variance (%)'))
+        self.settings['PelletRewardMinSeparationVariance'] = QtGui.QLineEdit('0.5')
+        hbox.addWidget(self.settings['PelletRewardMinSeparationVariance'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Chewing Target count'))
+        self.settings['Chewing_Target'] = QtGui.QLineEdit('4')
+        hbox.addWidget(self.settings['Chewing_Target'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Inactivity pellet time (s)'))
+        self.settings['MaxInactivityDuration'] = QtGui.QLineEdit('90')
+        hbox.addWidget(self.settings['MaxInactivityDuration'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Milk Trial Fail Penalty (s)'))
+        self.settings['MilkTrialFailPenalty'] = QtGui.QLineEdit('10')
+        hbox.addWidget(self.settings['MilkTrialFailPenalty'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        # Create Pellet FEEDER items
+        scroll_widget = QtGui.QWidget()
+        self.pellet_feeder_settings_layout = QtGui.QVBoxLayout(scroll_widget)
+        self.addPelletFeederButton = QtGui.QPushButton('Add FEEDER')
+        self.addPelletFeederButton.clicked.connect(lambda: self.addFeedersToList('pellet'))
+        self.pellet_feeder_settings_layout.addWidget(self.addPelletFeederButton)
+        scroll = QtGui.QScrollArea()
+        scroll.setWidget(scroll_widget)
+        scroll.setWidgetResizable(True)
+        vbox.addWidget(scroll)
+        # Add Pellet Task settings to task specific settings layout
+        frame = QtGui.QFrame()
+        frame.setLayout(vbox)
+        frame.setFrameStyle(3)
+        bottom_hbox_layout.addWidget(frame)
+        # Create Milk task specific menu items
+        vbox = QtGui.QVBoxLayout()
+        font = QtGui.QFont('SansSerif', 15)
+        string = QtGui.QLabel('Milk Game Settings')
+        string.setFont(font)
+        vbox.addWidget(string)
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Initial Milk'))
+        self.settings['InitMilk'] = QtGui.QLineEdit('2')
+        hbox.addWidget(self.settings['InitMilk'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Reward Quantity'))
+        self.settings['MilkQuantity'] = QtGui.QLineEdit('1')
+        hbox.addWidget(self.settings['MilkQuantity'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Min Separation (s)'))
+        self.settings['MilkTrialMinSeparationMean'] = QtGui.QLineEdit('40')
+        hbox.addWidget(self.settings['MilkTrialMinSeparationMean'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Min Separation variance (%)'))
+        self.settings['MilkTrialMinSeparationVariance'] = QtGui.QLineEdit('0.5')
+        hbox.addWidget(self.settings['MilkTrialMinSeparationVariance'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Minimum Start Distance (cm)'))
+        self.settings['MilkTaskMinStartDistance'] = QtGui.QLineEdit('50')
+        hbox.addWidget(self.settings['MilkTaskMinStartDistance'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Minimum Goal Distance (cm)'))
+        self.settings['MilkTaskMinGoalDistance'] = QtGui.QLineEdit('10')
+        hbox.addWidget(self.settings['MilkTaskMinGoalDistance'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Minimum Goal angular distance (deg)'))
+        self.settings['MilkTaskMinGoalAngularDistance'] = QtGui.QLineEdit('45')
+        hbox.addWidget(self.settings['MilkTaskMinGoalAngularDistance'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Goal angular distance time (s)'))
+        self.settings['MilkTaskGoalAngularDistanceTime'] = QtGui.QLineEdit('2')
+        hbox.addWidget(self.settings['MilkTaskGoalAngularDistanceTime'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Maximum Trial Duration (s)'))
+        self.settings['MilkTrialMaxDuration'] = QtGui.QLineEdit('9')
+        hbox.addWidget(self.settings['MilkTrialMaxDuration'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        # Create Milk FEEDER items
+        scroll_widget = QtGui.QWidget()
+        self.milk_feeder_settings_layout = QtGui.QVBoxLayout(scroll_widget)
+        self.addMilkFeederButton = QtGui.QPushButton('Add FEEDER')
+        self.addMilkFeederButton.clicked.connect(lambda: self.addFeedersToList('milk'))
+        self.milk_feeder_settings_layout.addWidget(self.addMilkFeederButton)
+        scroll = QtGui.QScrollArea()
+        scroll.setWidget(scroll_widget)
+        scroll.setWidgetResizable(True)
+        vbox.addWidget(scroll)
+        # Add Milk Task settings to task specific settings layout
+        frame = QtGui.QFrame()
+        frame.setLayout(vbox)
+        frame.setFrameStyle(3)
+        bottom_hbox_layout.addWidget(frame)
+
+    def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
+        if FEEDER_settings is None:
+            FEEDER_settings = {'ID': '1', 
+                               'Present': True, 
+                               'Active': True, 
+                               'IP': '192.168.0.40', 
+                               'Position': np.array([100,50]), 
+                               'Angle': np.array(0), 
+                               'Spacing': np.array(60), 
+                               'Clearence': np.array(20), 
+                               'SignalHz': np.array(10000), 
+                               'SignalHzWidth': np.array(500), 
+                               'ModulHz': np.array(4)}
+        # Create interface for interacting with this FEEDER
+        FEEDER = {'Type': FEEDER_type}
+        vbox = QtGui.QVBoxLayout()
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('ID:'))
+        FEEDER['ID'] = QtGui.QLineEdit(FEEDER_settings['ID'])
+        FEEDER['ID'].setMaximumWidth(40)
+        hbox.addWidget(FEEDER['ID'])
+        hbox.addWidget(QtGui.QLabel('IP:'))
+        FEEDER['IP'] = QtGui.QLineEdit(FEEDER_settings['IP'])
+        FEEDER['IP'].setMinimumWidth(105)
+        hbox.addWidget(FEEDER['IP'])
+        activateButton = QtGui.QPushButton('Activate')
+        activateButton.setMinimumWidth(70)
+        activateButton.setMaximumWidth(70)
+        FEEDER['ReleaseQuantity'] = QtGui.QLineEdit('1')
+        FEEDER['ReleaseQuantity'].setMaximumWidth(40)
+        activateButton.clicked.connect(lambda: activateFEEDER(FEEDER_type, FEEDER['IP'], 
+                                                              self.settings['Username'], 
+                                                              self.settings['Password'], 
+                                                              FEEDER['ReleaseQuantity']))
+        hbox.addWidget(activateButton)
+        hbox.addWidget(FEEDER['ReleaseQuantity'])
+        vbox.addLayout(hbox)
+        hbox = QtGui.QHBoxLayout()
+        FEEDER['Present'] = QtGui.QCheckBox('Present')
+        FEEDER['Present'].setChecked(FEEDER_settings['Present'])
+        hbox.addWidget(FEEDER['Present'])
+        FEEDER['Active'] = QtGui.QCheckBox('Active')
+        FEEDER['Active'].setChecked(FEEDER_settings['Active'])
+        hbox.addWidget(FEEDER['Active'])
+        hbox.addWidget(QtGui.QLabel('Position:'))
+        FEEDER['Position'] = QtGui.QLineEdit(','.join(map(str,FEEDER_settings['Position'])))
+        FEEDER['Position'].setMinimumWidth(70)
+        FEEDER['Position'].setMaximumWidth(70)
+        hbox.addWidget(FEEDER['Position'])
+        vbox.addLayout(hbox)
+        if FEEDER_type == 'milk':
+            hbox = QtGui.QHBoxLayout()
+            # Add minimum spacing betwen feeders
+            hbox.addWidget(QtGui.QLabel('Spacing:'))
+            FEEDER['Spacing'] = QtGui.QLineEdit(str(FEEDER_settings['Spacing']))
+            FEEDER['Spacing'].setMinimumWidth(40)
+            FEEDER['Spacing'].setMaximumWidth(40)
+            hbox.addWidget(FEEDER['Spacing'])
+            # Add minimum clearence from boundaries
+            hbox.addWidget(QtGui.QLabel('Clearence:'))
+            FEEDER['Clearence'] = QtGui.QLineEdit(str(FEEDER_settings['Clearence']))
+            FEEDER['Clearence'].setMinimumWidth(40)
+            FEEDER['Clearence'].setMaximumWidth(40)
+            hbox.addWidget(FEEDER['Clearence'])
+            # Add angular position to specify feeder orientation
+            hbox.addWidget(QtGui.QLabel('Angle:'))
+            FEEDER['Angle'] = QtGui.QLineEdit(str(FEEDER_settings['Angle']))
+            FEEDER['Angle'].setMinimumWidth(60)
+            FEEDER['Angle'].setMaximumWidth(60)
+            hbox.addWidget(FEEDER['Angle'])
+            # Add a button to automatically select feeder orientation and angle
+            autoPosButton = QtGui.QPushButton('AutoPos')
+            autoPosButton.setMinimumWidth(70)
+            autoPosButton.setMaximumWidth(70)
+            # autoPosButton.clicked.connect(lambda: activateFEEDER(FEEDER_type))
+            hbox.addWidget(autoPosButton)
+            # Finish this row of options
+            vbox.addLayout(hbox)
+            # Add sound signal values
+            hbox = QtGui.QHBoxLayout()
+            hbox.addWidget(QtGui.QLabel('Signal (Hz):'))
+            FEEDER['SignalHz'] = QtGui.QLineEdit(str(FEEDER_settings['SignalHz']))
+            hbox.addWidget(FEEDER['SignalHz'])
+            hbox.addWidget(QtGui.QLabel('W:'))
+            if not 'SignalHzWidth' in FEEDER_settings.keys():
+                print('Remove this section in Pellets_and_Milk_Task.py when settings resaved!')
+                FEEDER_settings['SignalHzWidth'] = np.array(500)
+            FEEDER['SignalHzWidth'] = QtGui.QLineEdit(str(FEEDER_settings['SignalHzWidth']))
+            hbox.addWidget(FEEDER['SignalHzWidth'])
+            hbox.addWidget(QtGui.QLabel('M:'))
+            FEEDER['ModulHz'] = QtGui.QLineEdit(str(FEEDER_settings['ModulHz']))
+            hbox.addWidget(FEEDER['ModulHz'])
+            playSignalButton = QtGui.QPushButton('Play')
+            playSignalButton.setMaximumWidth(40)
+            playSignalButton.clicked.connect(lambda: playSignal(FEEDER['SignalHz'], 
+                                                                 FEEDER['SignalHzWidth'], 
+                                                                 FEEDER['ModulHz']))
+            hbox.addWidget(playSignalButton)
+            vbox.addLayout(hbox)
+        frame = QtGui.QFrame()
+        frame.setLayout(vbox)
+        frame.setFrameStyle(3)
+        if FEEDER_type == 'milk':
+            frame.setMaximumHeight(160)
+        else:
+            frame.setMaximumHeight(90)
+        if FEEDER_type == 'pellet':
+            self.pellet_feeder_settings_layout.addWidget(frame)
+        elif FEEDER_type == 'milk':
+            self.milk_feeder_settings_layout.addWidget(frame)
+        self.settings['FEEDERs'][FEEDER_type].append(FEEDER)
+
+    def exportSettingsFromGUI(self):
+        # Get task settings from text boxes
+        TaskSettings = {'LastTravelTime': np.float64(str(self.settings['LastTravelTime'].text())), 
+                        'LastTravelSmooth': np.int64(float(str(self.settings['LastTravelSmooth'].text()))), 
+                        'LastTravelDist': np.int64(float(str(self.settings['LastTravelDist'].text()))), 
+                        'PelletMilkRatio': np.float64(str(self.settings['PelletMilkRatio'].text())), 
+                        'Chewing_TTLchan': np.int64(float(str(self.settings['Chewing_TTLchan'].text()))), 
+                        'MilkGoalRepetition': np.int64(float(str(self.settings['MilkGoalRepetition'].text()))), 
+                        'Username': str(self.settings['Username'].text()), 
+                        'Password': str(self.settings['Password'].text()), 
+                        'lightSignalIntensity': np.int64(str(self.settings['lightSignalIntensity'].text())), 
+                        'lightSignalDelay': np.float64(str(self.settings['lightSignalDelay'].text())), 
+                        'NegativeAudioSignal': np.float64(str(self.settings['NegativeAudioSignal'].text())), 
+                        'InitPellets': np.int64(float(str(self.settings['InitPellets'].text()))), 
+                        'PelletQuantity': np.int64(float(str(self.settings['PelletQuantity'].text()))), 
+                        'PelletRewardMinSeparationMean': np.int64(float(str(self.settings['PelletRewardMinSeparationMean'].text()))), 
+                        'PelletRewardMinSeparationVariance': np.float64(str(self.settings['PelletRewardMinSeparationVariance'].text())), 
+                        'Chewing_Target': np.int64(float(str(self.settings['Chewing_Target'].text()))), 
+                        'MaxInactivityDuration': np.int64(float(str(self.settings['MaxInactivityDuration'].text()))), 
+                        'MilkTrialFailPenalty': np.int64(float(str(self.settings['MilkTrialFailPenalty'].text()))), 
+                        'InitMilk': np.float64(str(self.settings['InitMilk'].text())), 
+                        'MilkQuantity': np.float64(str(self.settings['MilkQuantity'].text())), 
+                        'MilkTrialMinSeparationMean': np.int64(float(str(self.settings['MilkTrialMinSeparationMean'].text()))), 
+                        'MilkTrialMinSeparationVariance': np.float64(str(self.settings['MilkTrialMinSeparationVariance'].text())), 
+                        'MilkTaskMinStartDistance': np.int64(float(str(self.settings['MilkTaskMinStartDistance'].text()))), 
+                        'MilkTaskMinGoalDistance': np.int64(float(str(self.settings['MilkTaskMinGoalDistance'].text()))), 
+                        'MilkTaskMinGoalAngularDistance': np.int64(float(str(self.settings['MilkTaskMinGoalAngularDistance'].text()))), 
+                        'MilkTaskGoalAngularDistanceTime': np.float64(float(str(self.settings['MilkTaskGoalAngularDistanceTime'].text()))), 
+                        'MilkTrialMaxDuration': np.int64(float(str(self.settings['MilkTrialMaxDuration'].text())))}
+        # Get radio button selection
+        for key in self.settings['AudioSignalMode'].keys():
+            if self.settings['AudioSignalMode'][key].isChecked():
+                TaskSettings['AudioSignalMode'] = key
+        # Get FEEDER specific information
+        FEEDERs = {}
+        for FEEDER_type in self.settings['FEEDERs'].keys():
+            if len(self.settings['FEEDERs'][FEEDER_type]) > 0:
+                FEEDERs[FEEDER_type] = {}
+                IDs = []
+                for feeder in self.settings['FEEDERs'][FEEDER_type]:
+                    IDs.append(str(int(str(feeder['ID'].text()))))
+                    FEEDERs[FEEDER_type][IDs[-1]] = {'ID': IDs[-1], 
+                                                     'Present': np.array(feeder['Present'].isChecked()), 
+                                                     'Active': np.array(feeder['Active'].isChecked()), 
+                                                     'IP': str(feeder['IP'].text()), 
+                                                     'Position': np.array(map(int, str(feeder['Position'].text()).split(',')))}
+                    if FEEDER_type == 'milk':
+                        FEEDERs[FEEDER_type][IDs[-1]]['Spacing'] = np.int64(float(str(feeder['Spacing'].text())))
+                        FEEDERs[FEEDER_type][IDs[-1]]['Clearence'] = np.int64(float(str(feeder['Clearence'].text())))
+                        FEEDERs[FEEDER_type][IDs[-1]]['Angle'] = np.int64(float(str(feeder['Angle'].text())))
+                        FEEDERs[FEEDER_type][IDs[-1]]['SignalHz'] = np.int64(float(str(feeder['SignalHz'].text())))
+                        FEEDERs[FEEDER_type][IDs[-1]]['SignalHzWidth'] = np.int64(float(str(feeder['SignalHzWidth'].text())))
+                        FEEDERs[FEEDER_type][IDs[-1]]['ModulHz'] = np.int64(float(str(feeder['ModulHz'].text())))
+                # Check if there are duplicates of FEEDER IDs
+                if any(IDs.count(ID) > 1 for ID in IDs):
+                    raise ValueError('Duplicates of IDs in ' + FEEDER_type + ' feeders!')
+            else:
+                show_message('No ' + FEEDER_type + ' FEEDERs entered.')
+        TaskSettings['FEEDERs'] = FEEDERs
+
+        return TaskSettings
+
+    def importSettingsToGUI(self, TaskSettings):
+        # First remove all FEEDERs
+        self.clearLayout(self.pellet_feeder_settings_layout, keep=1)
+        self.clearLayout(self.milk_feeder_settings_layout, keep=1)
+        # Load all settings
+        for key in TaskSettings.keys():
+            if isinstance(TaskSettings[key], np.ndarray) and TaskSettings[key].dtype == 'bool':
+                self.settings[key].setChecked(TaskSettings[key])
+            elif key == 'AudioSignalMode':
+                for mode_key in self.settings['AudioSignalMode'].keys():
+                    if TaskSettings['AudioSignalMode'] == mode_key:
+                        self.settings['AudioSignalMode'][mode_key].setChecked(True)
+                    else:
+                        self.settings['AudioSignalMode'][mode_key].setChecked(False)
+            elif key == 'FEEDERs':
+                for FEEDER_type in TaskSettings['FEEDERs'].keys():
+                    for ID in sorted(TaskSettings['FEEDERs'][FEEDER_type].keys(), key=int):
+                        FEEDER_settings = TaskSettings['FEEDERs'][FEEDER_type][ID]
+                        self.addFeedersToList(self, FEEDER_type, FEEDER_settings)
+            elif key in self.settings.keys():
+                self.settings[key].setText(str(TaskSettings[key]))
+
 
 def smooth_edge_padding(data, smoothing):
     originalSize = data.size

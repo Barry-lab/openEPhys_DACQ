@@ -1,6 +1,6 @@
 
 from PyQt4 import QtGui
-import HelperFunctions as hfunct
+from HelperFunctions import openSingleFileDialog, clearLayout
 import os
 import NWBio
 from copy import deepcopy
@@ -41,10 +41,10 @@ class TaskSettingsGUI(object):
                 self.taskSelectionList.addItem(filename[:-3])
         # Create task general menu items
         self.task_general_settings = QtGui.QWidget()
-        self.task_general_settings_layout = QtGui.QGridLayout(self.task_general_settings)
+        self.top_grid_layout = QtGui.QGridLayout(self.task_general_settings)
         # Create task specific menu items
         self.task_specific_settings = QtGui.QWidget()
-        self.task_specific_settings_layout = QtGui.QHBoxLayout(self.task_specific_settings)
+        self.bottom_hbox_layout = QtGui.QHBoxLayout(self.task_specific_settings)
         # Put all boxes into main window
         top_hbox = QtGui.QHBoxLayout()
         top_hbox.addItem(top_menu_vbox)
@@ -56,17 +56,6 @@ class TaskSettingsGUI(object):
         # Show MainWindow
         self.mainWindow.show()
 
-    def clearLayout(self, layout, keep=0):
-        # This function clears the layout so that it could be regenerated
-        if layout is not None:
-            while layout.count() > keep:
-                item = layout.takeAt(keep)
-                widget = item.widget()
-                if widget is not None:
-                    widget.deleteLater()
-                else:
-                    self.clearLayout(item.layout())
-
     def taskSelection(self, item):
         currentTask = str(item.text())
         self.loadTaskGUI(currentTask)
@@ -74,31 +63,31 @@ class TaskSettingsGUI(object):
     def loadTaskGUI(self, currentTask):
         # Load the GUI for currently selected task
         TaskModule = import_module('Tasks.' + currentTask)
-        self.clearLayout(self.task_general_settings_layout)
-        self.clearLayout(self.task_specific_settings_layout)
-        self = TaskModule.SettingsGUI(self)
+        clearLayout(self.top_grid_layout)
+        clearLayout(self.bottom_hbox_layout)
+        self.TaskGUI = TaskModule.SettingsGUI(self.top_grid_layout, self.bottom_hbox_layout)
 
     def loadSettings(self, TaskSettings=None):
         if not TaskSettings:
-            filename = hfunct.openSingleFileDialog('load', suffix='nwb', caption='Select file to load')
+            filename = openSingleFileDialog('load', suffix='nwb', caption='Select file to load')
             TaskSettings = NWBio.load_settings(filename, path='/TaskSettings/')
         self.loadTaskGUI(TaskSettings['name'])
         TaskSettings.pop('name')
-        self.importSettingsToGUI(self, TaskSettings)
+        self.TaskGUI.importSettingsToGUI(self, TaskSettings)
 
     def saveSettings(self):
         # Grab all info from self.settings and put to TaskSettings
         # Save TaskSettings to disk using dialog box
-        TaskSettings = self.exportSettingsFromGUI(self)
+        TaskSettings = self.TaskGUI.exportSettingsFromGUI(self)
         TaskSettings['name'] = str(self.taskSelectionList.currentItem().text())
-        filename = hfunct.openSingleFileDialog('save', suffix='nwb', caption='Save file name and location')
+        filename = openSingleFileDialog('save', suffix='nwb', caption='Save file name and location')
         NWBio.save_settings(filename, TaskSettings, path='/TaskSettings/')
         print('Settings saved.')
 
     def applySettings(self):
         # Grab all info from self.settings and put to TaskSettings
         # By overwriting self.TaskSettings, it should also overwrite it in RecGUI
-        TaskSettings = self.exportSettingsFromGUI(self)
+        TaskSettings = self.TaskGUI.exportSettingsFromGUI(self)
         TaskSettings['name'] = str(self.taskSelectionList.currentItem().text())
         self.parent.Settings['TaskSettings'] = deepcopy(TaskSettings)
         self.mainWindow.close()

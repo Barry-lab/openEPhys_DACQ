@@ -308,3 +308,15 @@ class QThread_with_completion_callback(QThread):
     def run(self):
         self.function_output = self.function(*self.function_args)
         self.finishedSignal.emit()
+
+
+def clearLayout(layout, keep=0):
+    # This function clears the layout so that it could be regenerated
+    if layout is not None:
+        while layout.count() > keep:
+            item = layout.takeAt(keep)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+            else:
+                clearLayout(item.layout())
