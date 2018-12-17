@@ -7,8 +7,9 @@ from copy import deepcopy
 from importlib import import_module
 
 class TaskSettingsGUI(object):
-    def __init__(self, parent=None):
+    def __init__(self, parent, arena_size):
         self.parent = parent
+        self.arena_size = arena_size
         # Initialize GUI window
         self.mainWindow = QtGui.QWidget()
         self.mainWindow.resize(1050, 1000)
@@ -65,7 +66,8 @@ class TaskSettingsGUI(object):
         TaskModule = import_module('Tasks.' + currentTask)
         clearLayout(self.top_grid_layout)
         clearLayout(self.bottom_hbox_layout)
-        self.TaskGUI = TaskModule.SettingsGUI(self.top_grid_layout, self.bottom_hbox_layout)
+        self.TaskGUI = TaskModule.SettingsGUI(self.top_grid_layout, self.bottom_hbox_layout, 
+                                              self.arena_size)
 
     def loadSettings(self, TaskSettings=None):
         if not TaskSettings:

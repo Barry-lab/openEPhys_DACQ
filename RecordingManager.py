@@ -418,7 +418,8 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
 
     def task_settings(self):
         from TaskSettingsGUI import TaskSettingsGUI
-        self.TaskSet = TaskSettingsGUI(parent=self)
+        RecGUI_Settings = self.get_RecordingGUI_settings()
+        self.TaskSet = TaskSettingsGUI(parent=self, arena_size=RecGUI_Settings['arena_size'])
         # If TaskSettings available, load them
         if 'TaskSettings' in self.Settings.keys():
             self.TaskSet.loadSettings(deepcopy(self.Settings['TaskSettings']))

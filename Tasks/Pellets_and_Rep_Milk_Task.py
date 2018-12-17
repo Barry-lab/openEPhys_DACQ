@@ -43,11 +43,49 @@ def playSignal(frequency, frequency_band_width, modulation_frequency):
     # Play 2 seconds of the sound
     sound.play(-1, maxtime=2000)
 
+def distance_from_segment(point, seg_p1, seg_p2):
+    '''
+    Computes distance of numpy array point from a segment defined by two numpy array points
+    seg_p1 and seg_p2.
+    '''
+    return np.cross(seg_p2 - seg_p1, point - seg_p1) / np.linalg.norm(seg_p2 - seg_p1)
+
+def distance_from_boundaries(point, arena_size):
+    # North wall
+    seg_1_p1 = np.array([0, 0]).astype(np.float64)
+    seg_1_p2 = np.array([arena_size[0], 0]).astype(np.float64)
+    # East wall
+    seg_2_p1 = np.array([arena_size[0], 0]).astype(np.float64)
+    seg_2_p2 = np.array([arena_size[0], arena_size[1]]).astype(np.float64)
+    # South wall
+    seg_3_p1 = np.array([arena_size[0], arena_size[1]]).astype(np.float64)
+    seg_3_p2 = np.array([0, arena_size[1]]).astype(np.float64)
+    # West wall
+    seg_4_p1 = np.array([0, arena_size[1]]).astype(np.float64)
+    seg_4_p2 = np.array([0, 0]).astype(np.float64)
+    # List of walls
+    segments = [[seg_1_p1, seg_1_p2], [seg_2_p1, seg_2_p2], 
+                [seg_3_p1, seg_3_p2], [seg_4_p1, seg_4_p2]]
+    # Find minimum distance from all walls
+    distances = []
+    for seg_p1, seg_p2 in segments:
+        distances.append(distance_from_segment(point, seg_p1, seg_p2))
+    distance = min(distances)
+
+    return distance
+
 
 class SettingsGUI(object):
 
-    def __init__(self, top_grid_layout, bottom_hbox_layout):
+    def __init__(self, top_grid_layout, bottom_hbox_layout, arena_size):
+        '''
+        top_grid_layout    - QtGui Grid Layout
+        bottom_hbox_layout - QtGui HBox Layout
+        arena_size         - list or numpy array of x and y size of the arena
+        '''
+
         # Create empty settings variables
+        self.arena_size = arena_size
         self.settings = {}
         self.settings['FEEDERs'] = {'pellet': [], 'milk': []}
         # Create settings menu
@@ -329,7 +367,7 @@ class SettingsGUI(object):
             autoPosButton = QtGui.QPushButton('AutoPos')
             autoPosButton.setMinimumWidth(70)
             autoPosButton.setMaximumWidth(70)
-            # autoPosButton.clicked.connect(lambda: activateFEEDER(FEEDER_type))
+            autoPosButton.clicked.connect(lambda: self.autoFeederPosition(FEEDER))
             hbox.addWidget(autoPosButton)
             # Finish this row of options
             vbox.addLayout(hbox)
@@ -450,6 +488,47 @@ class SettingsGUI(object):
                         self.addFeedersToList(self, FEEDER_type, FEEDER_settings)
             elif key in self.settings.keys():
                 self.settings[key].setText(str(TaskSettings[key]))
+
+    def autoFeederPosition(self, target_feeder, max_attempts=1000):
+        target_feeder_spacing = np.int64(float(target_feeder['Spacing'].text()))
+        target_feeder_clearence = np.int64(float(target_feeder['Clearence'].text()))
+        positions = []
+        spacings = []
+        for FEEDER in self.settings['FEEDERs']['milk']:
+            if not (target_feeder is FEEDER):
+                other_pos = np.array(map(float, str(FEEDER['Position'].text()).split(','))).astype(np.float64)
+                positions.append(other_pos)
+                spacings.append(float(str(FEEDER['Spacing'].text())))
+        # Keep looking for new position until one matches criteria
+        n_attempt = 0
+        position_found = False
+        while not position_found and n_attempt < max_attempts:
+            n_attempt += 1
+            # Pick new position randomly from uniform distribution across the environment
+            position = np.array([random.random() * self.arena_size[0], 
+                                 random.random() * self.arena_size[1]], dtype=np.int64)
+            position_found = True
+            # Check if it is too close to the boundaries
+            if position_found:
+                if distance_from_boundaries(position, self.arena_size) < target_feeder_clearence:
+                    position_found = False
+            # Check if position is too close to any other feeder
+            if position_found:
+                for other_pos, other_spacing in zip(positions, spacings):
+                    distance = euclidean(position, other_pos)
+                    if distance < target_feeder_spacing or distance < other_spacing:
+                        position_found = False
+        if position_found:
+            # Set position to correct format
+            position = ','.join(map(str, map(int, list(position))))
+            # Pick random orientation
+            angle = str(int(round(random.random() * 360.0)))
+            # Set position value in the target feeder box
+            target_feeder['Position'].setText(position)
+            # Set angle value in the target feeder box
+            target_feeder['Angle'].setText(angle)
+        else:
+            show_message('Could not find a position matching the criteria.')
 
 
 def smooth_edge_padding(data, smoothing):
