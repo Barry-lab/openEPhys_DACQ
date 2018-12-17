@@ -29,9 +29,12 @@ def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
                            'Active': True, 
                            'IP': '192.168.0.40', 
                            'Position': np.array([100,50]), 
-                           'SignalHz': np.array(4000), 
+                           'Angle': np.array(0), 
+                           'Spacing': np.array(60), 
+                           'Clearence': np.array(20), 
+                           'SignalHz': np.array(10000), 
                            'SignalHzWidth': np.array(500), 
-                           'ModulHz': np.array(0)}
+                           'ModulHz': np.array(4)}
     # Create interface for interacting with this FEEDER
     FEEDER = {'Type': FEEDER_type}
     vbox = QtGui.QVBoxLayout()
@@ -44,19 +47,6 @@ def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
     FEEDER['IP'] = QtGui.QLineEdit(FEEDER_settings['IP'])
     FEEDER['IP'].setMinimumWidth(105)
     hbox.addWidget(FEEDER['IP'])
-    hbox.addWidget(QtGui.QLabel('Position:'))
-    FEEDER['Position'] = QtGui.QLineEdit(','.join(map(str,FEEDER_settings['Position'])))
-    FEEDER['Position'].setMinimumWidth(70)
-    FEEDER['Position'].setMaximumWidth(70)
-    hbox.addWidget(FEEDER['Position'])
-    vbox.addLayout(hbox)
-    hbox = QtGui.QHBoxLayout()
-    FEEDER['Present'] = QtGui.QCheckBox('Present')
-    FEEDER['Present'].setChecked(FEEDER_settings['Present'])
-    hbox.addWidget(FEEDER['Present'])
-    FEEDER['Active'] = QtGui.QCheckBox('Active')
-    FEEDER['Active'].setChecked(FEEDER_settings['Active'])
-    hbox.addWidget(FEEDER['Active'])
     activateButton = QtGui.QPushButton('Activate')
     activateButton.setMinimumWidth(70)
     activateButton.setMaximumWidth(70)
@@ -69,7 +59,48 @@ def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
     hbox.addWidget(activateButton)
     hbox.addWidget(FEEDER['ReleaseQuantity'])
     vbox.addLayout(hbox)
+    hbox = QtGui.QHBoxLayout()
+    FEEDER['Present'] = QtGui.QCheckBox('Present')
+    FEEDER['Present'].setChecked(FEEDER_settings['Present'])
+    hbox.addWidget(FEEDER['Present'])
+    FEEDER['Active'] = QtGui.QCheckBox('Active')
+    FEEDER['Active'].setChecked(FEEDER_settings['Active'])
+    hbox.addWidget(FEEDER['Active'])
+    hbox.addWidget(QtGui.QLabel('Position:'))
+    FEEDER['Position'] = QtGui.QLineEdit(','.join(map(str,FEEDER_settings['Position'])))
+    FEEDER['Position'].setMinimumWidth(70)
+    FEEDER['Position'].setMaximumWidth(70)
+    hbox.addWidget(FEEDER['Position'])
+    vbox.addLayout(hbox)
     if FEEDER_type == 'milk':
+        hbox = QtGui.QHBoxLayout()
+        # Add minimum spacing betwen feeders
+        hbox.addWidget(QtGui.QLabel('Spacing:'))
+        FEEDER['Spacing'] = QtGui.QLineEdit(str(FEEDER_settings['Spacing']))
+        FEEDER['Spacing'].setMinimumWidth(40)
+        FEEDER['Spacing'].setMaximumWidth(40)
+        hbox.addWidget(FEEDER['Spacing'])
+        # Add minimum clearence from boundaries
+        hbox.addWidget(QtGui.QLabel('Clearence:'))
+        FEEDER['Clearence'] = QtGui.QLineEdit(str(FEEDER_settings['Clearence']))
+        FEEDER['Clearence'].setMinimumWidth(40)
+        FEEDER['Clearence'].setMaximumWidth(40)
+        hbox.addWidget(FEEDER['Clearence'])
+        # Add angular position to specify feeder orientation
+        hbox.addWidget(QtGui.QLabel('Angle:'))
+        FEEDER['Angle'] = QtGui.QLineEdit(str(FEEDER_settings['Angle']))
+        FEEDER['Angle'].setMinimumWidth(60)
+        FEEDER['Angle'].setMaximumWidth(60)
+        hbox.addWidget(FEEDER['Angle'])
+        # Add a button to automatically select feeder orientation and angle
+        autoPosButton = QtGui.QPushButton('AutoPos')
+        autoPosButton.setMinimumWidth(70)
+        autoPosButton.setMaximumWidth(70)
+        # autoPosButton.clicked.connect(lambda: activateFEEDER(FEEDER_type))
+        hbox.addWidget(autoPosButton)
+        # Finish this row of options
+        vbox.addLayout(hbox)
+        # Add sound signal values
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Signal (Hz):'))
         FEEDER['SignalHz'] = QtGui.QLineEdit(str(FEEDER_settings['SignalHz']))
@@ -94,7 +125,7 @@ def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
     frame.setLayout(vbox)
     frame.setFrameStyle(3)
     if FEEDER_type == 'milk':
-        frame.setMaximumHeight(120)
+        frame.setMaximumHeight(160)
     else:
         frame.setMaximumHeight(90)
     if FEEDER_type == 'pellet':
