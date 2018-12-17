@@ -4,13 +4,14 @@ import HelperFunctions as hfunct
 import os
 import NWBio
 from copy import deepcopy
+from importlib import import_module
 
 class TaskSettingsGUI(object):
     def __init__(self, parent=None):
         self.parent = parent
         # Initialize GUI window
         self.mainWindow = QtGui.QWidget()
-        self.mainWindow.resize(950, 900)
+        self.mainWindow.resize(1050, 1000)
         self.mainWindow.setWindowTitle('Task Settings')
         # Create top menu items
         self.taskSelectionList = QtGui.QListWidget()
@@ -72,7 +73,7 @@ class TaskSettingsGUI(object):
 
     def loadTaskGUI(self, currentTask):
         # Load the GUI for currently selected task
-        TaskModule = hfunct.import_subdirectory_module('Tasks', currentTask)
+        TaskModule = import_module('Tasks.' + currentTask)
         self.clearLayout(self.task_general_settings_layout)
         self.clearLayout(self.task_specific_settings_layout)
         self = TaskModule.SettingsGUI(self)
