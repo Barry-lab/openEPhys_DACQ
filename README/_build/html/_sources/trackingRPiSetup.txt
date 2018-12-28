@@ -297,7 +297,7 @@ Ensure that your PC has as much free space as your SD cards total capacity, then
 
 .. code-block:: none
 
-	sudo dd if=/dev/mmcblk0 of=~/RPi-SDcard-Copy.img
+	sudo dd if=/dev/mmcblk0 of=~/RPi-SDcard-Copy.img status=progress
 
 This should put the virtual copy to your home folder and name it ``RPi-SDcard-Copy.img``. If you wish to save it elsewhere, you can specify the full path including the file name, instead of the ``~/RPi-SDcard-Copy.img`` in the above command.
 

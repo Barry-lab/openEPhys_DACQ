@@ -257,8 +257,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Running this script initates Controller class.')
     parser.add_argument('--pinchValve', action='store_true', 
                         help='Initializes pinch valve.')
-    parser.add_argument('--lightSignal', type=int, nargs = 1, 
+    parser.add_argument('--lightSignalIntensity', type=int, nargs = 1, 
                         help='Initializes lightSignal controller with specified intensity (0 - 100).')
+    parser.add_argument('--lightSignalPins', type=int, nargs='*', 
+                        help='Specifies which pins to use for light signal.')
     parser.add_argument('--trialAudioSignal', type=int, nargs = 3, 
                         help='Initializes audioSignalController with specified parameters\n' + \
                         'signal_frequency frequency_band_width modulation_frequency.')
@@ -277,14 +279,18 @@ if __name__ == '__main__':
         pvc.close()
     else:
         # Load input arguments
-        if args.lightSignal:
+        if args.lightSignalIntensity:
             pinchValve = True
         else:
             pinchValve = False
-        if args.lightSignal:
-            lightSignalIntensity = int(args.lightSignal[0])
+        if args.lightSignalIntensity:
+            lightSignalIntensity = int(args.lightSignalIntensity[0])
         else:
             lightSignalIntensity = None
+        if args.lightSignalPins:
+            lightSignalPins = args.lightSignalPins
+        else:
+            lightSignalPins = [1]
         if args.trialAudioSignal:
             trialAudioSignalParams = (args.trialAudioSignal[0], args.trialAudioSignal[1], args.trialAudioSignal[2])
         else:
@@ -301,7 +307,7 @@ if __name__ == '__main__':
             init_feedback = False
         # Initialize Controller
         active_Controller = Controller(pinchValve=pinchValve, trialAudioSignalParams=trialAudioSignalParams, 
-                                       lightSignalIntensity=lightSignalIntensity, negativeAudioSignal=negativeAudioSignal, 
-                                       init_feedback=init_feedback)
+                                       lightSignalIntensity=lightSignalIntensity, lightSignalPins=lightSignalPins, 
+                                       negativeAudioSignal=negativeAudioSignal, init_feedback=init_feedback)
         # Start an endless loop that can be cancelled with close method or ctrl+c
         active_Controller.keepProcessRunning()

@@ -75,12 +75,12 @@ class TaskSettingsGUI(object):
             TaskSettings = NWBio.load_settings(filename, path='/TaskSettings/')
         self.loadTaskGUI(TaskSettings['name'])
         TaskSettings.pop('name')
-        self.TaskGUI.importSettingsToGUI(self, TaskSettings)
+        self.TaskGUI.importSettingsToGUI(TaskSettings)
 
     def saveSettings(self):
         # Grab all info from self.settings and put to TaskSettings
         # Save TaskSettings to disk using dialog box
-        TaskSettings = self.TaskGUI.exportSettingsFromGUI(self)
+        TaskSettings = self.TaskGUI.exportSettingsFromGUI()
         TaskSettings['name'] = str(self.taskSelectionList.currentItem().text())
         filename = openSingleFileDialog('save', suffix='nwb', caption='Save file name and location')
         NWBio.save_settings(filename, TaskSettings, path='/TaskSettings/')
@@ -89,7 +89,7 @@ class TaskSettingsGUI(object):
     def applySettings(self):
         # Grab all info from self.settings and put to TaskSettings
         # By overwriting self.TaskSettings, it should also overwrite it in RecGUI
-        TaskSettings = self.TaskGUI.exportSettingsFromGUI(self)
+        TaskSettings = self.TaskGUI.exportSettingsFromGUI()
         TaskSettings['name'] = str(self.taskSelectionList.currentItem().text())
         self.parent.Settings['TaskSettings'] = deepcopy(TaskSettings)
         self.mainWindow.close()

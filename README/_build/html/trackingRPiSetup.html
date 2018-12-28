@@ -373,7 +373,7 @@ sudo umount /dev/mmcblk0
 </pre></div>
 </div>
 <p>Ensure that your PC has as much free space as your SD cards total capacity, then use the following terminal command to make a virtual copy of the card, where you need to use the correct drive identifier:</p>
-<div class="highlight-none"><div class="highlight"><pre>sudo dd if=/dev/mmcblk0 of=~/RPi-SDcard-Copy.img
+<div class="highlight-none"><div class="highlight"><pre>sudo dd if=/dev/mmcblk0 of=~/RPi-SDcard-Copy.img status=progress
 </pre></div>
 </div>
 <p>This should put the virtual copy to your home folder and name it <code class="docutils literal"><span class="pre">RPi-SDcard-Copy.img</span></code>. If you wish to save it elsewhere, you can specify the full path including the file name, instead of the <code class="docutils literal"><span class="pre">~/RPi-SDcard-Copy.img</span></code> in the above command.</p>

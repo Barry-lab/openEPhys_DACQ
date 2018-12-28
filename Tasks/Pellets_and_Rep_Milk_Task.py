@@ -28,6 +28,13 @@ def setDoubleHBoxStretch(hbox):
 
     return hbox
 
+def setTripleHBoxStretch(hbox):
+    hbox.setStretch(0,3)
+    hbox.setStretch(1,1)
+    hbox.setStretch(2,1)
+
+    return hbox
+
 def playSignal(frequency, frequency_band_width, modulation_frequency):
     if type(frequency) == QtGui.QLineEdit:
         frequency = np.int64(float(str(frequency.text())))
@@ -149,25 +156,40 @@ class SettingsGUI(object):
         self.settings['AudioSignalMode']['ambient'].setChecked(True)
         hbox.addWidget(self.settings['AudioSignalMode']['ambient'])
         hbox.addWidget(self.settings['AudioSignalMode']['localised'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),2,1)
-        # Specify light signal intensity
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Light Signal intensity (0 - 100)'))
-        self.settings['lightSignalIntensity'] = QtGui.QLineEdit('100')
-        hbox.addWidget(self.settings['lightSignalIntensity'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),3,1)
-        # Specify light signal delay relative to trial start
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Light Signal delay (s)'))
-        self.settings['lightSignalDelay'] = QtGui.QLineEdit('0')
-        hbox.addWidget(self.settings['lightSignalDelay'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),4,1)
+        top_grid_layout.addLayout(setTripleHBoxStretch(hbox),2,1)
         # Option to set duration of negative audio feedback
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Negative Audio Feedback (s)'))
         self.settings['NegativeAudioSignal'] = QtGui.QLineEdit('0')
         hbox.addWidget(self.settings['NegativeAudioSignal'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),3,1)
+        # Specify audio signal mode
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Light Signal On (repetitions)'))
+        self.settings['LightSignalOnRepetitions'] = {'first': QtGui.QCheckBox('First'), 
+                                                     'others': QtGui.QCheckBox('Others')}
+        self.settings['LightSignalOnRepetitions']['first'].setChecked(True)
+        hbox.addWidget(self.settings['LightSignalOnRepetitions']['first'])
+        hbox.addWidget(self.settings['LightSignalOnRepetitions']['others'])
+        top_grid_layout.addLayout(setTripleHBoxStretch(hbox),4,1)
+        # Specify light signal intensity
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Light Signal intensity (0 - 100)'))
+        self.settings['lightSignalIntensity'] = QtGui.QLineEdit('100')
+        hbox.addWidget(self.settings['lightSignalIntensity'])
         top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),5,1)
+        # Specify light signal delay relative to trial start
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Light Signal delay (s)'))
+        self.settings['lightSignalDelay'] = QtGui.QLineEdit('0')
+        hbox.addWidget(self.settings['lightSignalDelay'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),6,1)
+        # Specify light signal pins to use, separated by comma
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Light Signal Pin(s)'))
+        self.settings['lightSignalPins'] = QtGui.QLineEdit('1')
+        hbox.addWidget(self.settings['lightSignalPins'])
+        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),7,1)
 
     def populate_bottom_hbox_layout(self, bottom_hbox_layout):
         # Create Pellet task specific menu items
@@ -415,9 +437,10 @@ class SettingsGUI(object):
                         'MilkGoalRepetition': np.int64(float(str(self.settings['MilkGoalRepetition'].text()))), 
                         'Username': str(self.settings['Username'].text()), 
                         'Password': str(self.settings['Password'].text()), 
+                        'NegativeAudioSignal': np.float64(str(self.settings['NegativeAudioSignal'].text())), 
                         'lightSignalIntensity': np.int64(str(self.settings['lightSignalIntensity'].text())), 
                         'lightSignalDelay': np.float64(str(self.settings['lightSignalDelay'].text())), 
-                        'NegativeAudioSignal': np.float64(str(self.settings['NegativeAudioSignal'].text())), 
+                        'lightSignalPins': str(self.settings['lightSignalPins'].text()), 
                         'InitPellets': np.int64(float(str(self.settings['InitPellets'].text()))), 
                         'PelletQuantity': np.int64(float(str(self.settings['PelletQuantity'].text()))), 
                         'PelletRewardMinSeparationMean': np.int64(float(str(self.settings['PelletRewardMinSeparationMean'].text()))), 
@@ -438,6 +461,10 @@ class SettingsGUI(object):
         for key in self.settings['AudioSignalMode'].keys():
             if self.settings['AudioSignalMode'][key].isChecked():
                 TaskSettings['AudioSignalMode'] = key
+        TaskSettings['LightSignalOnRepetitions'] = {}
+        for key in self.settings['LightSignalOnRepetitions'].keys():
+            state = self.settings['LightSignalOnRepetitions'][key].isChecked()
+            TaskSettings['LightSignalOnRepetitions'][key] = np.array(state)
         # Get FEEDER specific information
         FEEDERs = {}
         for FEEDER_type in self.settings['FEEDERs'].keys():
@@ -468,9 +495,6 @@ class SettingsGUI(object):
         return TaskSettings
 
     def importSettingsToGUI(self, TaskSettings):
-        # First remove all FEEDERs
-        self.clearLayout(self.pellet_feeder_settings_layout, keep=1)
-        self.clearLayout(self.milk_feeder_settings_layout, keep=1)
         # Load all settings
         for key in TaskSettings.keys():
             if isinstance(TaskSettings[key], np.ndarray) and TaskSettings[key].dtype == 'bool':
@@ -481,17 +505,22 @@ class SettingsGUI(object):
                         self.settings['AudioSignalMode'][mode_key].setChecked(True)
                     else:
                         self.settings['AudioSignalMode'][mode_key].setChecked(False)
+            elif key == 'LightSignalOnRepetitions':
+                for repeat_key in TaskSettings['LightSignalOnRepetitions'].keys():
+                    state = TaskSettings['LightSignalOnRepetitions'][repeat_key]
+                    self.settings['LightSignalOnRepetitions'][repeat_key].setChecked(state)
             elif key == 'FEEDERs':
                 for FEEDER_type in TaskSettings['FEEDERs'].keys():
                     for ID in sorted(TaskSettings['FEEDERs'][FEEDER_type].keys(), key=int):
                         FEEDER_settings = TaskSettings['FEEDERs'][FEEDER_type][ID]
-                        self.addFeedersToList(self, FEEDER_type, FEEDER_settings)
+                        self.addFeedersToList(FEEDER_type, FEEDER_settings)
             elif key in self.settings.keys():
                 self.settings[key].setText(str(TaskSettings[key]))
 
     def autoFeederPosition(self, target_feeder, max_attempts=1000):
         target_feeder_spacing = np.int64(float(target_feeder['Spacing'].text()))
         target_feeder_clearence = np.int64(float(target_feeder['Clearence'].text()))
+        # Collect positions and spacing settings of all other feeders
         positions = []
         spacings = []
         for FEEDER in self.settings['FEEDERs']['milk']:
@@ -717,17 +746,35 @@ class Core(object):
         for ID in sorted(self.FEEDERs['pellet'].keys(), key=int):
             if self.FEEDERs['pellet'][ID]['Active']:
                 self.activePfeeders.append(ID)
-        self.lastPelletRewardLock = threading.Lock()
-        self.lastPelletReward = time()
-        self.updatePelletMinSepratation()
         # Set up Milk Rewards
         self.activeMfeeders = []
         for ID in sorted(self.FEEDERs['milk'].keys(), key=int):
             if self.FEEDERs['milk'][ID]['Active']:
                 self.activeMfeeders.append(ID)
+        # Initialize counters
+        self.game_counters = {'Pellets': {'ID': deepcopy(self.activePfeeders), 
+                                          'count': [0] * len(self.activePfeeders)}, 
+                              'Milk trials': {'ID': deepcopy(self.activeMfeeders), 
+                                              'count': [0] * len(self.activeMfeeders)}, 
+                              'Successful': {'ID': deepcopy(self.activeMfeeders), 
+                                             'count': [0] * len(self.activeMfeeders)}}
+        # Initialize Pellet Game
+        self.lastPelletRewardLock = threading.Lock()
+        self.lastPelletReward = time()
+        self.updatePelletMinSepratation()
+        # Initialize Milk Game
         self.lastMilkTrial = time()
         self.updateMilkTrialMinSepratation()
         self.milkTrialFailTime = time() - self.TaskSettings['MilkTrialFailPenalty']
+        if self.TaskSettings['MilkGoalRepetition'] > 0:
+            milk_goal_choice_method = 'random_cycle'
+        else:
+            milk_goal_choice_method = 'random'
+        self.MilkGoalChoice = MilkGoalChoice(self.activeMfeeders, 
+                                             choice_method=milk_goal_choice_method, 
+                                             repetitions=self.TaskSettings['MilkGoalRepetition'])
+        self.feederID_milkTrial = self.chooseMilkTrialFeeder()
+        self.MilkGoalChangeComplete = False
         # Initialize FEEDERs
         print('Initializing FEEDERs...')
         T_initFEEDER = []
@@ -743,25 +790,10 @@ class Core(object):
         for T in T_initFEEDER:
             T.join()
         print('Initializing FEEDERs Successful')
-        # Initialize counters
-        self.game_counters = {'Pellets': {'ID': deepcopy(self.activePfeeders), 
-                                          'count': [0] * len(self.activePfeeders)}, 
-                              'Milk trials': {'ID': deepcopy(self.activeMfeeders), 
-                                              'count': [0] * len(self.activeMfeeders)}, 
-                              'Successful': {'ID': deepcopy(self.activeMfeeders), 
-                                             'count': [0] * len(self.activeMfeeders)}}
         # Set game speed
         self.responseRate = 60 # Hz
         self.gameRate = 10 # Hz
-        # Initialize game
-        if self.TaskSettings['MilkGoalRepetition'] > 0:
-            milk_goal_choice_method = 'random_cycle'
-        else:
-            milk_goal_choice_method = 'random'
-        self.MilkGoalChoice = MilkGoalChoice(self.activeMfeeders, 
-                                             choice_method=milk_goal_choice_method, 
-                                             repetitions=self.TaskSettings['MilkGoalRepetition'])
-        self.feederID_milkTrial = self.chooseMilkTrialFeeder()
+        # Initialize game control
         self.lastRewardLock = threading.Lock()
         self.lastReward = time()
         self.rewardInProgressLock = threading.Lock()
@@ -772,11 +804,6 @@ class Core(object):
         self.clock = pygame.time.Clock()
         pygame.mixer.pre_init(48000, -16, 2)  # This is necessary for sound to work
         pygame.init()
-        # Check if lightSignal will be used in the task
-        if self.TaskSettings['lightSignalIntensity'] > 0:
-            self.lightSignalOn = True
-        else:
-            self.lightSignalOn = False
         # If ambient sound signals are required, create the sound
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
             self.milkTrialSignal = {}
@@ -793,6 +820,7 @@ class Core(object):
             AudioSignalMode = self.TaskSettings['AudioSignalMode']
             negativeAudioSignal = self.TaskSettings['NegativeAudioSignal']
             lightSignalIntensity = self.TaskSettings['lightSignalIntensity']
+            lightSignalPins = map(int, self.TaskSettings['lightSignalPins'].split(','))
         try:
             if FEEDER_type == 'pellet' or AudioSignalMode == 'ambient':
                 trialAudioSignal = None
@@ -803,7 +831,8 @@ class Core(object):
             actuator = RewardControl(FEEDER_type, IP, username, password, 
                                      trialAudioSignal=trialAudioSignal, 
                                      negativeAudioSignal=negativeAudioSignal, 
-                                     lightSignalIntensity=lightSignalIntensity)
+                                     lightSignalIntensity=lightSignalIntensity, 
+                                     lightSignalPins=lightSignalPins)
             with self.TaskSettings_Lock:
                 self.FEEDERs[FEEDER_type][ID]['actuator'] = actuator
                 self.FEEDERs[FEEDER_type][ID]['init_successful'] = True
@@ -1357,8 +1386,11 @@ class Core(object):
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
             self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].stopTrialAudioSignal()
 
-    def start_milkTrialLightSignal(self):
+    def start_milkTrialLightSignal(self, max_duration=None):
         self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].startLightSignal()
+        if not (max_duration is None):
+            sleep(max_duration)
+            self.stop_milkTrialLightSignal()
 
     def stop_milkTrialLightSignal(self):
         self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].stopLightSignal()
@@ -1368,21 +1400,32 @@ class Core(object):
 
     def start_milkTrialSignals(self):
         self.start_milkTrialAudioSignal()
-        if self.lightSignalOn:
-            sleep(min([self.TaskSettings['lightSignalDelay'], self.TaskSettings['MilkTrialMaxDuration']]))
-            if self.game_state == 'milk_trial':
+        # Show light signal ONLY 
+        # if its this goal has been achieved and other repetitions are set to have light signal 
+        # OR 
+        # if this goal has not been achieved and first repetition is set to have light signal.
+        if self.MilkGoalChangeComplete and self.TaskSettings['LightSignalOnRepetitions']['others']:
+            start_light_signal = True
+        elif self.TaskSettings['LightSignalOnRepetitions']['first']:
+            start_light_signal = True
+        if start_light_signal:
+            sleep(min([self.TaskSettings['lightSignalDelay'], self.TaskSettings['MilkTrialMaxDuration'] + 1]))
+            if self.game_state == 'milk_trial' or self.game_state == 'milk_trial_goal_change':
                 # This command is only given if milk trial has not yet ended.
                 self.start_milkTrialLightSignal()
 
     def stop_milkTrialSignals(self):
         self.stop_milkTrialAudioSignal()
-        if self.lightSignalOn:
+        if self.TaskSettings['LightSignalOnRepetitions']['first'] or self.TaskSettings['LightSignalOnRepetitions']['others']:
             self.stop_milkTrialLightSignal()
 
     def start_milkTrial(self, action='undefined'):
         # These settings put the game_logic into milkTrial mode
         self.lastMilkTrial = time()
-        self.game_state = 'milk_trial'
+        if self.MilkGoalChangeComplete:
+            self.game_state = 'milk_trial'
+        else:
+            self.game_state = 'milk_trial_goal_change'
         # Make process visible on GUI
         feeder_button = self.getButton('buttonMilkTrial', self.feederID_milkTrial)
         feeder_button['button_pressed'] = True
@@ -1390,6 +1433,8 @@ class Core(object):
         threading.Thread(target=self.start_milkTrialSignals).start()
         # Send timestamp to Open Ephys GUI
         OEmessage = 'milkTrialStart ' + action + ' ' + self.feederID_milkTrial
+        if not self.MilkGoalChangeComplete:
+            OEmessage += ' GoalChange'
         self.TaskIO['MessageToOE'](OEmessage)
         # Update counter
         idx = self.game_counters['Milk trials']['ID'].index(self.feederID_milkTrial)
@@ -1406,6 +1451,8 @@ class Core(object):
             # Update counter
             idx = self.game_counters['Successful']['ID'].index(self.feederID_milkTrial)
             self.game_counters['Successful']['count'][idx] += 1
+            if not self.MilkGoalChangeComplete:
+                self.MilkGoalChangeComplete = True
         else:
             self.milkTrialFailTime = time()
             self.game_state = 'interval'
@@ -1419,8 +1466,11 @@ class Core(object):
         # Reset GUI signal of trial process
         feeder_button = self.getButton('buttonMilkTrial', self.feederID_milkTrial)
         feeder_button['button_pressed'] = False
-        # Update next milk_trial feeder
-        self.feederID_milkTrial = self.chooseMilkTrialFeeder()
+        # Update next milk_trial feeder and activate GoalChange pathway if different feeder
+        next_feederID = self.chooseMilkTrialFeeder()
+        if next_feederID != self.feederID_milkTrial:
+            self.MilkGoalChangeComplete = False
+        self.feederID_milkTrial = next_feederID
 
     def find_closest_feeder_ID(self):
         # Get animal position history
@@ -1565,7 +1615,7 @@ class Core(object):
         game_progress_names.append('distance_from_goal_feeder')
         goal_distance = distances[self.activeMfeeders.index(self.feederID_milkTrial)]
         game_progress.append({'name': 'Goal Distance', 
-                              'game_states': ['milk_trial'], 
+                              'game_states': ['milk_trial', 'milk_trial_goal_change'], 
                               'target': self.TaskSettings['MilkTaskMinGoalDistance'], 
                               'status': int(round(goal_distance)), 
                               'complete': goal_distance <= self.TaskSettings['MilkTaskMinGoalDistance'], 
@@ -1583,7 +1633,7 @@ class Core(object):
         game_progress_names.append('milk_trial_duration')
         trial_run_time = time() - self.lastMilkTrial
         game_progress.append({'name': 'Trial Duration', 
-                              'game_states': ['milk_trial'], 
+                              'game_states': ['milk_trial', 'milk_trial_goal_change'], 
                               'target': self.TaskSettings['MilkTrialMaxDuration'], 
                               'status': int(round(trial_run_time)), 
                               'complete': trial_run_time > self.TaskSettings['MilkTrialMaxDuration'], 
@@ -1657,6 +1707,18 @@ class Core(object):
                 # If animal is far enough from milk feeders and is mobile enough, start milk trial
                 self.game_state = 'transition'
                 threading.Thread(target=self.start_milkTrial, args=('goal_milkTrialStart',)).start() # changes self.game_state = 'milk_trial'
+        # IF IN MILK_TRIAL_GOAL_CHANGE STATE
+        elif self.game_state == 'milk_trial_goal_change':
+            conditions = {'distance_from_goal_feeder': game_progress[game_progress_names.index('distance_from_goal_feeder')]['complete'], 
+                          'milk_trial_duration': game_progress[game_progress_names.index('milk_trial_duration')]['complete']}
+            if conditions['distance_from_goal_feeder']:
+                # If subject reached goal location, stop milk trial with positive outcome
+                self.game_state = 'transition'
+                threading.Thread(target=self.stop_milkTrial, args=(True,)).start() # changes self.game_state = 'reward_in_progress'
+            elif conditions['milk_trial_duration']:
+                # If time limit for task duration has passed, stop milk trial with negative outcome
+                self.game_state = 'transition'
+                threading.Thread(target=self.stop_milkTrial, args=(False,)).start() # changes self.game_state = 'interval'
         # IF IN MILK_TRIAL STATE
         elif self.game_state == 'milk_trial':
             conditions = {'distance_from_goal_feeder': game_progress[game_progress_names.index('distance_from_goal_feeder')]['complete'], 

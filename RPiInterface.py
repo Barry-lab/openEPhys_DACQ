@@ -522,12 +522,14 @@ class onlineTrackingData(object):
 class RewardControl(object):
     # This class allows control of FEEDERs
     # FEEDER_type can be either 'milk' or 'pellet'
-    def __init__(self, FEEDER_type, RPiIP, RPiUsername, RPiPassword, trialAudioSignal=None, negativeAudioSignal=0, lightSignalIntensity=0):
+    def __init__(self, FEEDER_type, RPiIP, RPiUsername, RPiPassword, trialAudioSignal=None, 
+                 negativeAudioSignal=0, lightSignalIntensity=0, lightSignalPins=[]):
         self.FEEDER_type = FEEDER_type
         self.RPiIP = RPiIP
         self.trialAudioSignal = trialAudioSignal
         self.lightSignalIntensity = lightSignalIntensity
         self.negativeAudioSignal = negativeAudioSignal
+        self.lightSignalPins = lightSignalPins
         # Set up SSH connection
         self.ssh_connection = ssh(RPiIP, RPiUsername, RPiPassword)
         self.ssh_connection.sendCommand('sudo pkill python') # Ensure any past processes have closed
@@ -565,7 +567,9 @@ class RewardControl(object):
         if self.negativeAudioSignal > 0:
             command += ' ' + '--negativeAudioSignal ' + str(self.negativeAudioSignal)
         if self.lightSignalIntensity > 0:
-            command += ' ' + '--lightSignal ' + str(self.lightSignalIntensity)
+            command += ' ' + '--lightSignalIntensity ' + str(self.lightSignalIntensity)
+        if len(self.lightSignalPins) > 0:
+            command += ' ' + '--lightSignalPins ' + ' '.join(map(str, self.lightSignalPins))
 
         return command
 
