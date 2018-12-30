@@ -338,9 +338,10 @@ def uncombine_spike_datas_tet(spike_datas_tet_comb, spike_datas_tet):
 
     return spike_datas_tet
 
-def applyKlustaKwik_to_combined_recordings(spike_datas_tet):
+def applyKlustaKwik_to_combined_recordings(spike_datas_tet, max_clusters=31):
     spike_datas_tet_comb = combine_spike_datas_tet(spike_datas_tet)
-    clusterIDs = applyKlustaKwik_on_spike_data_tet(spike_datas_tet_comb)
+    clusterIDs = applyKlustaKwik_on_spike_data_tet(spike_datas_tet_comb, 
+                                                   max_possible_clusters=max_clusters)
     spike_datas_tet_comb['clusterIDs'] = clusterIDs
     spike_datas_tet = uncombine_spike_datas_tet(spike_datas_tet_comb, spike_datas_tet)
 
@@ -372,7 +373,9 @@ def save_spike_data_to_disk(OpenEphysDataPath, processing_method, tetrode_nr, wa
         NWBio.save_tetrode_clusterIDs(OpenEphysDataPath, tetrode_nr, clusterIDs, 
                                       spike_name=spike_name, overwrite=True)
 
-def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels, noise_cut_off=1000, threshold=50):
+def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels, 
+                                              noise_cut_off=1000, threshold=50, 
+                                              max_clusters=31):
     tetrode_nrs = hfunct.get_tetrode_nrs(channels)
     # Load spikes
     spike_datas = [range(len(tetrode_nrs)) for i in range(len(OpenEphysDataPaths))]
@@ -396,7 +399,8 @@ def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels, nois
         elif len(spike_datas) > 1:
             # If multiple datasets included, apply KlustaKwik on combined spike_datas_tet
             spike_datas_tet = [spike_data[n_tet] for spike_data in spike_datas]
-            spike_datas_tet = applyKlustaKwik_to_combined_recordings(spike_datas_tet)
+            spike_datas_tet = applyKlustaKwik_to_combined_recordings(spike_datas_tet, 
+                                                                     max_clusters=max_clusters)
             # Put this tetrode from all datasets into spike_datas
             for n_dataset, spike_data_tet in enumerate(spike_datas_tet):
                 spike_datas[n_dataset][n_tet] = spike_data_tet
@@ -411,7 +415,9 @@ def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels, nois
 
     return spike_datas
 
-def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels, noise_cut_off=1000, threshold=50):
+def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels, 
+                                                  noise_cut_off=1000, threshold=50, 
+                                                  max_clusters=31):
     tetrode_nrs = hfunct.get_tetrode_nrs(channels)
     tooclose = 30
     spike_datas = [range(len(tetrode_nrs)) for i in range(len(OpenEphysDataPaths))]
@@ -448,7 +454,8 @@ def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels, 
             clusterIDs = applyKlustaKwik_on_spike_data_tet(spike_datas_tet[0])
             spike_datas_tet[0]['clusterIDs'] = np.int16(clusterIDs).squeeze()
         elif len(spike_datas_tet) > 1:
-            spike_datas_tet = applyKlustaKwik_to_combined_recordings(spike_datas_tet)
+            spike_datas_tet = applyKlustaKwik_to_combined_recordings(spike_datas_tet, 
+                                                                     max_clusters=max_clusters)
         # Put this tetrode from all datasets into spike_datas
         for n_dataset, spike_data_tet in enumerate(spike_datas_tet):
                 spike_datas[n_dataset][n_tet] = spike_data_tet
@@ -465,7 +472,8 @@ def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels, 
 
     return spike_datas
 
-def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1000, threshold=5):
+def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1000, threshold=5, 
+                                   num_clusters=31):
     KiloSortBinaryFileName = 'experiment_1.dat'
     tetrode_nrs = hfunct.get_tetrode_nrs(channels)
     spike_datas = [range(len(tetrode_nrs)) for i in range(len(OpenEphysDataPaths))]
@@ -497,7 +505,8 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
         datas_tet.tofile(os.path.join(KiloSortProcessingFolder, KiloSortBinaryFileName))
         del datas_tet
         # Run KiloSort
-        eng.master_file(float(datas_tet_shape[0][0]), KiloSortProcessingFolder, nargout=0)
+        eng.master_file(float(datas_tet_shape[0][0]), KiloSortProcessingFolder, 
+                        float(num_clusters), nargout=0)
         eng.clear(nargout=0)
         # Load KiloSort output
         datas_comb_clusterIDs = np.load(os.path.join(KiloSortProcessingFolder, 'spike_clusters.npy'))[:,0]
@@ -543,7 +552,9 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
 
     return spike_datas
 
-def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, noise_cut_off=1000, threshold=50, make_AxonaData=False, axonaDataArgs=(None, False)):
+def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, 
+         noise_cut_off=1000, threshold=50, make_AxonaData=False, 
+         axonaDataArgs=(None, False), max_clusters=31):
     # Ensure correct format for data paths
     if isinstance(OpenEphysDataPaths, basestring):
         OpenEphysDataPaths = [OpenEphysDataPaths]
@@ -561,16 +572,19 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, n
         if processing_method == 'klustakwik':
             area_spike_datas.append(process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels, 
                                                                               noise_cut_off=noise_cut_off, 
-                                                                              threshold=threshold))
+                                                                              threshold=threshold, 
+                                                                              max_clusters=max_clusters))
         elif processing_method == 'klustakwik_raw':
             area_spike_datas.append(process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels, 
                                                                                   noise_cut_off=noise_cut_off, 
-                                                                                  threshold=threshold))
+                                                                                  threshold=threshold, 
+                                                                                  max_clusters=max_clusters))
         elif processing_method == 'kilosort':
             if not matlab_available:
                 raise Exception('Matlab not available. Can not process using KiloSort.')
             area_spike_datas.append(process_raw_data_with_kilosort(OpenEphysDataPaths, channels, 
-                                                                   noise_cut_off=noise_cut_off, threshold=5))
+                                                                   noise_cut_off=noise_cut_off, threshold=5, 
+                                                                   num_clusters=max_clusters))
     # Save data in Axona Format
     if make_AxonaData:
         spike_name = NWBio.get_spike_name_for_processing_method(processing_method)
@@ -579,7 +593,7 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, n
                                         channel_map=channel_map, pixels_per_metre=axonaDataArgs[0], 
                                         show_output=axonaDataArgs[1])
 
-def process_data_tree(root_path, downsample=False):
+def process_data_tree(root_path, downsample=False, max_clusters=31):
     # Commence directory walk
     for dirName, subdirList, fileList in os.walk(root_path):
         for fname in fileList:
@@ -602,7 +616,7 @@ def process_data_tree(root_path, downsample=False):
                        (raw_data_available or downsampled_data_available):
                         main(fpath, processing_method='klustakwik', 
                             noise_cut_off=1000, threshold=50, make_AxonaData=True, 
-                            axonaDataArgs=(None, False))
+                            axonaDataArgs=(None, False), max_clusters=max_clusters)
     if downsample:
         import DeleteRAWdata
         DeleteRAWdata.main(root_path)
@@ -628,6 +642,8 @@ if __name__ == '__main__':
                         help='to skip conversion into AxonaData format after processing')
     parser.add_argument('--ppm', type=int, nargs = 1, 
                         help='(for AxonaData) enter pixels_per_metre to assume position data is in pixels')
+    parser.add_argument('--max_clusters', type=int, nargs = 1, 
+                        help='Specifies the maximum number of cluster to find. Default is 31.')
     parser.add_argument('--show_output', action='store_true', 
                         help='(for AxonaData) to open AxonaData output folder after processing')
     parser.add_argument('--datatree', action='store_true', 
@@ -682,10 +698,15 @@ if __name__ == '__main__':
             pixels_per_metre = args.ppm[0]
         else:
             pixels_per_metre = None
+        if args.max_clusters:
+            max_clusters = args.max_clusters[0]
+        else:
+            max_clusters = 31
         if args.show_output:
             show_output = True
         else:
             show_output = False
         axonaDataArgs = (pixels_per_metre, show_output)
         # Run the script
-        main(OpenEphysDataPaths, processing_method, channel_map, noise_cut_off, threshold, make_AxonaData, axonaDataArgs)
+        main(OpenEphysDataPaths, processing_method, channel_map, noise_cut_off, 
+             threshold, make_AxonaData, axonaDataArgs, max_clusters)

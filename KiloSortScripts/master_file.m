@@ -1,4 +1,10 @@
-function [ varargout ] = master_file (nchannels, pname)
+function [ varargout ] = master_file (nchannels, pname, num_clusters)
+
+if nargin == 2
+    num_clusters = 32;
+else
+    num_clusters = round(ceil(num_clusters / 32) * 32);
+end
 
 originalChannels = 4;
 % default options are in parenthesis after the comment

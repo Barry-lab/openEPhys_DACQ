@@ -104,7 +104,7 @@ class Kluster():
             f.write('\n')
             np.savetxt(f, mask, fmt='%1d')
 
-    def kluster(self):
+    def kluster(self, max_possible_clusters=31):
         '''
         Using a .fet.n file this makes a system call to KlustaKwik (KK) which
         clusters data and saves istributional ' + str(self.distribution) + 
@@ -143,7 +143,7 @@ class Kluster():
             str(self.tet_num) +
             ' -UseDistributional ' + str(self.distribution) + 
             ' -MinClusters 5'
-            ' -MaxPossibleClusters 31'
+            ' -MaxPossibleClusters ' + str(max_possible_clusters) + 
             ' -MaskStarts 30'
             ' -FullStepEvery 1'
             ' -SplitEvery 40'
@@ -273,7 +273,7 @@ def getParam(waveforms=None, param='Amp', t=200, fet=1):
                         out[:,rng[0,i]:rng[1,i]] = A
             return out
 
-def klustakwik(waveforms, d, filename_root):
+def klustakwik(waveforms, d, filename_root, max_possible_clusters=31):
     """ 
     Calls two methods below (kluster and getPC) to run klustakwik on
     a given tetrode with nFet number of features (for the PCA)
@@ -324,9 +324,9 @@ def klustakwik(waveforms, d, filename_root):
         c.make_fet()
         mask = c.get_mask()
         c.make_fmask(mask)
-        c.kluster()
+        c.kluster(max_possible_clusters=max_possible_clusters)
 
-def applyKlustaKwik_on_spike_data_tet(spike_data_tet):
+def applyKlustaKwik_on_spike_data_tet(spike_data_tet, max_possible_clusters=31):
     '''
     Returns the input dictionary with added field 'clusterIDs'
     Input dictionary required fields:
@@ -344,7 +344,8 @@ def applyKlustaKwik_on_spike_data_tet(spike_data_tet):
         # Prepare input to KlustaKwik
         features2use = ['PC1', 'PC2', 'PC3', 'Amp', 'Vt']
         d = {0: features2use}
-        klustakwik(waves, d, os.path.join(KlustaKwikProcessingFolder, 'KlustaKwikTemp'))
+        klustakwik(waves, d, os.path.join(KlustaKwikProcessingFolder, 'KlustaKwikTemp'), 
+                   max_possible_clusters=max_possible_clusters)
         # Read in cluster IDs
         cluFileName = os.path.join(KlustaKwikProcessingFolder, 'KlustaKwikTemp.clu.0')
         with open(cluFileName, 'rb') as file:
