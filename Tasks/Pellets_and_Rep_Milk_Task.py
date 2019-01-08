@@ -1375,27 +1375,37 @@ class Core(object):
         return ID
 
     def start_milkTrialAudioSignal(self):
+        OEmessage = 'AudioSignal Start'
+        self.TaskIO['MessageToOE'](OEmessage)
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
             self.milkTrialSignal[self.feederID_milkTrial].play(-1)
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
             self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].startTrialAudioSignal()
 
     def stop_milkTrialAudioSignal(self):
+        OEmessage = 'AudioSignal Stop'
+        self.TaskIO['MessageToOE'](OEmessage)
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
             self.milkTrialSignal[self.feederID_milkTrial].stop()
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
             self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].stopTrialAudioSignal()
 
     def start_milkTrialLightSignal(self, max_duration=None):
+        OEmessage = 'LightSignal Start'
+        self.TaskIO['MessageToOE'](OEmessage)
         self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].startLightSignal()
         if not (max_duration is None):
             sleep(max_duration)
             self.stop_milkTrialLightSignal()
 
     def stop_milkTrialLightSignal(self):
+        OEmessage = 'LightSignal Stop'
+        self.TaskIO['MessageToOE'](OEmessage)
         self.FEEDERs['milk'][self.feederID_milkTrial]['actuator'].stopLightSignal()
 
     def play_NegativeAudioSignal(self):
+        OEmessage = 'NegativeAudioSignal Play'
+        self.TaskIO['MessageToOE'](OEmessage)
         self.FEEDERs['milk'][self.find_closest_feeder_ID()]['actuator'].playNegativeAudioSignal()
 
     def start_milkTrialSignals(self):
@@ -1404,17 +1414,11 @@ class Core(object):
         # if its this goal has been achieved and other repetitions are set to have light signal 
         # OR 
         # if this goal has not been achieved and first repetition is set to have light signal.
-        print('self.MilkGoalChangeComplete ' + self.MilkGoalChangeComplete)
-        print('self.TaskSettings[LightSignalOnRepetitions][others] ' + self.TaskSettings['LightSignalOnRepetitions']['others'])
-        print('self.TaskSettings[LightSignalOnRepetitions][first] ' + self.TaskSettings['LightSignalOnRepetitions']['first'])
         if self.MilkGoalChangeComplete and self.TaskSettings['LightSignalOnRepetitions']['others']:
-            print('First if true')
             start_light_signal = True
-        elif self.TaskSettings['LightSignalOnRepetitions']['first']:
-            print('Second if true')
+        elif (not self.MilkGoalChangeComplete) and self.TaskSettings['LightSignalOnRepetitions']['first']:
             start_light_signal = True
         else:
-            print('No if true')
             start_light_signal = False
         if start_light_signal:
             sleep(min([self.TaskSettings['lightSignalDelay'], self.TaskSettings['MilkTrialMaxDuration'] + 1]))
