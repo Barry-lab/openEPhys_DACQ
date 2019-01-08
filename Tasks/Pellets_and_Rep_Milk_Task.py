@@ -1404,10 +1404,18 @@ class Core(object):
         # if its this goal has been achieved and other repetitions are set to have light signal 
         # OR 
         # if this goal has not been achieved and first repetition is set to have light signal.
+        print('self.MilkGoalChangeComplete ' + self.MilkGoalChangeComplete)
+        print('self.TaskSettings[LightSignalOnRepetitions][others] ' + self.TaskSettings['LightSignalOnRepetitions']['others'])
+        print('self.TaskSettings[LightSignalOnRepetitions][first] ' + self.TaskSettings['LightSignalOnRepetitions']['first'])
         if self.MilkGoalChangeComplete and self.TaskSettings['LightSignalOnRepetitions']['others']:
+            print('First if true')
             start_light_signal = True
         elif self.TaskSettings['LightSignalOnRepetitions']['first']:
+            print('Second if true')
             start_light_signal = True
+        else:
+            print('No if true')
+            start_light_signal = False
         if start_light_signal:
             sleep(min([self.TaskSettings['lightSignalDelay'], self.TaskSettings['MilkTrialMaxDuration'] + 1]))
             if self.game_state == 'milk_trial' or self.game_state == 'milk_trial_goal_change':
@@ -1467,10 +1475,11 @@ class Core(object):
         feeder_button = self.getButton('buttonMilkTrial', self.feederID_milkTrial)
         feeder_button['button_pressed'] = False
         # Update next milk_trial feeder and activate GoalChange pathway if different feeder
-        next_feederID = self.chooseMilkTrialFeeder()
-        if next_feederID != self.feederID_milkTrial:
-            self.MilkGoalChangeComplete = False
-        self.feederID_milkTrial = next_feederID
+        if self.MilkGoalChangeComplete:
+            next_feederID = self.chooseMilkTrialFeeder()
+            if next_feederID != self.feederID_milkTrial:
+                self.MilkGoalChangeComplete = False
+            self.feederID_milkTrial = next_feederID
 
     def find_closest_feeder_ID(self):
         # Get animal position history
