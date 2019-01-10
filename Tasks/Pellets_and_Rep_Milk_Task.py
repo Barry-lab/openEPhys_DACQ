@@ -660,7 +660,7 @@ def draw_rect_with_border(surface, fill_color, outline_color, position, border=1
     surface.fill(fill_color, rect.inflate(-border*2, -border*2))
 
 
-class MilkGoalChoice(object):
+class MilkGoal(object):
     '''
     Determines the sequence of milk feeder goal decisions.
     '''
@@ -674,6 +674,7 @@ class MilkGoalChoice(object):
         self.choice_method = choice_method
         self.repetitions = repetitions
         self._initialize_sequence()
+        self.next()
 
     def _initialize_sequence(self):
         '''
@@ -724,7 +725,7 @@ class MilkGoalChoice(object):
 
     def next(self, game_counters=None):
         '''
-        Returns the next feeder chosen from the activeMfeeders list elements, 
+        Selects the next feeder chosen from the activeMfeeders list elements, 
         using the choice method provided during initialization.
 
         game_counters - dict with specific structure (see choose_with_weighted_randomness() method)
@@ -734,7 +735,7 @@ class MilkGoalChoice(object):
             if game_counters is None:
                 n_feeder = np.random.choice(len(self.activeMfeeders))
             else:
-                n_feeder = MilkGoalChoice.choose_with_weighted_randomness(self.activeMfeeders, 
+                n_feeder = MilkGoal.choose_with_weighted_randomness(self.activeMfeeders, 
                                                                           game_counters)
         elif self.choice_method == 'random_cycle':
             self.repetition_counter += 1
@@ -743,8 +744,8 @@ class MilkGoalChoice(object):
                 self.sequence_position = np.mod(self.sequence_position + 1, len(self.sequence))
                 self.repetition_counter = 0
             n_feeder = self.sequence[self.sequence_position]
-
-        return self.activeMfeeders[n_feeder]
+        # Set current ID of milk goal
+        self.ID = self.activeMfeeders[n_feeder]
 
 
 class RewardDevices(object):
@@ -858,7 +859,7 @@ class ChewingCounter(object):
 
 class Variables(object):
 
-    def __init__(self, TaskSettings, RPIPos, position_on_screen, renderText, ChewingCounter=None, MilkRewardDevices=None, feederID_milkTrial=None):
+    def __init__(self, TaskSettings, RPIPos, position_on_screen, renderText, ChewingCounter=None, MilkRewardDevices=None, MilkGoal=None):
         update_rate = 10 # Variable state update frequency in Hz
         # Parse inputs
         self.TaskSettings = TaskSettings
@@ -866,7 +867,7 @@ class Variables(object):
         self.renderText = renderText
         self.ChewingCounter = ChewingCounter
         self.MilkRewardDevices = MilkRewardDevices
-        self.feederID_milkTrial = feederID_milkTrial
+        self.MilkGoal = MilkGoal
         # Create dynamic variables
         self.lastReward = time()
         self.lastPelletReward = time()
@@ -1033,7 +1034,7 @@ class Variables(object):
                               'percentage': angularDistance / float(self.TaskSettings['MilkTaskMinGoalAngularDistance'])})
         # Check if animal is close enough to goal location
         variable_state_names.append('distance_from_goal_feeder')
-        goal_distance = distances[self.MilkRewardDevices.IDs_active.index(self.feederID_milkTrial)]
+        goal_distance = distances[self.MilkRewardDevices.IDs_active.index(self.MilkGoal.ID)]
         variable_states.append({'name': 'Goal Distance', 
                               'game_states': ['milk_trial', 'milk_trial_goal_change'], 
                               'target': self.TaskSettings['MilkTaskMinGoalDistance'], 
@@ -1042,7 +1043,7 @@ class Variables(object):
                               'percentage': 1 - (goal_distance - self.TaskSettings['MilkTaskMinGoalDistance']) / float(self.TaskSettings['max_distance_in_arena'])})
         # Check if animal is too close to goal incorrect location
         variable_state_names.append('distance_from_other_feeders')
-        other_distances = min([distances[i] for i in range(len(self.MilkRewardDevices.IDs_active)) if self.MilkRewardDevices.IDs_active[i] != self.feederID_milkTrial])
+        other_distances = min([distances[i] for i in range(len(self.MilkRewardDevices.IDs_active)) if self.MilkRewardDevices.IDs_active[i] != self.MilkGoal.ID])
         variable_states.append({'name': 'Other Distance', 
                               'game_states': ['milk_trial'], 
                               'target': self.TaskSettings['MilkTaskMinGoalDistance'], 
@@ -1193,10 +1194,9 @@ class Core(object):
                 milk_goal_choice_method = 'random_cycle'
             else:
                 milk_goal_choice_method = 'random'
-            self.MilkGoalChoice = MilkGoalChoice(self.MilkRewardDevices.IDs_active, 
-                                                 choice_method=milk_goal_choice_method, 
-                                                 repetitions=self.TaskSettings['MilkGoalRepetition'])
-            self.feederID_milkTrial = self.chooseMilkTrialFeeder()
+            self.MilkGoal = MilkGoal(self.MilkRewardDevices.IDs_active, 
+                                     choice_method=milk_goal_choice_method, 
+                                     repetitions=self.TaskSettings['MilkGoalRepetition'])
             self.MilkGoalChangeComplete = False
         # Prepare chewing counter
         if 'pellet' in self.GAMES:
@@ -1266,8 +1266,8 @@ class Core(object):
             self.old_PelletHistogramParameters = None
         elif FEEDER_type == 'milk':
             self.MilkRewardDevices.inactivate_feeder(ID)
-            # If milk feeder, reinitialise MilkGoalChoice
-            self.MilkGoalChoice.re_init(activeMfeeders=self.MilkRewardDevices.IDs_active)
+            # If milk feeder, reinitialise MilkGoal
+            self.MilkGoal.re_init(activeMfeeders=self.MilkRewardDevices.IDs_active)
         # Get FEEDER button on GUI
         if FEEDER_type == 'pellet':
             feeder_button = self.getButton('buttonReleasePellet', ID)
@@ -1391,7 +1391,7 @@ class Core(object):
         if self.game_state == 'interval' or self.game_state == 'pellet' or self.game_state == 'milk':
             self.game_state = 'transition'
             # Starts the trial with specific feeder as goal
-            self.feederID_milkTrial = button['callargs'][0]
+            self.MilkGoal.ID = button['callargs'][0]
             Thread(target=self.start_milkTrial, args=('user',)).start()
         else:
             button['enabled'] = False
@@ -1677,22 +1677,11 @@ class Core(object):
 
         return ID
 
-    def chooseMilkTrialFeeder(self):
-        '''
-        Uses performance to weight probability of selecting a feeder
-        '''
-        if len(self.MilkRewardDevices.IDs_active) > 1:
-            ID = self.MilkGoalChoice.next(self.game_counters)
-        else:
-            ID = self.MilkRewardDevices.IDs_active[0]
-
-        return ID
-
     def start_milkTrialAudioSignal(self, ID):
         OEmessage = 'AudioSignal Start'
         self.TaskIO['MessageToOE'](OEmessage)
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
-            self.milkTrialSignal[self.feederID_milkTrial].play(-1)
+            self.milkTrialSignal[self.MilkGoal.ID].play(-1)
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
             self.MilkRewardDevices.actuator_method_call(ID, 'startTrialAudioSignal')
 
@@ -1700,7 +1689,7 @@ class Core(object):
         OEmessage = 'AudioSignal Stop'
         self.TaskIO['MessageToOE'](OEmessage)
         if self.TaskSettings['AudioSignalMode'] == 'ambient':
-            self.milkTrialSignal[self.feederID_milkTrial].stop()
+            self.milkTrialSignal[self.MilkGoal.ID].stop()
         elif self.TaskSettings['AudioSignalMode'] == 'localised':
             self.MilkRewardDevices.actuator_method_call(ID, 'stopTrialAudioSignal')
 
@@ -1723,7 +1712,7 @@ class Core(object):
         self.MilkRewardDevices.actuator_method_call(ID, 'playNegativeAudioSignal')
 
     def start_milkTrialSignals(self):
-        self.start_milkTrialAudioSignal(self.feederID_milkTrial)
+        self.start_milkTrialAudioSignal(self.MilkGoal.ID)
         # Show light signal ONLY 
         # if its this goal has been achieved and other repetitions are set to have light signal 
         # OR 
@@ -1738,12 +1727,12 @@ class Core(object):
             sleep(min([self.TaskSettings['lightSignalDelay'], self.TaskSettings['MilkTrialMaxDuration'] + 1]))
             if self.game_state == 'milk_trial' or self.game_state == 'milk_trial_goal_change':
                 # This command is only given if milk trial has not yet ended.
-                self.start_milkTrialLightSignal(self.feederID_milkTrial)
+                self.start_milkTrialLightSignal(self.MilkGoal.ID)
 
     def stop_milkTrialSignals(self):
-        self.stop_milkTrialAudioSignal(self.feederID_milkTrial)
+        self.stop_milkTrialAudioSignal(self.MilkGoal.ID)
         if self.TaskSettings['LightSignalOnRepetitions']['first'] or self.TaskSettings['LightSignalOnRepetitions']['others']:
-            self.stop_milkTrialLightSignal(self.feederID_milkTrial)
+            self.stop_milkTrialLightSignal(self.MilkGoal.ID)
 
     def start_milkTrial(self, action='undefined'):
         # These settings put the game_logic into milkTrial mode
@@ -1753,17 +1742,17 @@ class Core(object):
         else:
             self.game_state = 'milk_trial_goal_change'
         # Make process visible on GUI
-        feeder_button = self.getButton('buttonMilkTrial', self.feederID_milkTrial)
+        feeder_button = self.getButton('buttonMilkTrial', self.MilkGoal.ID)
         feeder_button['button_pressed'] = True
         # Initiate signals
         Thread(target=self.start_milkTrialSignals).start()
         # Send timestamp to Open Ephys GUI
-        OEmessage = 'milkTrialStart ' + action + ' ' + self.feederID_milkTrial
+        OEmessage = 'milkTrialStart ' + action + ' ' + self.MilkGoal.ID
         if not self.MilkGoalChangeComplete:
             OEmessage += ' GoalChange'
         self.TaskIO['MessageToOE'](OEmessage)
         # Update counter
-        idx = self.game_counters['Milk trials']['ID'].index(self.feederID_milkTrial)
+        idx = self.game_counters['Milk trials']['ID'].index(self.MilkGoal.ID)
         self.game_counters['Milk trials']['count'][idx] += 1
 
     def stop_milkTrial(self, successful, negative_feedback=False):
@@ -1771,11 +1760,11 @@ class Core(object):
         if successful:
             self.game_state = 'reward_in_progress'
             Thread(target=self.releaseReward, 
-                   args=('milk', self.feederID_milkTrial, 'goal_milk', 
+                   args=('milk', self.MilkGoal.ID, 'goal_milk', 
                        self.TaskSettings['MilkQuantity'])
                    ).start()
             # Update counter
-            idx = self.game_counters['Successful']['ID'].index(self.feederID_milkTrial)
+            idx = self.game_counters['Successful']['ID'].index(self.MilkGoal.ID)
             self.game_counters['Successful']['count'][idx] += 1
             if not self.MilkGoalChangeComplete:
                 self.MilkGoalChangeComplete = True
@@ -1790,14 +1779,29 @@ class Core(object):
         OEmessage = 'milkTrialEnd Success:' + str(successful)
         self.TaskIO['MessageToOE'](OEmessage)
         # Reset GUI signal of trial process
-        feeder_button = self.getButton('buttonMilkTrial', self.feederID_milkTrial)
+        feeder_button = self.getButton('buttonMilkTrial', self.MilkGoal.ID)
         feeder_button['button_pressed'] = False
         # Update next milk_trial feeder and activate GoalChange pathway if different feeder
         if self.MilkGoalChangeComplete:
-            next_feederID = self.chooseMilkTrialFeeder()
-            if next_feederID != self.feederID_milkTrial:
+            old_ID = copy(self.MilkGoal.ID)
+            self.MilkGoal.next(self.game_counters)
+            if old_ID != self.MilkGoal.ID:
                 self.MilkGoalChangeComplete = False
-            self.feederID_milkTrial = next_feederID
+
+    def find_closest_feeder_ID(self):
+        # Get animal position history
+        one_second_steps = self.TaskSettings['one_second_steps'] = int(np.round(1 / self.TaskIO['RPIPos'].combPos_update_interval))
+        with self.TaskIO['RPIPos'].combPosHistoryLock:
+            posHistory_one_second_steps = self.TaskIO['RPIPos'].combPosHistory[-one_second_steps:]
+        # Compute distances to all active milk feeders
+        mean_posHistory = compute_mean_posHistory(posHistory_one_second_steps)
+        distances = []
+        for ID in self.MilkRewardDevices.IDs_active:
+            distances.append(euclidean(mean_posHistory, self.MilkRewardDevices.positions[ID]))
+        # Find identity ID of closest feeder
+        ID = self.MilkRewardDevices.IDs_active[np.argmin(distances)]
+
+        return ID
 
     def check_if_reward_in_progress(self):
         '''
@@ -1962,7 +1966,7 @@ class Core(object):
         self.Variables = Variables(TaskSettings, self.TaskIO['RPIPos'], position_on_screen, 
                                    self.renderText, ChewingCounter=self.ChewingCounter, 
                                    MilkRewardDevices=self.MilkRewardDevices, 
-                                   feederID_milkTrial=self.feederID_milkTrial)
+                                   MilkGoal=self.MilkGoal)
         # Signal game start to Open Ephys GUI
         buttonGameOnOff = self.getButton('buttonGameOnOff')
         buttonGameOnOff['callback'](buttonGameOnOff)
