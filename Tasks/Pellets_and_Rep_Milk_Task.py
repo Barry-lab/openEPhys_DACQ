@@ -14,6 +14,15 @@ from sshScripts import ssh
 from HelperFunctions import show_message, clearLayout
 import warnings
 
+
+def init_pygame():
+    pygame.mixer.pre_init(48000, -16, 2)  # This is necessary for sound to work
+    pygame.init()
+
+def close_pygame():
+    pygame.mixer.quit()
+    pygame.quit()
+
 def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
     ssh_connection = ssh(str(RPiIPBox.text()), str(RPiUsernameBox.text()), str(RPiPasswordBox.text()))
     if FEEDER_type == 'milk':
@@ -36,7 +45,7 @@ def setTripleHBoxStretch(hbox):
 
     return hbox
 
-def playSignal(frequency, frequency_band_width, modulation_frequency):
+def playSignal(frequency, frequency_band_width, modulation_frequency, duration=2):
     if type(frequency) == QtGui.QLineEdit:
         frequency = np.int64(float(str(frequency.text())))
     if type(frequency_band_width) == QtGui.QLineEdit:
@@ -44,12 +53,13 @@ def playSignal(frequency, frequency_band_width, modulation_frequency):
     if type(modulation_frequency) == QtGui.QLineEdit:
         modulation_frequency = np.int64(float(str(modulation_frequency.text())))
     # Initialize pygame for playing sound
-    pygame.mixer.pre_init(48000, -16, 2)
-    pygame.init()
+    init_pygame()
     # Get sound
     sound = createAudioSignal(frequency, frequency_band_width, modulation_frequency)
-    # Play 2 seconds of the sound
-    sound.play(-1, maxtime=2000)
+    # Play duration seconds of the sound
+    sound.play(-1, maxtime=(duration * 1000))
+    sleep(duration)
+    close_pygame()
 
 def distance_from_segment(point, seg_p1, seg_p2):
     '''
@@ -661,6 +671,12 @@ def draw_rect_with_border(surface, fill_color, outline_color, position, border=1
 
 
 class PelletChoice(object):
+    '''
+    Selects the next feeder using positional occupancy.
+
+    Query read PelletChoice.ID for current feeder.
+    Use PelletChoice.next() method to choose next feeder.
+    '''
 
     def __init__(self, PelletRewardDevices, RPIPos, arena_size):
         self.PelletRewardDevices = PelletRewardDevices
@@ -668,7 +684,7 @@ class PelletChoice(object):
         self.arena_size = arena_size
         self.next()
 
-    def compute_position_histogram_nearest_feeders(self, IDs_active):
+    def _compute_position_histogram_nearest_feeders(self, IDs_active):
         self.old_IDs_active = IDs_active
         # Get feeder locations
         FEEDER_Locs = []
@@ -704,7 +720,7 @@ class PelletChoice(object):
                 histFeeder[ypos, xpos] = np.argmin(dists)
         self.histogramPfeederMap['feeder_map'] = histFeeder
 
-    def ensure_nearest_feeder_map_valid(self, IDs_active):
+    def _ensure_nearest_feeder_map_valid(self, IDs_active):
         with self.RPIPos.histogramLock:
             histparam = deepcopy(self.RPIPos.HistogramParameters)
         histogram_same = hasattr(self, 'old_PelletHistogramParameters') and \
@@ -712,7 +728,7 @@ class PelletChoice(object):
         feeders_same = hasattr(self, 'old_IDs_active') and \
                                self.old_IDs_active == IDs_active
         if not histogram_same or not feeders_same:
-            self.compute_position_histogram_nearest_feeders(IDs_active)
+            self._compute_position_histogram_nearest_feeders(IDs_active)
 
     @staticmethod
     def weighted_randomness(weights):
@@ -727,7 +743,7 @@ class PelletChoice(object):
         to increase probability of selecting feeder with lower mean occupancy.
         '''
         IDs_active = copy(self.PelletRewardDevices.IDs_active)
-        self.ensure_nearest_feeder_map_valid(IDs_active)
+        self._ensure_nearest_feeder_map_valid(IDs_active)
         if len(IDs_active) > 1:
             # Get occupancy information from RPIPos class
             with self.RPIPos.histogramLock:
@@ -755,16 +771,22 @@ class PelletChoice(object):
 class MilkGoal(object):
     '''
     Determines the sequence of milk feeder goal decisions.
+
+    Query read MilkGoal.ID for current feeder.
+    Use MilkGoal.next() method to choose next feeder.
     '''
-    def __init__(self, activeMfeeders, choice_method='random', repetitions=0):
+    def __init__(self, activeMfeeders, repetitions=0):
         '''
         activeMfeeders - list - elements are returned with next() method as choices
-        choice_method - str - 'random' or 'random_cycle'
-        repetitions - int - number of repetitions to do per each feeder in 'random_cycle' method
+        repetitions - int - number of repetitions to do per each feeder in 'random_cycle' method,
+                      if repetitions == 0, milk feeders are chosen randomly.
         '''
         self.activeMfeeders = activeMfeeders
-        self.choice_method = choice_method
         self.repetitions = repetitions
+        if self.repetitions > 0:
+            self.choice_method = 'random_cycle'
+        else:
+            self.choice_method = 'random'
         self._initialize_sequence()
         self.next()
 
@@ -866,7 +888,7 @@ class RewardDevices(object):
         T_initFEEDER = []
         for ID in self.FEEDERs.keys():
             if self.FEEDERs[ID]['Active']:
-                T = Thread(target=self.initFEEDER, args=(ID,))
+                T = Thread(target=self._initFEEDER, args=(ID,))
                 T.start()
                 T_initFEEDER.append(T)
         for T in T_initFEEDER:
@@ -878,7 +900,7 @@ class RewardDevices(object):
                 self.IDs_active.append(ID)
         self.IDs_active = sorted(self.IDs_active, key=int)
 
-    def initFEEDER(self, ID):
+    def _initFEEDER(self, ID):
         with self.FEEDERs_Lock:
             IP = self.FEEDERs[ID]['IP']
         try:
@@ -950,6 +972,9 @@ class ChewingCounter(object):
 
 
 class Variables(object):
+    '''
+    Monitors static and dynamic in-game variables.
+    '''
 
     def __init__(self, TaskSettings, RPIPos, position_on_screen, renderText, ChewingCounter=None, MilkRewardDevices=None, MilkGoal=None):
         update_rate = 10 # Variable state update frequency in Hz
@@ -972,11 +997,11 @@ class Variables(object):
         self.variable_state_names = []
         self.variable_states_Lock = Lock()
         # Initialize variable states and pre-render
-        self.initialize_position_data_for_update_variable_states()
-        self.update_variable_states()
-        self.pre_render(position_on_screen)
+        self._initialize_position_data_for_update_variable_states()
+        self._update_variable_states()
+        self._pre_render(position_on_screen)
         # Start variable state update loop
-        self.start_variable_states_update_loop(update_rate)
+        self._start_variable_states_update_loop(update_rate)
 
     def lastReward_update(self):
         self.lastReward = time()
@@ -1006,7 +1031,7 @@ class Variables(object):
         new_val = int(mean_val + jitter)
         self.milkTrialMinSeparation = new_val
 
-    def initialize_position_data_for_update_variable_states(self):
+    def _initialize_position_data_for_update_variable_states(self):
         posHistory = [None]
         while None in posHistory:
             with self.RPIPos.combPosHistoryLock:
@@ -1019,7 +1044,7 @@ class Variables(object):
             else:
                 sleep(0.01)
 
-    def update_variable_states(self):
+    def _update_variable_states(self):
         # Get animal position history
         with self.RPIPos.combPosHistoryLock:
             posHistory = self.RPIPos.combPosHistory[-self.TaskSettings['distance_steps']:]
@@ -1156,31 +1181,27 @@ class Variables(object):
             self.variable_states = variable_states
             self.variable_state_names = variable_state_names
 
-    def variable_states_update_loop(self, update_rate):
+    def _variable_states_update_loop(self, update_rate):
         loop_clock = pygame.time.Clock()
         while self.variable_states_update_loop_active:
-            self.update_variable_states()
+            self._update_variable_states()
             loop_duration = loop_clock.tick(update_rate)
             if loop_duration > 1000 / update_rate:
-                warnings.warn('Method Variables.update_variable_states runs slower than assigned ' + \
+                warnings.warn('Method Variables._update_variable_states runs slower than assigned ' + \
                               'update rate ' + str(update_rate) + ' Hz. Duration ' + str(loop_duration) + ' ms.', 
                               RuntimeWarning)
 
-    def start_variable_states_update_loop(self, update_rate):
+    def _start_variable_states_update_loop(self, update_rate):
         self.variable_states_update_loop_active = True
-        self.T_variable_states_update_loop = Thread(target=self.variable_states_update_loop, 
+        self.T_variable_states_update_loop = Thread(target=self._variable_states_update_loop, 
                                                     args=(update_rate,))
         self.T_variable_states_update_loop.start()
 
-    def stop_variable_states_update_loop(self):
+    def _stop_variable_states_update_loop(self):
         self.variable_states_update_loop_active = False
         self.T_variable_states_update_loop.join()
 
-    def get(self, name, key):
-        with self.variable_states_Lock:
-            return copy(self.variable_states[self.variable_state_names.index(name)][key])
-
-    def pre_render(self, position_on_screen):
+    def _pre_render(self, position_on_screen):
         '''
         Pre-computes variable state display positions and renders static text
 
@@ -1239,8 +1260,146 @@ class Variables(object):
                 position = (pb['Position']['xpos'], ypos, pb['Position']['xlen'], ylen)
                 pygame.draw.rect(screen, color, position, 0)
 
+    def get(self, name, key):
+        with self.variable_states_Lock:
+            return copy(self.variable_states[self.variable_state_names.index(name)][key])
+
     def close(self):
-        self.stop_variable_states_update_loop()
+        self._stop_variable_states_update_loop()
+
+
+class MilkTrial_AudioSignal(object):
+
+    def __init__(self, actuator_method_call, MessageToOE, AudioSignalMode, FEEDERsettings):
+        '''
+        actuator_method_call - MilkRewardDevices.actuator_method_call method
+        MessageToOE          - method is called when signal is started with a message string
+        AudioSignalMode - str - 'ambient' or 'localised'
+        FEEDERsettings  - dict - key (ID) and value (feeder specific parameters)
+        '''
+        # Parse input
+        self.actuator_method_call = actuator_method_call
+        self.MessageToOE = MessageToOE
+        self.AudioSignalMode = AudioSignalMode
+        if self.AudioSignalMode == 'ambient':
+            self._init_ambient_sounds(FEEDERsettings)
+
+    def _init_ambient_sounds(self, FEEDERsettings):
+        self.ambient_sounds = {}
+        for ID in FEEDERsettings.keys():
+            self.ambient_sounds[ID] = createAudioSignal(FEEDERsettings[ID]['SignalHz'], 
+                                                        FEEDERsettings[ID]['SignalHzWidth'], 
+                                                        FEEDERsettings[ID]['ModulHz'])
+
+    def start(self, ID):
+        OEmessage = 'AudioSignal Start'
+        self.MessageToOE(OEmessage)
+        if self.AudioSignalMode == 'ambient':
+            self.ambient_sounds[ID].play(-1)
+        else:
+            self.actuator_method_call(ID, 'startTrialAudioSignal')
+
+    def stop(self, ID):
+        OEmessage = 'AudioSignal Stop'
+        self.MessageToOE(OEmessage)
+        if self.AudioSignalMode == 'ambient':
+            self.ambient_sounds[ID].stop()
+        else:
+            self.actuator_method_call(ID, 'stopTrialAudioSignal')
+
+    def play_negative(self, ID):
+        OEmessage = 'NegativeAudioSignal Play'
+        self.MessageToOE(OEmessage)
+        self.actuator_method_call(ID, 'playNegativeAudioSignal')
+
+
+class MilkTrial_LightSignal(object):
+
+    def __init__(self, actuator_method_call, MessageToOE):
+        '''
+        actuator_method_call - MilkRewardDevices.actuator_method_call method
+        MessageToOE          - method is called when signal is started with a message string
+        '''
+        # Parse input
+        self.actuator_method_call = actuator_method_call
+        self.MessageToOE = MessageToOE
+        # Prepare internal variables
+        self._waiting_on_delay = False
+        self._cancel_delay = False
+
+    def start(self, ID):
+        OEmessage = 'LightSignal Start'
+        self.MessageToOE(OEmessage)
+        self.actuator_method_call(ID, 'startLightSignal')
+
+    def stop(self, ID):
+        if self._waiting_on_delay:
+            self._cancel_delay = True
+        else:
+            OEmessage = 'LightSignal Stop'
+            self.MessageToOE(OEmessage)
+            self.actuator_method_call(ID, 'stopLightSignal')
+
+    def _delayed_starter(self, ID, delay):
+        '''
+        delay - float - time to wait in seconds
+        '''
+        self._waiting_on_delay = True
+        sleep(delay)
+        self._waiting_on_delay = False
+        if not self._cancel_delay:
+            self.start(ID)
+        self._cancel_delay = False
+
+    def start_delayed(self, ID, delay):
+        Thread(target=self._delayed_starter, args=(ID, delay)).start()
+
+
+class MilkTrialSignals(object):
+
+    def __init__(self, TaskSettings, actuator_method_call, MessageToOE, FEEDERsettings=None):
+        '''
+        TaskSettings    - dict - General Task settings. See below for what is used.
+        actuator_method_call - MilkRewardDevices.actuator_method_call method
+        MessageToOE          - method is called when signal is started with a message string
+        FEEDERsettings  - dict - key (ID) and value (feeder specific parameters)
+        '''
+        # Parse TaskSettings
+        self.GoalChangeLightOn = TaskSettings['LightSignalOnRepetitions']['first']
+        self.OtherTrialLightOn = TaskSettings['LightSignalOnRepetitions']['others']
+        self.lightSignalDelay  = TaskSettings['lightSignalDelay']
+        AudioSignalMode        = TaskSettings['AudioSignalMode']
+        # Initialize signals
+        self.MilkTrial_AudioSignal = MilkTrial_AudioSignal(actuator_method_call, MessageToOE, 
+                                                           AudioSignalMode, FEEDERsettings)
+        if self.GoalChangeLightOn or self.OtherTrialLightOn:
+            self.MilkTrial_LightSignal = MilkTrial_LightSignal(actuator_method_call, MessageToOE)
+
+    def start(self, ID, goal_change=False):
+        self.MilkTrial_AudioSignal.start(ID)
+        # Show light signal ONLY 
+        # if its this goal has been achieved and other repetitions are set to have light signal 
+        # OR 
+        # if this goal has not been achieved and first repetition is set to have light signal.
+        if goal_change and self.GoalChangeLightOn:
+            start_light_signal = True
+        elif (not goal_change) and self.OtherTrialLightOn:
+            start_light_signal = True
+        else:
+            start_light_signal = False
+        if start_light_signal:
+            if self.lightSignalDelay > 0:
+                self.MilkTrial_LightSignal.start_delayed(ID, self.lightSignalDelay)
+            else:
+                self.MilkTrial_LightSignal.start(ID)
+
+    def stop(self, ID):
+        self.MilkTrial_AudioSignal.stop(ID)
+        if self.GoalChangeLightOn or self.OtherTrialLightOn:
+            self.MilkTrial_LightSignal.stop(ID)
+
+    def fail(self, ID):
+        self.MilkTrial_AudioSignal.play_negative(ID)
 
 
 class Core(object):
@@ -1254,6 +1413,8 @@ class Core(object):
         for key in self.TaskSettings['games_active'].keys():
             if self.TaskSettings['games_active'][key]:
                 self.GAMES.append(key)
+        # Initialize pygame engine
+        init_pygame()
         # Initialize Pellet Rewards
         if 'pellet' in self.GAMES:
             print('Initializing Pellet FEEDERs...')
@@ -1286,14 +1447,10 @@ class Core(object):
                                              self.TaskSettings['arena_size'])
         # Initialize Milk Game
         if 'milk' in self.GAMES:
-            if self.TaskSettings['AudioSignalMode'] == 'ambient':
-                self.init_ambient_audio_signals(FEEDERs['milk'])
-            if self.TaskSettings['MilkGoalRepetition'] > 0:
-                milk_goal_choice_method = 'random_cycle'
-            else:
-                milk_goal_choice_method = 'random'
+            self.MilkTrialSignals = MilkTrialSignals(self.TaskSettings, 
+                                                     self.MilkRewardDevices.actuator_method_call, 
+                                                     self.TaskIO['MessageToOE'], FEEDERs['milk'])
             self.MilkGoal = MilkGoal(self.MilkRewardDevices.IDs_active, 
-                                     choice_method=milk_goal_choice_method, 
                                      repetitions=self.TaskSettings['MilkGoalRepetition'])
             self.MilkGoalChangeComplete = False
         # Prepare chewing counter
@@ -1338,18 +1495,6 @@ class Core(object):
                                  'lightSignalPins': lightSignalPins}
 
         return feeder_kwargs
-
-    def init_ambient_audio_signals(self, FEEDERs):
-        '''
-        FEEDERs - dict - key (ID) and value (feeder specific parameters)
-        '''
-        pygame.mixer.pre_init(48000, -16, 2)  # This is necessary for sound to work
-        pygame.init()
-        self.milkTrialSignal = {}
-        for ID in FEEDERs.keys():
-            self.milkTrialSignal[ID] = createAudioSignal(FEEDERs[ID]['SignalHz'], 
-                                                         FEEDERs[ID]['SignalHzWidth'], 
-                                                         FEEDERs[ID]['ModulHz'])
 
     def renderText(self, text):
         renderedText = self.font.render(text, True, self.textColor)
@@ -1710,63 +1855,6 @@ class Core(object):
         for i, count in enumerate(self.game_counters['Successful']['count']):
             self.screen.blit(self.renderText(str(count)), (columnedges[4], topedge + i * textSpace))
 
-    def start_milkTrialAudioSignal(self, ID):
-        OEmessage = 'AudioSignal Start'
-        self.TaskIO['MessageToOE'](OEmessage)
-        if self.TaskSettings['AudioSignalMode'] == 'ambient':
-            self.milkTrialSignal[self.MilkGoal.ID].play(-1)
-        elif self.TaskSettings['AudioSignalMode'] == 'localised':
-            self.MilkRewardDevices.actuator_method_call(ID, 'startTrialAudioSignal')
-
-    def stop_milkTrialAudioSignal(self, ID):
-        OEmessage = 'AudioSignal Stop'
-        self.TaskIO['MessageToOE'](OEmessage)
-        if self.TaskSettings['AudioSignalMode'] == 'ambient':
-            self.milkTrialSignal[self.MilkGoal.ID].stop()
-        elif self.TaskSettings['AudioSignalMode'] == 'localised':
-            self.MilkRewardDevices.actuator_method_call(ID, 'stopTrialAudioSignal')
-
-    def start_milkTrialLightSignal(self, ID, max_duration=None):
-        OEmessage = 'LightSignal Start'
-        self.TaskIO['MessageToOE'](OEmessage)
-        self.MilkRewardDevices.actuator_method_call(ID, 'startLightSignal')
-        if not (max_duration is None):
-            sleep(max_duration)
-            self.stop_milkTrialLightSignal(ID)
-
-    def stop_milkTrialLightSignal(self, ID):
-        OEmessage = 'LightSignal Stop'
-        self.TaskIO['MessageToOE'](OEmessage)
-        self.MilkRewardDevices.actuator_method_call(ID, 'stopLightSignal')
-
-    def play_NegativeAudioSignal(self, ID):
-        OEmessage = 'NegativeAudioSignal Play'
-        self.TaskIO['MessageToOE'](OEmessage)
-        self.MilkRewardDevices.actuator_method_call(ID, 'playNegativeAudioSignal')
-
-    def start_milkTrialSignals(self):
-        self.start_milkTrialAudioSignal(self.MilkGoal.ID)
-        # Show light signal ONLY 
-        # if its this goal has been achieved and other repetitions are set to have light signal 
-        # OR 
-        # if this goal has not been achieved and first repetition is set to have light signal.
-        if self.MilkGoalChangeComplete and self.TaskSettings['LightSignalOnRepetitions']['others']:
-            start_light_signal = True
-        elif (not self.MilkGoalChangeComplete) and self.TaskSettings['LightSignalOnRepetitions']['first']:
-            start_light_signal = True
-        else:
-            start_light_signal = False
-        if start_light_signal:
-            sleep(min([self.TaskSettings['lightSignalDelay'], self.TaskSettings['MilkTrialMaxDuration'] + 1]))
-            if self.game_state == 'milk_trial' or self.game_state == 'milk_trial_goal_change':
-                # This command is only given if milk trial has not yet ended.
-                self.start_milkTrialLightSignal(self.MilkGoal.ID)
-
-    def stop_milkTrialSignals(self):
-        self.stop_milkTrialAudioSignal(self.MilkGoal.ID)
-        if self.TaskSettings['LightSignalOnRepetitions']['first'] or self.TaskSettings['LightSignalOnRepetitions']['others']:
-            self.stop_milkTrialLightSignal(self.MilkGoal.ID)
-
     def start_milkTrial(self, action='undefined'):
         # These settings put the game_logic into milkTrial mode
         self.Variables.lastMilkTrial_update()
@@ -1778,7 +1866,9 @@ class Core(object):
         feeder_button = self.getButton('buttonMilkTrial', self.MilkGoal.ID)
         feeder_button['button_pressed'] = True
         # Initiate signals
-        Thread(target=self.start_milkTrialSignals).start()
+        goal_change = copy(not self.MilkGoalChangeComplete)
+        Thread(target=self.MilkTrialSignals.start, 
+               args=(self.MilkGoal.ID, goal_change)).start()
         # Send timestamp to Open Ephys GUI
         OEmessage = 'milkTrialStart ' + action + ' ' + self.MilkGoal.ID
         if not self.MilkGoalChangeComplete:
@@ -1789,6 +1879,9 @@ class Core(object):
         self.game_counters['Milk trials']['count'][idx] += 1
 
     def stop_milkTrial(self, successful, negative_feedback=False):
+        # Stop signals
+        Thread(target=self.MilkTrialSignals.stop, 
+               args=(self.MilkGoal.ID,)).start()
         # Release reward if successful and update counter
         if successful:
             self.game_state = 'reward_in_progress'
@@ -1805,9 +1898,7 @@ class Core(object):
             self.Variables.milkTrialFailTime_update()
             self.game_state = 'interval'
             if negative_feedback and self.TaskSettings['NegativeAudioSignal'] > 0:
-                self.play_NegativeAudioSignal(self.find_closest_feeder_ID())
-        # Stop signals
-        self.stop_milkTrialSignals()
+                self.MilkTrialSignals.fail(self.find_closest_feeder_ID())
         # Send timestamp to Open Ephys GUI
         OEmessage = 'milkTrialEnd Success:' + str(successful)
         self.TaskIO['MessageToOE'](OEmessage)
@@ -2036,8 +2127,7 @@ class Core(object):
                 lastUpdatedState = time()
         # Quit game when out of gameOn loop
         T_update_states.join() # Ensure the previous state update thread has finished
-        pygame.mixer.quit()
-        pygame.quit()
+        close_pygame()
 
     def run(self):
         self.init_main_loop()
