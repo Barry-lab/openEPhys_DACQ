@@ -628,14 +628,14 @@ def compute_mean_movement_vector(posHistory):
     posHistory = np.array(posHistory)
     posHistory = posHistory[:, :2]
     posVectors = posHistory[1:, :] - posHistory[:-1, :]
-    posVector = np.mean(posVectors, axis=0)
+    posVector = np.nanmean(posVectors, axis=0)
 
     return posVector
 
 def compute_mean_posHistory(posHistory):
     posHistory = np.array(posHistory)
     posHistory = posHistory[:, :2]
-    mean_posHistory = np.mean(posHistory, axis=0)
+    mean_posHistory = np.nanmean(posHistory, axis=0)
 
     return mean_posHistory
 
@@ -658,6 +658,98 @@ def draw_rect_with_border(surface, fill_color, outline_color, position, border=1
     rect = pygame.Rect(position)
     surface.fill(outline_color, rect)
     surface.fill(fill_color, rect.inflate(-border*2, -border*2))
+
+
+class PelletChoice(object):
+
+    def __init__(self, PelletRewardDevices, RPIPos, arena_size):
+        self.PelletRewardDevices = PelletRewardDevices
+        self.RPIPos = RPIPos
+        self.arena_size = arena_size
+        self.next()
+
+    def compute_position_histogram_nearest_feeders(self, IDs_active):
+        self.old_IDs_active = IDs_active
+        # Get feeder locations
+        FEEDER_Locs = []
+        for ID in IDs_active:
+            FEEDER_Locs.append(np.array(self.PelletRewardDevices.positions[ID], dtype=np.float32))
+        # Get occupancy histogram information from RPIPos class
+        with self.RPIPos.histogramLock:
+            histparam = deepcopy(self.RPIPos.HistogramParameters)
+            histXedges = deepcopy(self.RPIPos.positionHistogramEdges['x'])
+            histYedges = deepcopy(self.RPIPos.positionHistogramEdges['y'])
+        self.old_PelletHistogramParameters = histparam
+        self.histogramPfeederMap = {}
+        # Convert histogram edges to bin centers
+        histXbin = (histXedges[1:] + histXedges[:-1]) / 2
+        histYbin = (histYedges[1:] + histYedges[:-1]) / 2
+        # Crop data to only include parts inside the arena boundaries
+        idx_X = np.logical_and(0 < histXbin, histXbin < self.arena_size[0])
+        idx_Y = np.logical_and(0 < histYbin, histYbin < self.arena_size[1])
+        histXbin = histXbin[idx_X]
+        histYbin = histYbin[idx_Y]
+        self.histogramPfeederMap['idx_crop_X'] = np.repeat(np.where(idx_X)[0][None, :], 
+                                                              histYbin.size, axis=0)
+        self.histogramPfeederMap['idx_crop_Y'] = np.repeat(np.where(idx_Y)[0][:, None], 
+                                                              histXbin.size, axis=1)
+        # Find closest feeder for each spatial bin
+        histFeeder = np.zeros((histYbin.size, histXbin.size), dtype=np.int16)
+        for xpos in range(histXbin.size):
+            for ypos in range(histYbin.size):
+                pos = np.array([histXbin[xpos], histYbin[ypos]], dtype=np.float32)
+                dists = np.zeros(len(IDs_active), dtype=np.float32)
+                for n_feeder in range(len(IDs_active)):
+                    dists[n_feeder] = np.linalg.norm(FEEDER_Locs[n_feeder] - pos)
+                histFeeder[ypos, xpos] = np.argmin(dists)
+        self.histogramPfeederMap['feeder_map'] = histFeeder
+
+    def ensure_nearest_feeder_map_valid(self, IDs_active):
+        with self.RPIPos.histogramLock:
+            histparam = deepcopy(self.RPIPos.HistogramParameters)
+        histogram_same = hasattr(self, 'old_PelletHistogramParameters') and \
+                                 self.old_PelletHistogramParameters == histparam
+        feeders_same = hasattr(self, 'old_IDs_active') and \
+                               self.old_IDs_active == IDs_active
+        if not histogram_same or not feeders_same:
+            self.compute_position_histogram_nearest_feeders(IDs_active)
+
+    @staticmethod
+    def weighted_randomness(weights):
+        relative_weights = (np.sum(weights) - weights) ** 2
+        probability = relative_weights / np.sum(relative_weights)
+        
+        return np.random.choice(len(probability), p=probability)
+
+    def next(self):
+        '''
+        Uses relative mean occupancy in bins closest to each feeder
+        to increase probability of selecting feeder with lower mean occupancy.
+        '''
+        IDs_active = copy(self.PelletRewardDevices.IDs_active)
+        self.ensure_nearest_feeder_map_valid(IDs_active)
+        if len(IDs_active) > 1:
+            # Get occupancy information from RPIPos class
+            with self.RPIPos.histogramLock:
+                histmap = deepcopy(self.RPIPos.positionHistogram)
+            # Crop histogram to relavant parts
+            histmap = histmap[self.histogramPfeederMap['idx_crop_Y'], self.histogramPfeederMap['idx_crop_X']]
+            # Find mean occupancy in bins nearest to each feeder
+            feeder_bin_occupancy = np.zeros(len(IDs_active), dtype=np.float64)
+            for n_feeder in range(len(IDs_active)):
+                bin_occupancies = histmap[self.histogramPfeederMap['feeder_map'] == n_feeder]
+                feeder_bin_occupancy[n_feeder] = np.mean(bin_occupancies)
+            # Choose feeder with weighted randomness if any parts occupied
+            if np.any(feeder_bin_occupancy > 0):
+                n_feeder = PelletChoice.weighted_randomness(feeder_bin_occupancy)
+            else:
+                n_feeder = np.random.choice(len(IDs_active))
+        else:
+            n_feeder = 0
+        # Update current feeder ID
+        self.ID = IDs_active[n_feeder]
+
+        return self.ID
 
 
 class MilkGoal(object):
@@ -1070,7 +1162,9 @@ class Variables(object):
             self.update_variable_states()
             loop_duration = loop_clock.tick(update_rate)
             if loop_duration > 1000 / update_rate:
-                warnings.warn('Method Variables.update_variable_states runs longer than assigned update interval.', RuntimeWarning)
+                warnings.warn('Method Variables.update_variable_states runs slower than assigned ' + \
+                              'update rate ' + str(update_rate) + ' Hz. Duration ' + str(loop_duration) + ' ms.', 
+                              RuntimeWarning)
 
     def start_variable_states_update_loop(self, update_rate):
         self.variable_states_update_loop_active = True
@@ -1186,6 +1280,10 @@ class Core(object):
                                                  'count': [0] * len(self.MilkRewardDevices.IDs_active)}
             self.game_counters['Successful'] = {'ID': deepcopy(self.MilkRewardDevices.IDs_active), 
                                                 'count': [0] * len(self.MilkRewardDevices.IDs_active)}
+        # Initialize Pellet Game
+        if 'pellet' in self.GAMES:
+            self.PelletChoice = PelletChoice(self.PelletRewardDevices, self.TaskIO['RPIPos'], 
+                                             self.TaskSettings['arena_size'])
         # Initialize Milk Game
         if 'milk' in self.GAMES:
             if self.TaskSettings['AudioSignalMode'] == 'ambient':
@@ -1612,71 +1710,6 @@ class Core(object):
         for i, count in enumerate(self.game_counters['Successful']['count']):
             self.screen.blit(self.renderText(str(count)), (columnedges[4], topedge + i * textSpace))
 
-    def choose_pellet_feeder(self):
-        '''
-        Uses relative mean occupancy in bins closest to each feeder
-        to increase probability of selecting feeder with lower mean occupancy.
-        '''
-        # Get list of FEEDER locations
-        N_feeders = len(self.PelletRewardDevices.IDs_active)
-        if N_feeders > 1:
-            FEEDER_Locs = []
-            for ID in self.PelletRewardDevices.IDs_active:
-                FEEDER_Locs.append(np.array(self.PelletRewardDevices.positions[ID], dtype=np.float32))
-            # Get occupancy information from RPIPos class
-            with self.TaskIO['RPIPos'].histogramLock:
-                histparam = deepcopy(self.TaskIO['RPIPos'].HistogramParameters)
-                histmap = deepcopy(self.TaskIO['RPIPos'].positionHistogram)
-                histXedges = deepcopy(self.TaskIO['RPIPos'].positionHistogramEdges['x'])
-                histYedges = deepcopy(self.TaskIO['RPIPos'].positionHistogramEdges['y'])
-            # Only recompute histogram bin bindings to feeders if histogram parameters have been updated
-            calc_valid = hasattr(self, 'old_PelletHistogramParameters') and self.old_PelletHistogramParameters == histparam
-            if not calc_valid:
-                self.old_PelletHistogramParameters = histparam
-                self.histogramPfeederMap = {}
-                # Convert histogram edges to bin centers
-                histXbin = (histXedges[1:] + histXedges[:-1]) / 2
-                histYbin = (histYedges[1:] + histYedges[:-1]) / 2
-                # Crop data to only include parts inside the arena boundaries
-                arena_size = self.TaskSettings['arena_size']
-                idx_X = np.logical_and(0 < histXbin, histXbin < arena_size[0])
-                idx_Y = np.logical_and(0 < histYbin, histYbin < arena_size[1])
-                histXbin = histXbin[idx_X]
-                histYbin = histYbin[idx_Y]
-                self.histogramPfeederMap['idx_crop_X'] = np.repeat(np.where(idx_X)[0][None, :], 
-                                                                      histYbin.size, axis=0)
-                self.histogramPfeederMap['idx_crop_Y'] = np.repeat(np.where(idx_Y)[0][:, None], 
-                                                                      histXbin.size, axis=1)
-                # Find closest feeder for each spatial bin
-                histFeeder = np.zeros((histYbin.size, histXbin.size), dtype=np.int16)
-                for xpos in range(histXbin.size):
-                    for ypos in range(histYbin.size):
-                        pos = np.array([histXbin[xpos], histYbin[ypos]], dtype=np.float32)
-                        dists = np.zeros(N_feeders, dtype=np.float32)
-                        for n_feeder in range(N_feeders):
-                            dists[n_feeder] = np.linalg.norm(FEEDER_Locs[n_feeder] - pos)
-                        histFeeder[ypos, xpos] = np.argmin(dists)
-                self.histogramPfeederMap['feeder_map'] = histFeeder
-            # Crop histogram to relavant parts
-            histmap = histmap[self.histogramPfeederMap['idx_crop_Y'], self.histogramPfeederMap['idx_crop_X']]
-            # Find mean occupancy in bins nearest to each feeder
-            feeder_bin_occupancy = np.zeros(N_feeders, dtype=np.float64)
-            for n_feeder in range(N_feeders):
-                bin_occupancies = histmap[self.histogramPfeederMap['feeder_map'] == n_feeder]
-                feeder_bin_occupancy[n_feeder] = np.mean(bin_occupancies)
-            # Choose feeder with weighted randomness if any parts occupied
-            if np.any(feeder_bin_occupancy > 0):
-                feederProbabilityWeights = (np.sum(feeder_bin_occupancy) - feeder_bin_occupancy) ** 2
-                feederProbability = feederProbabilityWeights / np.sum(feederProbabilityWeights)
-                n_feeder = np.random.choice(N_feeders, p=feederProbability)
-            else:
-                n_feeder = np.random.choice(N_feeders)
-        else:
-            n_feeder = 0
-        ID = self.PelletRewardDevices.IDs_active[n_feeder]
-
-        return ID
-
     def start_milkTrialAudioSignal(self, ID):
         OEmessage = 'AudioSignal Start'
         self.TaskIO['MessageToOE'](OEmessage)
@@ -1833,10 +1866,9 @@ class Core(object):
             if conditions['inactivity']:
                 # If animal has been without any rewards for too long, release pellet reward
                 self.game_state = 'reward_in_progress'
-                ID = self.choose_pellet_feeder()
                 Thread(target=self.releaseReward, 
-                                 args=('pellet', ID, 'goal_inactivity', self.TaskSettings['PelletQuantity'])
-                                 ).start()
+                       args=('pellet', self.PelletChoice.next(), 
+                             'goal_inactivity', self.TaskSettings['PelletQuantity'])).start()
             elif conditions['chewing'] and conditions['pellet_interval'] and conditions['milk_trial_penalty'] and conditions['milk_trial_interval']:
                 # If conditions for pellet and milk state are met, choose one based on choose_subtask function
                 self.game_state = self.choose_subtask()
@@ -1858,17 +1890,15 @@ class Core(object):
             if conditions['inactivity']:
                 # If animal has been without any rewards for too long, release pellet reward
                 self.game_state = 'reward_in_progress'
-                ID = self.choose_pellet_feeder()
                 Thread(target=self.releaseReward, 
-                                 args=('pellet', ID, 'goal_inactivity', self.TaskSettings['PelletQuantity'])
-                                 ).start()
+                       args=('pellet', self.PelletChoice.next(), 'goal_inactivity', 
+                             self.TaskSettings['PelletQuantity'])).start()
             elif conditions['mobility']:
                 # If animal has chewed enough and is mobile enough, release pellet reward
                 self.game_state = 'reward_in_progress'
-                ID = self.choose_pellet_feeder()
                 Thread(target=self.releaseReward, 
-                                 args=('pellet', ID, 'goal_pellet', self.TaskSettings['PelletQuantity'])
-                                 ).start()
+                       args=('pellet', self.PelletChoice.next(), 'goal_pellet', 
+                             self.TaskSettings['PelletQuantity'])).start()
         # IF IN MILK STATE
         elif self.game_state == 'milk':
             conditions = {'inactivity': self.Variables.get('inactivity', 'complete'), 
@@ -1878,10 +1908,9 @@ class Core(object):
             if conditions['inactivity']:
                 # If animal has been without any rewards for too long, release pellet reward
                 self.game_state = 'reward_in_progress'
-                ID = self.choose_pellet_feeder()
                 Thread(target=self.releaseReward, 
-                                 args=('pellet', ID, 'goal_inactivity', self.TaskSettings['PelletQuantity'])
-                                 ).start()
+                       args=('pellet', self.PelletChoice.next(), 'goal_inactivity', 
+                             self.TaskSettings['PelletQuantity'])).start()
             elif conditions['distance_from_milk_feeders'] and conditions['mobility'] and conditions['angular_distance_from_goal_feeder']:
                 # If animal is far enough from milk feeders and is mobile enough, start milk trial
                 self.game_state = 'transition'

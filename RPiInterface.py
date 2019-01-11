@@ -342,7 +342,6 @@ class onlineTrackingData(object):
             HistogramParameters = {'margins': 10, # histogram data margins in centimeters
                                    'binSize': 2, # histogram binSize in centimeters
                                    'speedLimit': 10}# centimeters of distance in last second to be included
-        self.HistogramParameters = HistogramParameters
         self.KeepGettingData = True # Set True for endless while loop of updating latest data
         self.posDatas = [None for i in range(len(self.cameraIDs))]
         self.combPosHistory = []
@@ -351,6 +350,8 @@ class onlineTrackingData(object):
         self.posDatasLock = Lock()
         self.combPosHistoryLock = Lock()
         self.histogramLock = Lock()
+        # Initialize histogram
+        self.initializePosHistogram(HistogramParameters, update=False)
         # Start updating position data and storing it in history
         self.T_updateCombPosHistory = Thread(target=self.updateCombPosHistory)
         self.T_updateCombPosHistory.start()
@@ -468,8 +469,6 @@ class onlineTrackingData(object):
         # Set up speed tracking
         one_second_steps = int(np.round(1 / self.combPos_update_interval))
         self.lastSecondDistance = 0 # vector distance from position 1 second in past
-        # Initialize histogram
-        self.initializePosHistogram(self.HistogramParameters)
         # Check data is available before proceeding
         with self.combPosHistoryLock:
             lastCombPos = None
