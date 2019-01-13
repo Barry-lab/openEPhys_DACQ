@@ -814,6 +814,7 @@ class MilkGoal(object):
             self.repetitions = repetitions
         if self.choice_method == 'random_cycle':
             self._initialize_sequence()
+        self.next()
 
     @staticmethod
     def choose_with_weighted_randomness(activeMfeeders, game_counters):
@@ -870,7 +871,8 @@ class MilkGoal(object):
 
 class RewardDevices(object):
 
-    def __init__ (self, FEEDERs, FEEDER_type, username, password, feeder_kwargs={}):
+    def __init__ (self, FEEDERs, FEEDER_type, username, password, 
+                  feeder_kwargs={}, inactivation_signal=None):
         '''
         FEEDERs            - dict - key (ID) and value (feeder specific parameters)
         FEEDER_type        - str - passed on to RPiInterface.RewardControl
@@ -878,14 +880,20 @@ class RewardDevices(object):
         password           - str - password for all the Raspberry Pis in FEEDERs dict
         feeder_kwargs      - dict - key (ID) and value (feeder specific kwargs to be
                            passed to RPiInterfaces.RwardControl)
+        inactivation_signal - this method is called with FEEDER_type and ID as argument 
+                              when a feeder is being inactivated.
         '''
         # Parse input arguments
         self.FEEDERs = FEEDERs
-        self.FEEDERs_Lock = Lock()
         self.FEEDER_type = FEEDER_type
         self.username = username
         self.password = password
         self.FEEDER_kwargs = feeder_kwargs
+        self._inactivation_signal = inactivation_signal
+        # Create Locks for all feeders
+        self.FEEDERs_Locks = {}
+        for ID in self.FEEDERs.keys():
+            self.FEEDERs_Locks[ID] = Lock()
         # Create dictionary of feeder positions
         self.positions = {}
         for ID in self.FEEDERs.keys():
@@ -907,13 +915,13 @@ class RewardDevices(object):
         self.IDs_active = sorted(self.IDs_active, key=int)
 
     def _initFEEDER(self, ID):
-        with self.FEEDERs_Lock:
+        with self.FEEDERs_Locks[ID]:
             IP = self.FEEDERs[ID]['IP']
         try:
             kwargs = self.FEEDER_kwargs[ID] if ID in self.FEEDER_kwargs.keys() else {}
             actuator = RewardControl(self.FEEDER_type, IP, self.username, 
                                      self.password, **kwargs)
-            with self.FEEDERs_Lock:
+            with self.FEEDERs_Locks[ID]:
                 self.FEEDERs[ID]['actuator'] = actuator
                 self.FEEDERs[ID]['init_successful'] = True
         except Exception as e:
@@ -922,7 +930,7 @@ class RewardDevices(object):
             print('Error in ' + frameinfo.filename + ' line ' + str(frameinfo.lineno - 3))
             print('initFEEDER failed for: ' + IP)
             print(e)
-            with self.FEEDERs_Lock:
+            with self.FEEDERs_Locks[ID]:
                 self.FEEDERs[ID]['init_successful'] = False
 
     def actuator_method_call(self, ID, method_name, *args, **kwargs):
@@ -932,18 +940,20 @@ class RewardDevices(object):
 
         Method will be called with any following args and kwargs
         '''
-        with self.FEEDERs_Lock:
+        with self.FEEDERs_Locks[ID]:
             if 'actuator' in self.FEEDERs[ID].keys():
-                actuator = self.FEEDERs[ID]['actuator']
+                return getattr(self.FEEDERs[ID]['actuator'], method_name)(*args, **kwargs)
             else:
-                raise Exception('FEEDER does not have an active acutator.')
-        return getattr(actuator, method_name)(*args, **kwargs)
+                warnings.warn('FEEDER ' + str(ID) + ' does not have an active acutator.')
 
     def inactivate_feeder(self, ID):
         # Remove feeder from active feeder list
         self.IDs_active.remove(ID)
+        # Invoke the deactivation signal if provided during initialization
+        if not (self._inactivation_signal is None):
+            self._inactivation_signal(self.FEEDER_type, ID)
         # Close actuator for this feeder
-        with self.FEEDERs_Lock:
+        with self.FEEDERs_Locks[ID]:
             if 'actuator' in self.FEEDERs[ID].keys():
                 actuator = self.FEEDERs[ID].pop('actuator')
                 if hasattr(actuator, 'close'):
@@ -1327,7 +1337,11 @@ class MilkGame_Variables(Abstract_Variables):
                                 'percentage': angularDistance / float(self._min_angular_distance)})
         # Check if animal is close enough to goal location
         variable_state_names.append('distance_from_goal_feeder')
-        goal_distance = self._feeder_distances[self._MilkRewardDevices.IDs_active.index(self._MilkGoal.copy_ID())]
+        if self._MilkGoal.copy_ID() in self._MilkRewardDevices.IDs_active:
+            # This may not be the case if the goal milk feeder has just been deactivated
+            goal_distance = self._feeder_distances[self._MilkRewardDevices.IDs_active.index(self._MilkGoal.copy_ID())]
+        else:
+            goal_distance = self._max_distance_in_arena
         variable_states.append({'name': 'Goal Distance', 
                                 'target': self._min_goal_distance, 
                                 'status': int(round(goal_distance)), 
@@ -1541,12 +1555,90 @@ class GameState(object):
         self._continue = False
 
 
+class GameState_Init_Rewards(GameState):
+    '''
+    This state dispenses rewards if any are required during initialization.
+    '''
+    def __init__(self, **kwargs):
+        # Parse input arguments
+        self._GameState_kwargs = kwargs
+        self.MessageToOE = kwargs['MessageToOE']
+        self.init_pellets = kwargs['InitPellets']
+        self.init_milk = kwargs['InitMilk']
+        if 'PelletRewardDevices' in kwargs.keys() and hasattr(kwargs['PelletRewardDevices'], 'IDs_active'):
+            self.pellet_IDs_active = kwargs['PelletRewardDevices'].IDs_active
+        else:
+            self.pellet_IDs_active = []
+        if 'MilkRewardDevices' in kwargs.keys() and hasattr(kwargs['MilkRewardDevices'], 'IDs_active'):
+            self.milk_IDs_active = kwargs['MilkRewardDevices'].IDs_active
+        else:
+            self.milk_IDs_active = []
+
+    def _release_pellet_reward(self, ID, quantity):
+        game_state = GameState_PelletReward(**self._GameState_kwargs)
+        state_specific_kwargs = {'action': 'GameState_Init_Rewards', 'ID': ID, 'quantity': quantity}
+        game_state.enter(1, action='GameState_Init_Rewards', ID=ID, 
+                         quantity=quantity, suppress_MessageToOE=True)
+
+    def _release_milk_reward(self, ID, quantity):
+        game_state = GameState_MilkReward(**self._GameState_kwargs)
+        state_specific_kwargs = {'action': 'GameState_Init_Rewards', 'ID': ID, 'quantity': quantity}
+        game_state.enter(1, action='GameState_Init_Rewards', ID=ID, 
+                         quantity=quantity, suppress_MessageToOE=True)
+
+    def _compute_pellet_rewards(self):
+        minPellets = int(np.floor(float(self.init_pellets) / len(self.pellet_IDs_active)))
+        extraPellets = np.mod(self.init_pellets, len(self.pellet_IDs_active))
+        feeder_pellet_count = minPellets * np.ones(len(self.pellet_IDs_active), dtype=np.int16)
+        feeder_pellet_count[:extraPellets] = feeder_pellet_count[:extraPellets] + 1
+
+        return feeder_pellet_count
+
+    def _dispense_pellet_rewards(self, feeder_pellet_count):
+        T_rewards = []
+        for ID, n_pellets in zip(self.pellet_IDs_active, feeder_pellet_count):
+            if n_pellets > 0:
+                T = Thread(target=self._release_pellet_reward, args=(ID, n_pellets))
+                T.start()
+                T_rewards.append(T)
+
+        return T_rewards
+
+    def _dispense_milk_rewards(self, quantity):
+        T_rewards = []
+        for ID in self.milk_IDs_active:
+            T = Thread(target=self._release_milk_reward, args=(ID, quantity))
+            T.start()
+            T_rewards.append(T)
+
+        return T_rewards
+
+    def pre_logic(self, **kwargs):
+        self.MessageToOE('GameState_Init_Rewards')
+        # Collect threads into this list
+        T_rewards = []
+        # Dispense pellet rewards
+        if len(self.pellet_IDs_active) > 0 and self.init_pellets > 0:
+            feeder_pellet_count = self._compute_pellet_rewards()
+            T_rewards += self._dispense_pellet_rewards(feeder_pellet_count)
+        # Dispense milk rewards
+        if len(self.milk_IDs_active) > 0 and self.init_milk > 0:
+            T_rewards += self._dispense_milk_rewards(self.init_milk)
+        # Ensure all threads have finished
+        for T in T_rewards:
+            T.join()
+
+    def repeat_logic(self, **kwargs):
+        return 'GameState_Interval', {}
+
+
 class GameState_Interval_Pellet(GameState):
 
     def __init__(self, **kwargs):
         # Parse input arguments
         self.MessageToOE = kwargs['MessageToOE']
         self.PelletGame_Variables = kwargs['PelletGame_Variables']
+        self.pellet_feeder_ID = kwargs['PelletChoice'].next()
 
     def pre_logic(self, **kwargs):
         self.MessageToOE('GameState_Interval_Pellet')
@@ -1558,7 +1650,7 @@ class GameState_Interval_Pellet(GameState):
                       'pellet_interval': self.PelletGame_Variables.get('time_since_last_pellet', 'complete', set_relevant=True)}
         if conditions['inactivity']:
             # If animal has been without any rewards for too long, release pellet reward
-            return 'GameState_PelletReward', {'action': 'goal_inactivity', 'ID': self.feeder_ID}
+            return 'GameState_PelletReward', {'action': 'goal_inactivity', 'ID': self.pellet_feeder_ID}
         elif conditions['chewing'] and conditions['pellet_interval']:
             # If animal has been chewing and there has been sufficient time since last pellet reward
             return 'GameState_Pellet', {}
@@ -1590,6 +1682,7 @@ class GameState_Interval_Pellet_And_Milk(GameState):
         self.PelletGame_Variables = kwargs['PelletGame_Variables']
         self.MilkGame_Variables = kwargs['MilkGame_Variables']
         self.pellet_milk_ratio = kwargs['PelletMilkRatio']
+        self.pellet_feeder_ID = kwargs['PelletChoice'].next()
 
     def pre_logic(self, **kwargs):
         self.MessageToOE('GameState_Interval_Pellet_And_Milk')
@@ -1610,7 +1703,7 @@ class GameState_Interval_Pellet_And_Milk(GameState):
                       'milk_trial_interval': self.MilkGame_Variables.get('time_since_last_milk_trial', 'complete', set_relevant=True)}
         if conditions['inactivity']:
             # If animal has been without any rewards for too long, release pellet reward
-            return 'GameState_PelletReward', {'action': 'goal_inactivity', 'ID': self.feeder_ID}
+            return 'GameState_PelletReward', {'action': 'goal_inactivity', 'ID': self.pellet_feeder_ID}
         elif conditions['chewing'] and conditions['pellet_interval'] and conditions['milk_trial_interval']:
             # If conditions for pellet and milk state are met, choose one based on _choose_subtask method
             return self._choose_subtask(), {}
@@ -1677,9 +1770,12 @@ class GameState_PelletReward(GameState):
         self.PelletGame_Variables = kwargs['PelletGame_Variables']
 
     def pre_logic(self, **kwargs):
-        self.MessageToOE('GameState_PelletReward ' + kwargs['action'])
+        if not ('suppress_MessageToOE' in kwargs.keys()) or not kwargs['suppress_MessageToOE']:
+            self.MessageToOE('GameState_PelletReward ' + kwargs['action'])
         # Parse input arguments
         ID = kwargs['ID']
+        if 'quantity' in kwargs.keys():
+            self.quantity = kwargs['quantity']
         # Send command to release reward and wait for positive feedback
         feedback = self.reward_device.actuator_method_call(ID, 'release', self.quantity)
         if feedback:
@@ -1750,17 +1846,17 @@ class GameState_MilkTrial(GameState):
     def pre_logic(self, **kwargs):
         # Check if this is the first repetition
         first_repetition = self.MilkGoal.check_if_first_repetition()
+        # Send timestamp to Open Ephys GUI
+        OEmessage = 'GameState_MilkTrial ' + kwargs['action'] + ' ' + self.MilkGoal.copy_ID()
+        if first_repetition:
+            OEmessage += ' first_repetition'
+        self.MessageToOE(OEmessage)
         # Reset milk trial timers
         self.MilkGame_Variables.update_min_trial_separation()
         self.MilkGame_Variables.update_last_trial()
         # Start milk trial signals
         Thread(target=self.MilkTrialSignals.start, 
                args=(self.MilkGoal.copy_ID(), first_repetition)).start()
-        # Send timestamp to Open Ephys GUI
-        OEmessage = 'GameState_MilkTrial ' + kwargs['action'] + ' ' + self.MilkGoal.copy_ID()
-        if first_repetition:
-            OEmessage += ' first_repetition'
-        self.MessageToOE(OEmessage)
         # Update game counters
         self.update_game_counters_started(self.MilkGoal.copy_ID())
 
@@ -1847,9 +1943,12 @@ class GameState_MilkReward(GameState):
         self.reward_device = kwargs['MilkRewardDevices']
 
     def pre_logic(self, **kwargs):
-        self.MessageToOE('GameState_MilkReward ' + kwargs['action'])
+        if not ('suppress_MessageToOE' in kwargs.keys()) or not kwargs['suppress_MessageToOE']:
+            self.MessageToOE('GameState_MilkReward ' + kwargs['action'])
         # Parse input arguments
         ID = kwargs['ID']
+        if 'quantity' in kwargs.keys():
+            self.quantity = kwargs['quantity']
         # Send command to release reward and wait for positive feedback
         feedback = self.reward_device.actuator_method_call(ID, 'release', self.quantity)
         if feedback:
@@ -1901,6 +2000,8 @@ class GameStateOperator(object):
         kwargs['PelletQuantity'] = TaskSettings['PelletQuantity']
         kwargs['MilkTrialFailPenalty'] = TaskSettings['MilkTrialFailPenalty']
         kwargs['MilkQuantity'] = TaskSettings['MilkQuantity']
+        kwargs['InitPellets'] = TaskSettings['InitPellets']
+        kwargs['InitMilk'] = TaskSettings['InitMilk']
         # Parse generic inputs
         kwargs['game_counters'] = game_counters
         kwargs['MessageToOE'] = MessageToOE
@@ -1928,8 +2029,8 @@ class GameStateOperator(object):
 
     def _process(self):
         self._active = True
-        self._display_update('GameState_Interval')
-        self._GameState = GameState_Interval(**self._GameState_kwargs)
+        self._display_update('GameState_Init_Rewards')
+        self._GameState = GameState_Init_Rewards(**self._GameState_kwargs)
         ret = self._GameState.enter(self.game_rate, **{})
         while self._active:
             if ret is None:
@@ -2131,7 +2232,7 @@ class Buttons(object):
         button = self.list[self.names.index(name)]
         if isinstance(button, list): 
             if FEEDER_ID is None:
-                raise ValueError('getButton needs FEEDER_ID for this button_name.')
+                raise ValueError('get needs FEEDER_ID for this button_name.')
             else:
                 for subbutton in button:
                     if 'text' in subbutton.keys() and subbutton['text'] == FEEDER_ID:
@@ -2139,6 +2240,21 @@ class Buttons(object):
                         break
 
         return button
+
+    def _inactivate_device(self, device_type, ID):
+        '''
+        This method is called whenever a device is inactivated
+        '''
+        if device_type == 'pellet':
+            # Inactivate pellet reward button
+            self.get('buttonReleasePellet', ID)['enabled'] = False
+        elif device_type == 'milk':
+            # Inactivate milk reward button
+            self.get('buttonReleaseMilk', ID)['enabled'] = False
+            # Inactivate milk trial button
+            self.get('buttonMilkTrial', ID)['enabled'] = False
+        else:
+            raise ValueError('Unknown device_type.')
 
     def _define(self):
         '''
@@ -2526,7 +2642,8 @@ class Core(object):
             print('Initializing Pellet FEEDERs...')
             self.PelletRewardDevices = RewardDevices(FEEDERs['pellet'], 'pellet', 
                                                      self.TaskSettings['Username'], 
-                                                     self.TaskSettings['Password'])
+                                                     self.TaskSettings['Password'], 
+                                                     inactivation_signal=self._inactivation_signal)
             print('Initializing Pellet FEEDERs Successful')
         else:
             self.PelletRewardDevices = None
@@ -2537,7 +2654,8 @@ class Core(object):
             self.MilkRewardDevices = RewardDevices(FEEDERs['milk'], 'milk', 
                                                    self.TaskSettings['Username'], 
                                                    self.TaskSettings['Password'], 
-                                                   feeder_kwargs)
+                                                   feeder_kwargs=feeder_kwargs, 
+                                                   inactivation_signal=self._inactivation_signal)
             print('Initializing Milk FEEDERs Successful')
         else:
             self.MilkRewardDevices = None
@@ -2645,37 +2763,21 @@ class Core(object):
         # Start Variable class
         return Variables(TaskSettings, RPIPos, ChewingTracker, MilkRewardDevices, MilkGoal)
 
-    def release_initial_rewards(self):
+    def _inactivation_signal(self, device_type, ID):
         '''
-        Deposits initiation rewards simultaneously from all FEEDERs.
-        Completes only once all rewards have been released.
+        This method is passed to reward devices and invoked each time a device is inactivated.
         '''
-        T_initRewards = []
-        if 'InitPellets' in self.TaskSettings.keys() and self.TaskSettings['InitPellets'] > 0:
-            minPellets = int(np.floor(float(self.TaskSettings['InitPellets']) / len(self.PelletRewardDevices.IDs_active)))
-            extraPellets = np.mod(self.TaskSettings['InitPellets'], len(self.PelletRewardDevices.IDs_active))
-            n_pellets_Feeders = minPellets * np.ones(len(self.PelletRewardDevices.IDs_active), dtype=np.int16)
-            n_pellets_Feeders[:extraPellets] = n_pellets_Feeders[:extraPellets] + 1
-            for ID, n_pellets in zip(self.PelletRewardDevices.IDs_active, n_pellets_Feeders):
-                if n_pellets > 0:
-                    T = Thread(target=self.releaseReward, 
-                               args=('pellet', ID, 'game_init', n_pellets))
-                    T.start()
-                    T_initRewards.append(T)
-        if 'InitMilk' in self.TaskSettings.keys() and self.TaskSettings['InitMilk'] > 0:
-            for ID in self.MilkRewardDevices.IDs_active:
-                T = Thread(target=self.releaseReward, 
-                                     args=('milk', ID, 'game_init', self.TaskSettings['InitMilk']))
-                T.start()
-                T_initRewards.append(T)
-        for T in T_initRewards:
-            T.join()
+        self.Buttons._inactivate_device(device_type, ID)
+        if device_type == 'pellet':
+            self.PelletChoice._ensure_nearest_feeder_map_valid(self.PelletRewardDevices.IDs_active)
+        elif device_type == 'milk':
+            self.MilkGoal.re_init(self.MilkRewardDevices.IDs_active)
+        else:
+            raise ValueError('Unknown device_type: ' + str(device_type))
 
     def run(self):
         # Perform final initialization steps
         self._final_initialization()
-        # Release initation rewards
-        self.release_initial_rewards()
         # Start Display
         self.Display.start()
         # Start Game State Process
