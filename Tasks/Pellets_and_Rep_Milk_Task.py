@@ -1038,7 +1038,7 @@ class Abstract_Variables(object):
         while self._loop_active:
             self._recompute_dynamic_variables()
             loop_duration = loop_clock.tick(update_rate)
-            if loop_duration > (10 + 1000 / update_rate):
+            if loop_duration > (25 + 1000 / update_rate):
                 warnings.warn('Method _recompute_dynamic_variables in ' + str(type(self)) + \
                               ' runs slower than assigned ' + \
                               'update rate ' + str(update_rate) + ' Hz. Duration ' + \
@@ -1537,7 +1537,7 @@ class GameState(object):
         while self._continue and ret is None:
             ret = self.repeat_logic(**kwargs)
             loop_duration = loop_clock.tick(game_rate)
-            if loop_duration > (10 + 1000 / game_rate):
+            if loop_duration > (25 + 1000 / game_rate):
                 warnings.warn('Method repeat_logic in ' + str(type(self)) + \
                               ' runs slower than assigned ' + \
                               'rate ' + str(game_rate) + ' Hz. Duration ' + \
@@ -1872,9 +1872,9 @@ class GameState_MilkTrial(GameState):
             self.MilkGoal.next()
             return 'GameState_MilkReward', {'action': 'GameState_MilkTrial', 'ID': ID}
         elif conditions['milk_trial_duration']:
-            # If time limit for task duration has passed, stop milk trial without reward
+            # If time limit for task duration has passed, stop milk trial without reward.
+            # Milk Trial goal is not updated if first trial fails.
             self.MilkTrialSignals.stop(self.MilkGoal.copy_ID())
-            self.MilkGoal.next()
             return 'GameState_MilkTrial_Fail', {'reason': 'timeout'}
 
     def logic_other_trial(self, **kwargs):
@@ -2543,7 +2543,7 @@ class Display(object):
         while self._continue:
             self._update()
             loop_duration = loop_clock.tick(self._update_rate)
-            if loop_duration > (10 + 1000 / self._update_rate):
+            if loop_duration > (25 + 1000 / self._update_rate):
                 warnings.warn('Method logic in ' + str(type(self)) + \
                               ' runs slower than assigned ' + \
                               'rate ' + str(self._update_rate) + ' Hz. Duration ' + \
@@ -2609,7 +2609,7 @@ class UserEventHandler(object):
         while self._continue:
             self._check_events()
             loop_duration = loop_clock.tick(self._response_rate)
-            if loop_duration > (10 + 1000 / self._response_rate):
+            if loop_duration > (25 + 1000 / self._response_rate):
                 warnings.warn('Method logic in ' + str(type(self)) + \
                               ' runs slower than assigned ' + \
                               'rate ' + str(self._response_rate) + ' Hz. Duration ' + \
