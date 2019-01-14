@@ -1809,7 +1809,7 @@ class GameState_Milk(GameState):
     def _check_duration(self):
         if not hasattr(self, '_time_of_first_check_duration'):
             self._time_of_first_check_duration = time()
-        return self._time_of_first_check_duration - time()
+        return time() - self._time_of_first_check_duration
 
     def repeat_logic(self, **kwargs):
         # Acquire relavant variable states
