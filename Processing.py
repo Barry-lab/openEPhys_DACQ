@@ -408,10 +408,22 @@ def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels,
             spike_datas[n_dataset][n_tet] = spike_data_tet
     # Cluster each tetrode using KlustaKwik. This creates 'clusterIDs' field in spike_data dictionaries.
     hfunct.print_progress(0, len(tetrode_nrs), prefix='Applying KlustaKwik:', suffix=' T: 0/' + str(len(tetrode_nrs)), initiation=True)
+    mp_KlustaKwik = Multiprocess_KlustaKwik()
     for n_tet in range(len(tetrode_nrs)):
         if len(spike_datas) == 1:
-            clusterIDs = applyKlustaKwik_on_spike_data_tet(spike_datas[0][n_tet], 
-                                                           max_possible_clusters=max_clusters)
+            mp_KlustaKwik.add(spike_datas[0][n_tet], max_clusters=max_clusters)
+        elif len(spike_datas) > 1:
+            # If multiple datasets included, apply KlustaKwik on combined spike_datas_tet
+            spike_datas_tet = [spike_data[n_tet] for spike_data in spike_datas]
+            spike_datas_tet = applyKlustaKwik_to_combined_recordings(spike_datas_tet, 
+                                                                     max_clusters=max_clusters)
+            # Put this tetrode from all datasets into spike_datas
+            for n_dataset, spike_data_tet in enumerate(spike_datas_tet):
+                spike_datas[n_dataset][n_tet] = spike_data_tet
+        hfunct.print_progress(n_tet + 1, len(tetrode_nrs), prefix='Applying KlustaKwik:', suffix=' T: ' + str(n_tet + 1) + '/' + str(len(tetrode_nrs)))
+    for n_tet in range(len(tetrode_nrs)):
+        if len(spike_datas) == 1:
+            clusterIDs = mp_KlustaKwik.get()[n_tet]
             spike_datas[0][n_tet]['clusterIDs'] = np.int16(clusterIDs).squeeze()
         elif len(spike_datas) > 1:
             # If multiple datasets included, apply KlustaKwik on combined spike_datas_tet
