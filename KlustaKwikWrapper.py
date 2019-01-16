@@ -104,7 +104,7 @@ class Kluster():
             f.write('\n')
             np.savetxt(f, mask, fmt='%1d')
 
-    def kluster(self, max_possible_clusters=31):
+    def kluster(self, max_possible_clusters=31, cpu_core_nr=None):
         '''
         Using a .fet.n file this makes a system call to KlustaKwik (KK) which
         clusters data and saves istributional ' + str(self.distribution) + 
@@ -130,6 +130,10 @@ class Kluster():
             None but saves a Tint-friendly cut file in the same directory as
             the spike data
         '''
+        if cpu_core_nr is None:
+            taskset_cpu_affinity = ''
+        else:
+            taskset_cpu_affinity = 'taskset -c ' + str(int(cpu_core_nr)) + ' '
         # specify path to KlustaKwik exe
         kk_path = os.path.expanduser('~') + '/Programs/klustakwik/KlustaKwik'
         if not os.path.exists(kk_path):
@@ -138,6 +142,7 @@ class Kluster():
         # This FNULL stops klustakwik from printing progress reports
         FNULL = open(os.devnull, 'w')
         kk_proc = Popen(
+            taskset_cpu_affinity +
             kk_path + ' ' +
             self.filename + ' ' +
             str(self.tet_num) +
@@ -273,7 +278,7 @@ def getParam(waveforms=None, param='Amp', t=200, fet=1):
                         out[:,rng[0,i]:rng[1,i]] = A
             return out
 
-def klustakwik(waveforms, d, filename_root, max_possible_clusters=31):
+def klustakwik(waveforms, d, filename_root, max_possible_clusters=31, cpu_core_nr=None):
     """ 
     Calls two methods below (kluster and getPC) to run klustakwik on
     a given tetrode with nFet number of features (for the PCA)
@@ -324,9 +329,11 @@ def klustakwik(waveforms, d, filename_root, max_possible_clusters=31):
         c.make_fet()
         mask = c.get_mask()
         c.make_fmask(mask)
-        c.kluster(max_possible_clusters=max_possible_clusters)
+        c.kluster(max_possible_clusters=max_possible_clusters, 
+                  cpu_core_nr=cpu_core_nr)
 
-def applyKlustaKwik_on_spike_data_tet(spike_data_tet, max_possible_clusters=31):
+def applyKlustaKwik_on_spike_data_tet(spike_data_tet, max_possible_clusters=31, 
+                                      cpu_core_nr=None):
     '''
     Returns the input dictionary with added field 'clusterIDs'
     Input dictionary required fields:
@@ -345,7 +352,8 @@ def applyKlustaKwik_on_spike_data_tet(spike_data_tet, max_possible_clusters=31):
         features2use = ['PC1', 'PC2', 'PC3', 'Amp', 'Vt']
         d = {0: features2use}
         klustakwik(waves, d, os.path.join(KlustaKwikProcessingFolder, 'KlustaKwikTemp'), 
-                   max_possible_clusters=max_possible_clusters)
+                   max_possible_clusters=max_possible_clusters, 
+                   cpu_core_nr=cpu_core_nr)
         # Read in cluster IDs
         cluFileName = os.path.join(KlustaKwikProcessingFolder, 'KlustaKwikTemp.clu.0')
         with open(cluFileName, 'rb') as file:
