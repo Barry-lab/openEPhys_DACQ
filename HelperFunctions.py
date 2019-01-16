@@ -6,10 +6,76 @@ import numpy as np
 from PyQt4 import QtGui
 import subprocess
 import copy
-import multiprocessing
+import multiprocessing as mp
+import threading
 from time import sleep
 import psutil
 from PyQt4.QtCore import QThread, pyqtSignal
+
+
+class CPU_availability_tracker(object):
+    '''
+    Keeps track of available cores.
+    '''
+    def __init__(self, n_cores):
+        self._available_cores = [False for i in range(n_cores)] # Start unavailable to debug locks
+        self._core_locks = [mp.Lock() for i in range(n_cores)]
+        self._T__check_locks = threading.Thread(target=self._check_locks)
+        self._T__check_locks.daemon = True
+        self._T__check_locks.start()
+
+    def _check_locks(self, frequency=10):
+        '''
+        Checks locks of all unavailable cores at set interval.
+        Unlocked locks indicate a core is available.
+
+        frequency - int - how many times per second to check locks
+        '''
+        while True:
+            sleep(1.0 / frequency)
+            # Check for unavailable cores
+            unavailable_nrs = [i for i, state in enumerate(self._available_cores) if not state]
+            # Check locks for unavailable cores
+            for nr in unavailable_nrs:
+                if self._core_locks[nr].acquire(block=False):
+                    self._core_locks[nr].release()
+                    self._available_cores[nr] = True
+
+    def check_if_core_available(self):
+        return True in self._available_cores
+
+    def wait_for_available_core(self, check_interval=0.01):
+        '''
+        check_interval - seconds to wait between checking for available cores.
+        '''
+        while not self.check_if_core_available():
+            sleep(check_interval)
+
+    def use_next_available(self, block=True):
+        '''
+        Get available core number and set it to unavailable.
+
+        block - bool - if True, waits until core is available.
+                Otherwise, if core not available, returns None
+
+        Returns:
+            nr - the number of CPU core to use, starting from 0
+            lock - multiprocessing.Lock instance.
+                   This must be called with lock.release()
+                   for the CPU core nr to become available again.
+        '''
+        if block:
+            self.wait_for_available_core()
+        elif not self.check_if_core_available():
+            return None
+        # Get available core number and set it to unavailable
+        nr = self._available_cores.index(True)
+        # Lock the core lock and set core as unavailable
+        self._core_locks[nr].acquire()
+        self._available_cores[nr] = False
+
+        return nr, self._core_locks[nr]
+
 
 class multiprocess(object):
     '''
@@ -18,63 +84,59 @@ class multiprocess(object):
     use the map method as an example how to use run and results methods.
     '''
     def __init__(self):
-        self.max_processes = multiprocessing.cpu_count()-1 or 1
-        self.multiprocessingManager = multiprocessing.Manager()
-        self.n_active = multiprocessing.Value('i', 0)
-        self.n_active_Lock = multiprocessing.Lock()
+        self.CPU_availability_tracker = CPU_availability_tracker(mp.cpu_count()-1 or 1)
+        self.multiprocessingManager = mp.Manager()
         self.output_list = self.multiprocessingManager.list([])
-        self.output_list_Lock = multiprocessing.Lock()
-        self.n_total = 0
+        self.output_list_Lock = mp.Lock()
         self.processor_list = []
-        self.run_in_progress = False
+        self.run_Lock = threading.Lock()
 
-    def processor(self, n_in_list, f, args):
+    @staticmethod
+    def processor(output_list, output_list_Lock, list_pos, 
+                  cpu_lock, f, args, kwargs):
         '''
         This method called by run method in a separate process to utilize multiprocessing
         '''
         # Evaluate the function with input arguments
-        output = f(*args)
+        output = f(*args, **kwargs)
         # Update output list and active process counter
-        with self.output_list_Lock:
-            self.output_list[n_in_list] = output
-        with self.n_active_Lock:
-            self.n_active.value -= 1
+        with output_list_Lock:
+            output_list[list_pos] = output
+        # Release CPU core lock to inform CPU_availability_tracker
+        cpu_lock.release()
 
-    def run(self, f, args):
+    def run(self, f, args=(), kwargs={}, single_cpu_affinity=False):
         '''
         This method processes the function in a separate multiprocessing.Process,
         allowing the use of multiple CPU cores.
         If all CPU cores are in use, this function blocks until a core is from a process.
 
-        f - function to be called in a separate process
-        args - tuple of input arguments for that function
+        f      - function to be called in a separate process
+        args   - tuple of arguments for function f
+        kwargs - dictionary of keyword arguments for function f
+
+        Optional input
+            single_cpu_affinity - bool - if true, 'cpu_core_nr' keyword argument
+                                  is added to kwargs or owerwritten. 
+                                  The value of 'cpu_core_nr'
+                                  circles through the list of available CPUs.
         '''
-        if not (type(args) is tuple):
-            raise ValueError('Input args must be a tuple.')
-        # Avoid this method being called in separate threads
-        if self.run_in_progress:
-            raise Exception('multiprocessing.run method called before previous call finshed.')
-        self.run_in_progress = True
-        # If maximum number of processes active, wait until one has finished
-        with self.n_active_Lock:
-            currently_active = copy.deepcopy(self.n_active.value)
-        while currently_active >= self.max_processes:
-            sleep(0.05)
-            with self.n_active_Lock:
-                currently_active = copy.deepcopy(self.n_active.value)
-        # Update counters
-        with self.n_active_Lock:
-            self.n_active.value += 1
-        self.n_total += 1
-        # Start independent processor
-        with self.output_list_Lock:
-            self.output_list.append(None)
-        n_in_list = self.n_total - 1
-        p = multiprocessing.Process(target=self.processor, args=(n_in_list, f, args))
-        p.start()
-        self.processor_list.append(p)
-        # Open run method for another call
-        self.run_in_progress = False
+        with self.run_Lock:
+            # Wait for next available cpu core count
+            cpu_nr, cpu_lock = self.CPU_availability_tracker.use_next_available(block=True)
+            # If requested, specify CPU to use
+            if single_cpu_affinity:
+                kwargs['cpu_core_nr'] = cpu_nr
+            # Extend list and acquire current position
+            with self.output_list_Lock:
+                list_pos = len(self.output_list)
+                self.output_list.append(None)
+            # Start independent processor
+            p = mp.Process(target=multiprocess.processor, 
+                           args=(self.output_list, self.output_list_Lock, list_pos, 
+                                 cpu_lock, f, args, kwargs))
+            p.start()
+            self.processor_list.append(p)
 
     def results(self):
         '''
@@ -84,29 +146,49 @@ class multiprocess(object):
         if processors have not yet finished.
         '''
         # Ensure run method is not currently running
-        while self.run_in_progress:
-            sleep(0.05)
-        # Ensure all processors have finished
-        for p in self.processor_list:
-            p.join()
+        with self.run_Lock:
+            # Ensure all processors have finished
+            for p in self.processor_list:
+                p.join()
 
         return self.output_list
 
-    def map(self, f, args_list):
+    @staticmethod
+    def args_kwargs_list_check(n, args_list, kwargs_list):
+        # Set empty argument lists if not provided
+        if args_list is None:
+            args_list = [[] for x  in range(n)]
+        if kwargs_list is None:
+            kwargs_list = [{} for x  in range(n)]
+
+        return args_list, kwargs_list
+
+    def map(self, f, n, args_list=None, kwargs_list=None, single_cpu_affinity=False):
         '''
-        This function evaluates function f with each set of arguments in args_list
-        using multiprocessing module. It outputs a list where each element is the output
+        This function evaluates function f for number of times specified by argument n, 
+        with each set of arguments in args_list and kwargs_list.
+        It outputs a list where each element is the output
         from function f for each set of arguments in args_list.
         This function is more convenient to use that run and results separately,
         but it requires loading all input arguments into memory, which is not always ideal.
 
         f - function to evaluate
-        args_list - list of tuples of arguments for function f
+        n - number of calls to f
+
+        Optional input:
+            args_list   - list of tuples of arguments for function f
+            kwargs_list - list of dictionaries of keyword arguments for function f
+            single_cpu_affinity - bool - if true, 'cpu_core_nr' keyword argument
+                                  is added to kwargs or owerwritten. 
+                                  The value of 'cpu_core_nr'
+                                  circles through the list of available CPUs.
         '''
-        for args in args_list:
-            self.run(f, args)
+        args_list, kwargs_list = multiprocess.args_kwargs_list_check(n, args_list, kwargs_list)
+        for args, kwargs in zip(args_list, kwargs_list):
+            self.run(f, args, kwargs, single_cpu_affinity)
 
         return self.results()
+
 
 def proceed_when_enough_memory_available(memory_needed=None, percent=None, array_size=None, dtype=None):
     '''

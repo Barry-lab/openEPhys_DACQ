@@ -373,6 +373,22 @@ def save_spike_data_to_disk(OpenEphysDataPath, processing_method, tetrode_nr, wa
         NWBio.save_tetrode_clusterIDs(OpenEphysDataPath, tetrode_nr, clusterIDs, 
                                       spike_name=spike_name, overwrite=True)
 
+
+class Multiprocess_KlustaKwik(object):
+
+    def __init__(self):
+        self.multiprocessor = hfunct.multiprocess()
+
+    def add(self, spike_data_tet, max_clusters=31):
+        self.multiprocessor.run(applyKlustaKwik_on_spike_data_tet, 
+                                args=(spike_data_tet,), 
+                                kwargs={'max_possible_clusters': max_clusters}, 
+                                single_cpu_affinity=False)
+
+    def get(self):
+        return self.multiprocessor.results()
+
+
 def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels, 
                                               noise_cut_off=1000, threshold=50, 
                                               max_clusters=31):
@@ -394,7 +410,8 @@ def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels,
     hfunct.print_progress(0, len(tetrode_nrs), prefix='Applying KlustaKwik:', suffix=' T: 0/' + str(len(tetrode_nrs)), initiation=True)
     for n_tet in range(len(tetrode_nrs)):
         if len(spike_datas) == 1:
-            clusterIDs = applyKlustaKwik_on_spike_data_tet(spike_datas[0][n_tet])
+            clusterIDs = applyKlustaKwik_on_spike_data_tet(spike_datas[0][n_tet], 
+                                                           max_possible_clusters=max_clusters)
             spike_datas[0][n_tet]['clusterIDs'] = np.int16(clusterIDs).squeeze()
         elif len(spike_datas) > 1:
             # If multiple datasets included, apply KlustaKwik on combined spike_datas_tet
@@ -451,7 +468,8 @@ def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels,
             spike_datas_tet.append(spike_data_tet)
         # Apply KlustaKwik to this tetrode
         if len(spike_datas_tet) == 1:
-            clusterIDs = applyKlustaKwik_on_spike_data_tet(spike_datas_tet[0])
+            clusterIDs = applyKlustaKwik_on_spike_data_tet(spike_datas_tet[0], 
+                                                           max_possible_clusters=max_clusters)
             spike_datas_tet[0]['clusterIDs'] = np.int16(clusterIDs).squeeze()
         elif len(spike_datas_tet) > 1:
             spike_datas_tet = applyKlustaKwik_to_combined_recordings(spike_datas_tet, 
