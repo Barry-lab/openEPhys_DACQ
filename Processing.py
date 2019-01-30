@@ -421,19 +421,10 @@ def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels,
             for n_dataset, spike_data_tet in enumerate(spike_datas_tet):
                 spike_datas[n_dataset][n_tet] = spike_data_tet
         hfunct.print_progress(n_tet + 1, len(tetrode_nrs), prefix='Applying KlustaKwik:', suffix=' T: ' + str(n_tet + 1) + '/' + str(len(tetrode_nrs)))
-    for n_tet in range(len(tetrode_nrs)):
-        if len(spike_datas) == 1:
+    if len(spike_datas) == 1:
+        for n_tet in range(len(tetrode_nrs)):
             clusterIDs = mp_KlustaKwik.get()[n_tet]
             spike_datas[0][n_tet]['clusterIDs'] = np.int16(clusterIDs).squeeze()
-        elif len(spike_datas) > 1:
-            # If multiple datasets included, apply KlustaKwik on combined spike_datas_tet
-            spike_datas_tet = [spike_data[n_tet] for spike_data in spike_datas]
-            spike_datas_tet = applyKlustaKwik_to_combined_recordings(spike_datas_tet, 
-                                                                     max_clusters=max_clusters)
-            # Put this tetrode from all datasets into spike_datas
-            for n_dataset, spike_data_tet in enumerate(spike_datas_tet):
-                spike_datas[n_dataset][n_tet] = spike_data_tet
-        hfunct.print_progress(n_tet + 1, len(tetrode_nrs), prefix='Applying KlustaKwik:', suffix=' T: ' + str(n_tet + 1) + '/' + str(len(tetrode_nrs)))
     # Overwrite clusterIDs on disk
     for OpenEphysDataPath, spike_data in zip(OpenEphysDataPaths, spike_datas):
         print('Saving processing output to: ' + OpenEphysDataPath)
