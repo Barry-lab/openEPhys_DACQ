@@ -253,5 +253,6 @@ class PosPlot(object):
     def close(self):
         # Close the update loop, RPi Position tracking loop and application window
         self.cumulativePlot_timer.stop()
+        time.sleep(1)
         self.mainWindow.close()
         print('Stopped Cumulative Position Plot.')
