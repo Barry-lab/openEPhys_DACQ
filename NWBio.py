@@ -14,11 +14,11 @@ def get_filename(folder_path):
 
 def get_recordingKey(filename):
     with h5py.File(filename, 'r') as h5file:
-        return h5file['acquisition']['timeseries'].keys()[0]
+        return list(h5file['acquisition']['timeseries'].keys())[0]
 
 def get_processorKey(filename):
     with h5py.File(filename, 'r') as h5file:
-        return h5file['acquisition']['timeseries'][get_recordingKey(filename)]['continuous'].keys()[0]
+        return list(h5file['acquisition']['timeseries'][get_recordingKey(filename)]['continuous'].keys())[0]
 
 def load_continuous(filename):
     # Load data file
@@ -43,9 +43,9 @@ def load_tetrode_lowpass(filename):
     path = '/acquisition/timeseries/' + recordingKey + '/continuous/' + processorKey
     if check_if_path_exists(filename, path + '/tetrode_lowpass'):
         with h5py.File(filename, 'r') as f:
-            tetrode_lowpass = f[path + '/tetrode_lowpass'].value # not converted to microvolts!!!! need to multiply by 0.195
-            tetrode_lowpass_timestamps = f[path + '/tetrode_lowpass_timestamps'].value
-            tetrode_lowpass_info = list(f[path + '/tetrode_lowpass_info'].value)
+            tetrode_lowpass = f[path + '/tetrode_lowpass'][()] # not converted to microvolts!!!! need to multiply by 0.195
+            tetrode_lowpass_timestamps = f[path + '/tetrode_lowpass_timestamps'][()]
+            tetrode_lowpass_info = list(f[path + '/tetrode_lowpass_info'][()])
             tetrode_lowpass_info = [str(i) for i in tetrode_lowpass_info]
             data = {'tetrode_lowpass': tetrode_lowpass, 
                     'tetrode_lowpass_timestamps': tetrode_lowpass_timestamps, 
@@ -87,7 +87,7 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
         spike_name_path = '/acquisition/timeseries/' + recordingKey + '/' + spike_name
         if spike_name_path in h5file:
             # Get data file spikes folder keys and sort them into ascending order by tetrode number
-            tetrode_keys = h5file[spike_name_path].keys()
+            tetrode_keys = list(h5file[spike_name_path].keys())
         else:
             return []
         if len(tetrode_keys) > 0:
@@ -107,9 +107,9 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
                     # If data is available for this tetrode
                     ntet = tetrode_keys_int.index(nr_tetrode)
                     waveforms = h5file['/acquisition/timeseries/' + recordingKey + '/' + spike_name + '/' + \
-                                       tetrode_keys[ntet] + '/data/'].value
+                                       tetrode_keys[ntet] + '/data/'][()]
                     timestamps = h5file['/acquisition/timeseries/' + recordingKey + '/' + spike_name + '/' + \
-                                        tetrode_keys[ntet] + '/timestamps/'].value
+                                        tetrode_keys[ntet] + '/timestamps/'][()]
                     if waveforms.shape[0] == 0:
                         # If no waveforms are available, enter one waveform of zeros at timepoint zero
                         waveforms = empty_spike_data()['waveforms']
@@ -121,7 +121,7 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
                     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/' + \
                            tetrode_keys[ntet] + '/idx_keep'
                     if check_if_path_exists(filename, path):
-                        tet_data['idx_keep'] = np.array(h5file[path].value).squeeze()
+                        tet_data['idx_keep'] = np.array(h5file[path][()]).squeeze()
                         if use_idx_keep:
                             if np.sum(tet_data['idx_keep']) == 0:
                                 tet_data['waveforms'] = empty_spike_data()['waveforms']
@@ -133,7 +133,7 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
                     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/' + \
                            tetrode_keys[ntet] + '/clusterIDs'
                     if check_if_path_exists(filename, path):
-                        tet_data['clusterIDs'] = np.int16(h5file[path].value).squeeze()
+                        tet_data['clusterIDs'] = np.int16(h5file[path][()]).squeeze()
                     # Set spikes to zeros for channels in badChan list
                     if use_badChan:
                         badChan = listBadChannels(filename)
@@ -190,8 +190,8 @@ def load_events(filename):
     recordingKey = get_recordingKey(filename)
     with h5py.File(filename, 'r') as h5file:
         # Load timestamps and TLL signal info
-        timestamps = h5file['acquisition']['timeseries'][recordingKey]['events']['ttl1']['timestamps'].value
-        eventID = h5file['acquisition']['timeseries'][recordingKey]['events']['ttl1']['data'].value
+        timestamps = h5file['acquisition']['timeseries'][recordingKey]['events']['ttl1']['timestamps'][()]
+        eventID = h5file['acquisition']['timeseries'][recordingKey]['events']['ttl1']['data'][()]
         data = {'eventID': eventID, 'timestamps': timestamps}
 
     return data
@@ -234,16 +234,19 @@ def recursively_load_dict_contents_from_group(h5file, path):
         for key, item in h5file[path].items():
             if isinstance(item, h5py._hl.dataset.Dataset):
                 if 'S100' == item.dtype:
-                    tmp = list(item.value)
+                    tmp = list(item[()])
                     ans[str(key)] = [str(i) for i in tmp]
                 elif item.dtype == 'bool':
-                    ans[str(key)] = np.array(bool(item.value))
+                    ans[str(key)] = np.array(bool(item[()]))
                 else:
-                    ans[str(key)] = item.value
+                    ans[str(key)] = item[()]
             elif isinstance(item, h5py._hl.group.Group):
                 ans[str(key)] = recursively_load_dict_contents_from_group(h5file, path + key + '/')
     else:
-        ans = h5file[path].value
+        ans = h5file[path][()]
+        if isinstance(ans, bytes):
+            ans = ans.decode('utf-8')
+
     return ans
 
 def save_settings(filename, Settings, path='/'):
@@ -303,7 +306,7 @@ def listBadChannels(filename):
                 badChanStringList.remove(chanString) # Remove the '-' containing list element
         # Reorder list of bad channels
         badChanStringList.sort(key=int)
-        badChan = list(np.array(map(int, badChanStringList)) - 1)
+        badChan = list(np.array(list(map(int, badChanStringList))) - 1)
     else:
         badChan = []
 
@@ -328,7 +331,7 @@ def save_tracking_data(filename, TrackingData, ProcessedPos=False, overwrite=Fal
         elif ProcessedPos:
             # If overwrite is true, path is first cleared
             processed_pos_path = full_path + 'ProcessedPos/'
-            if overwrite and 'ProcessedPos' in h5file[full_path].keys():
+            if overwrite and 'ProcessedPos' in list(h5file[full_path].keys()):
                 del h5file[processed_pos_path]
             h5file[processed_pos_path] = TrackingData
 
@@ -344,7 +347,7 @@ def load_processed_tracking_data(filename, subset='ProcessedPos'):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'
     path = path + subset
     with h5py.File(filename, 'r') as h5file:
-        return np.array(h5file[path].value)
+        return np.array(h5file[path][()])
 
 def get_processed_tracking_data_timestamp_edges(filename, subset='ProcessedPos'):
     if check_if_processed_position_data_available(filename):
@@ -471,7 +474,7 @@ def extract_recording_info(filename, selection='default'):
         del recording_info['root_folder']
         if recording_info['TaskActive']:
             recording_info.update({'TaskName': load_settings(filename, '/TaskSettings/name/')})
-        for key in recording_info['channel_map'].keys():
+        for key in list(recording_info['channel_map'].keys()):
             del recording_info['channel_map'][key]['list']
         pos_edges = get_processed_tracking_data_timestamp_edges(filename)
         recording_info['duration (min)'] = int(round((pos_edges[1] - pos_edges[0]) / 60))
