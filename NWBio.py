@@ -203,6 +203,36 @@ def load_GlobalClock_timestamps(filename, GlobalClock_TTL_channel=1):
     data = load_events(filename)
     return data['timestamps'][data['eventID'] == GlobalClock_TTL_channel]
 
+
+def load_network_events(filename):
+    '''returns network_events_data
+
+    Extracts the list of network messages from NWB file 
+    and returns it along with corresponding timestamps
+    in dictionary with keys ['data', 'timestamps']
+    
+    'data' - list of str
+    
+    'timestamps' - list of float
+
+    :param filename: full path to NWB file
+    :type filename: str
+    :return: network_events_data
+    :rtype: dict
+    '''    # Load data file
+    recordingKey = get_recordingKey(filename)
+    with h5py.File(filename, 'r') as h5file:
+        # Load timestamps and TLL signal info
+        timestamps = h5file['acquisition']['timeseries'][recordingKey]['events']['text1']['timestamps'][()]
+        data = h5file['acquisition']['timeseries'][recordingKey]['events']['text1']['data'][()]
+    data = [x.decode('utf-8') for x in data]
+    timestamps = [float(x) for x in timestamps]
+
+    data = {'data': data, 'timestamps': timestamps}
+
+    return data
+
+
 def check_if_path_exists(filename, path):
     with h5py.File(filename,'r') as h5file:
         return path in h5file
@@ -497,6 +527,7 @@ def display_recording_data(root_path, selection='default'):
                 recording_info = extract_recording_info(filename, selection)
                 print('Data on path: ' + dirName)
                 pprint(recording_info)
+
 
 if __name__ == '__main__':
     # Input argument handling and help info
