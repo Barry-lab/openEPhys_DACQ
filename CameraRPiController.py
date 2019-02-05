@@ -1,3 +1,4 @@
+from __future__ import division
 import numpy as np
 import picamera
 import picamera.array
@@ -12,16 +13,19 @@ import os
 import cPickle as pickle
 from scipy.spatial.distance import euclidean
 import sys
-from multiprocessing import Manager, Process, RawArray
+from multiprocessing import Manager, Process, RawArray, Value
+from threading import Thread
 from copy import copy, deepcopy
 from ZMQcomms import remote_controlled_class
 import argparse
-from ctypes import c_uint8
+from ctypes import c_uint8, c_uint16, c_bool
 import warnings
 import io
 import socket
 import struct
 from PIL import Image
+from subprocess import PIPE, Popen
+import psutil
 
 
 class csv_writer(object):
@@ -65,6 +69,79 @@ def distance_between_adjacent_pixels(calibrationTmatrix, frame_shape):
 
 def convert_centimeters_to_pixel_distance(distance_in_cm, calibrationTmatrix, frame_shape):
     return int(np.round(float(distance_in_cm) / distance_between_adjacent_pixels(calibrationTmatrix, frame_shape)))
+
+
+class RPiMonitorLogger(object):
+
+    def __init__(self, frequency=2, queue_length_method=None):
+        self._frequency = frequency
+        self._queue_length_method = queue_length_method
+        self._continue_bool = Value(c_bool)
+        self._continue_bool.value = True
+        self._queue_length = Value(c_uint16)
+        self._P_logger = Process(target=RPiMonitorLogger.logger, 
+                                 args=(self._continue_bool, 
+                                       self._frequency, 
+                                       self._queue_length))
+        self._P_logger.start()
+        if not (queue_length_method is None):
+            self._keep_updating_queue_length = True
+            self._T_update_queue_length = Thread(target=self._update_queue_length)
+            self._T_update_queue_length.start()
+
+    def _update_queue_length(self):
+        while self._keep_updating_queue_length:
+            self._queue_length.value = int(self._queue_length_method())
+            sleep(1.0 / self._frequency)
+
+    @staticmethod
+    def get_cpu_temperature():
+        process = Popen(['vcgencmd', 'measure_temp'], stdout=PIPE)
+        output, _error = process.communicate()
+        return float(output[output.index('=') + 1:output.rindex("'")])
+
+    @staticmethod
+    def get_cpu_usage():
+        return psutil.cpu_percent()
+
+    @staticmethod
+    def get_memory_usage():
+        return psutil.virtual_memory().percent
+
+    @staticmethod
+    def get_disk_usage():
+        return psutil.disk_usage('/').percent
+
+    @staticmethod
+    def logger(continue_bool, frequency, queue_length):
+        writer = csv_writer('RPiMonitorLog.csv')
+        # Write header
+        writer.write(['time_from_start', 
+                      'cpu_temperature', 
+                      'cpu_usage', 
+                      'memory_usage', 
+                      'disk_usage', 
+                      'queue_length'])
+        # Get start time
+        start_time = time()
+        # Keep writing lines at specified rate
+        while continue_bool.value:
+            writer.write([time() - start_time, 
+                          RPiMonitorLogger.get_cpu_temperature(), 
+                          RPiMonitorLogger.get_cpu_usage(), 
+                          RPiMonitorLogger.get_memory_usage(), 
+                          RPiMonitorLogger.get_disk_usage(), 
+                          queue_length.value])
+            sleep(1.0 / float(frequency))
+        # Close CSV file before finishing process
+        writer.close()
+
+    def close(self):
+        self._continue_bool.value = False
+        self._P_logger.join()
+        if hasattr(self, '_T_update_queue_length'):
+            self._keep_updating_queue_length = False
+            self._T_update_queue_length.join()
 
 
 class OnlineTracker(object):
@@ -496,7 +573,7 @@ class RawYUV_Processor(object):
     Used by RawYUV_Output to process each incoming frame.
     Uses SharedArrayQueue to pass items into OnlineTracker in a separate process.
     '''
-    def __init__(self, OnlineTrackerParams, frame_shape):
+    def __init__(self, OnlineTrackerParams, frame_shape, monitor=True):
         '''
         OnlineTrackerParams - dict - input to prepare_OnlineTracker_params
         frame_shape - tuple - (height, width, n_channels) of incoming frames
@@ -506,6 +583,8 @@ class RawYUV_Processor(object):
         self.P_OnlineTracker_Process = Process(target=RawYUV_Processor.OnlineTracker_Process, 
                                                 args=(OnlineTrackerParams, self.queue))
         self.P_OnlineTracker_Process.start()
+        if monitor:
+            self._MonitorLogger = RPiMonitorLogger(4, self.queue.qsize)
 
     @staticmethod
     def OnlineTracker_Process(params, queue):
@@ -534,6 +613,8 @@ class RawYUV_Processor(object):
         self.queue.put('STOP')
         self.queue.join()
         self.P_OnlineTracker_Process.join()
+        if hasattr(self, '_MonitorLogger'):
+            self._MonitorLogger.close()
 
 
 class Calibrator(object):
