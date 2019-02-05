@@ -1298,10 +1298,13 @@ class MilkGame_Variables(Abstract_Variables):
             posHistory = self._RPIPos.combPosHistory[-self._distance_steps:]
             posHistory_one_second_steps = self._RPIPos.combPosHistory[-self._one_second_steps:]
             posHistory_for_angularDistance = self._RPIPos.combPosHistory[-self._angular_distance_steps:]
-        if not (None in posHistory):
-            self._lastKnownPosHistory = posHistory[-1]
-        else:
+        # If animal position history is flaulty, use last known position as current static position
+        if None in posHistory or None in posHistory_one_second_steps or None in posHistory_for_angularDistance:
             posHistory = [self._lastKnownPosHistory] * self._distance_steps
+            posHistory_one_second_steps = [self._lastKnownPosHistory] * self._one_second_steps
+            posHistory_for_angularDistance = [self._lastKnownPosHistory] * self._angular_distance_steps
+        else:
+            self._lastKnownPosHistory = posHistory[-1]
         # Compute distances to all active milk feeders
         self._update_feeder_distances(posHistory_one_second_steps)
         # Compute all game progress variables
