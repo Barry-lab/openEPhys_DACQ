@@ -2814,3 +2814,4 @@ class Core(object):
             print('Closing Pellet FEEDER connections successful.')
         # Close pygame engine
         close_pygame()
+

@@ -209,9 +209,9 @@ def load_network_events(filename):
 
     Extracts the list of network messages from NWB file 
     and returns it along with corresponding timestamps
-    in dictionary with keys ['data', 'timestamps']
+    in dictionary with keys ['messages', 'timestamps']
     
-    'data' - list of str
+    'messages' - list of str
     
     'timestamps' - list of float
 
@@ -219,16 +219,17 @@ def load_network_events(filename):
     :type filename: str
     :return: network_events_data
     :rtype: dict
-    '''    # Load data file
+    '''
+    # Load data file
     recordingKey = get_recordingKey(filename)
     with h5py.File(filename, 'r') as h5file:
-        # Load timestamps and TLL signal info
+        # Load timestamps and messages
         timestamps = h5file['acquisition']['timeseries'][recordingKey]['events']['text1']['timestamps'][()]
-        data = h5file['acquisition']['timeseries'][recordingKey]['events']['text1']['data'][()]
-    data = [x.decode('utf-8') for x in data]
+        messages = h5file['acquisition']['timeseries'][recordingKey]['events']['text1']['data'][()]
+    messages = [x.decode('utf-8') for x in messages]
     timestamps = [float(x) for x in timestamps]
 
-    data = {'data': data, 'timestamps': timestamps}
+    data = {'messages': messages, 'timestamps': timestamps}
 
     return data
 
