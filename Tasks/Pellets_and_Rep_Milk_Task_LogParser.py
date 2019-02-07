@@ -371,11 +371,3 @@ def extract_milk_task_performance(game_state_data):
                 break
 
     return task_data
-
-
-if __name__ == '__main__':
-    import NWBio
-    filename = '/media/sander/BarryL_STF1/2019-01-23_13-55-27/experiment_1.nwb'
-    data = NWBio.load_network_events(filename)
-    lp = LogParser(**data)
-    extract_milk_task_performance(lp.data['GameState'])
