@@ -201,8 +201,12 @@ def create_DACQ_pos_data(posdata, data_time_edges=None, pixels_per_metre=None, d
         # Realign position data start to 0 at data_time_edges[0]
         timestamps = timestamps - data_time_edges[0]
         # Set minumum value of x and y to be 0
-        x_min = min([np.nanmin(xy_pos[:, 0]), np.nanmin(xy_pos[:, 2])])
-        y_min = min([np.nanmin(xy_pos[:, 1]), np.nanmin(xy_pos[:, 3])])
+        x_min = np.nanmin(xy_pos[:, 0])
+        y_min = np.nanmin(xy_pos[:, 1])
+        if not all(np.isnan(xy_pos[:, 2])):
+            x_min = min(x_min, np.nanmin(xy_pos[:, 2]))
+        if not all(np.isnan(xy_pos[:, 3])):
+            y_min = min(y_min, np.nanmin(xy_pos[:, 3]))
         xy_pos[:, 0] = xy_pos[:, 0] - x_min
         xy_pos[:, 2] = xy_pos[:, 2] - x_min
         xy_pos[:, 1] = xy_pos[:, 1] - y_min

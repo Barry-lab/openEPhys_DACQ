@@ -290,18 +290,24 @@ def get_channel_map(OpenEphysDataPaths):
 
     return channel_map
 
-def ensure_processed_position_data_is_available(OpenEphysDataPath, postprocess=False, maxjump=25):
+
+def process_position_data(OpenEphysDataPath, postprocess=False, maxjump=25):
+    if NWBio.check_if_tracking_data_available(OpenEphysDataPath):
+        print('Processing tracking data for: ' + OpenEphysDataPath)
+        ProcessedPos = process_tracking_data(OpenEphysDataPath)
+        NWBio.save_tracking_data(OpenEphysDataPath, ProcessedPos, ProcessedPos=True, overwrite=True)
+        print('ProcessedPos saved to ' + OpenEphysDataPath)
+    elif NWBio.check_if_binary_pos(OpenEphysDataPath):
+        NWBio.use_binary_pos(OpenEphysDataPath, postprocess=postprocess, maxjump=maxjump)
+        print('Using binary position data for: ' + OpenEphysDataPath)
+    else:
+        print('Proceeding without position data for: ' + OpenEphysDataPath)
+
+
+def ensure_processed_position_data_is_available(OpenEphysDataPath, **kwargs):
     if not NWBio.check_if_processed_position_data_available(OpenEphysDataPath):
-        if NWBio.check_if_tracking_data_available(OpenEphysDataPath):
-            print('Processing tracking data for: ' + OpenEphysDataPath)
-            ProcessedPos = process_tracking_data(OpenEphysDataPath)
-            NWBio.save_tracking_data(OpenEphysDataPath, ProcessedPos, ProcessedPos=True)
-            print('ProcessedPos saved to ' + OpenEphysDataPath)
-        elif NWBio.check_if_binary_pos(OpenEphysDataPath):
-            NWBio.use_binary_pos(OpenEphysDataPath, postprocess=postprocess, maxjump=maxjump)
-            print('Using binary position data for: ' + OpenEphysDataPath)
-        else:
-            print('Proceeding without position data for: ' + OpenEphysDataPath)
+        process_position_data(OpenEphysDataPath, **kwargs)
+
 
 def ensure_data_available_for_all_tetrodes(spike_data, tetrode_nrs):
     # Check which tetrodes have data missing in the recording
@@ -575,14 +581,18 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
 
 def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, 
          noise_cut_off=1000, threshold=50, make_AxonaData=False, 
-         axonaDataArgs=(None, False), max_clusters=31, pos_data_processing_kwargs={}):
+         axonaDataArgs=(None, False), max_clusters=31, 
+         force_position_processing=False, pos_data_processing_kwargs={}):
     # Ensure correct format for data paths
     if isinstance(OpenEphysDataPaths, basestring):
         OpenEphysDataPaths = [OpenEphysDataPaths]
     OpenEphysDataPaths = clarify_OpenEphysDataPaths(OpenEphysDataPaths)
     # Create ProcessedPos if not yet available
     for OpenEphysDataPath in OpenEphysDataPaths:
-        ensure_processed_position_data_is_available(OpenEphysDataPath, **pos_data_processing_kwargs)
+        if force_position_processing:
+            process_position_data(OpenEphysDataPath, **pos_data_processing_kwargs)
+        else:
+            ensure_processed_position_data_is_available(OpenEphysDataPath, **pos_data_processing_kwargs)
     # Get channel_map if not available
     if channel_map is None:
         channel_map = get_channel_map(OpenEphysDataPaths)
@@ -664,6 +674,8 @@ if __name__ == '__main__':
                         help='to skip conversion into AxonaData format after processing')
     parser.add_argument('--ppm', type=int, nargs = 1, 
                         help='(for AxonaData) enter pixels_per_metre to assume position data is in pixels')
+    parser.add_argument('--force_position_processing', action='store_true',
+                        help='instruct reprocessing position data and overwrite previous data')
     parser.add_argument('--position_postprocessing', action='store_true',
                         help='instruct position data postprocessing (default is no postprocessing)')
     parser.add_argument('--position_maxjump', type=float, nargs = 1, 
@@ -716,6 +728,10 @@ if __name__ == '__main__':
         else:
             processing_method = 'klustakwik'
         # Specify position data processing options
+        if args.force_position_processing:
+            force_position_processing = True
+        else:
+            force_position_processing = False
         pos_data_processing_kwargs = {}
         if args.position_postprocessing:
             pos_data_processing_kwargs['postprocess'] = True
@@ -744,4 +760,4 @@ if __name__ == '__main__':
         # Run the script
         main(OpenEphysDataPaths, processing_method, channel_map, noise_cut_off, 
              threshold, make_AxonaData, axonaDataArgs, max_clusters, 
-             pos_data_processing_kwargs)
+             force_position_processing, pos_data_processing_kwargs)

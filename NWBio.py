@@ -330,10 +330,11 @@ def save_tracking_data(filename, TrackingData, ProcessedPos=False, overwrite=Fal
         if not ProcessedPos:
             recursively_save_dict_contents_to_group(h5file, full_path, TrackingData)
         elif ProcessedPos:
-            # If overwrite is true, path is first cleared
             processed_pos_path = full_path + 'ProcessedPos/'
-            if overwrite and 'ProcessedPos' in list(h5file[full_path].keys()):
-                del h5file[processed_pos_path]
+            # If overwrite is true, path is first cleared
+            if overwrite:
+                if full_path in h5file and 'ProcessedPos' in list(h5file[full_path].keys()):
+                    del h5file[processed_pos_path]
             h5file[processed_pos_path] = TrackingData
 
 def load_raw_tracking_data(filename, cameraID, specific_path=None):
@@ -366,8 +367,10 @@ def get_processed_tracking_data_timestamp_edges(filename, subset='ProcessedPos')
     return edges
 
 def check_if_tracking_data_available(filename):
-    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'
-    return check_if_path_exists(filename, path)
+    if check_if_settings_available(filename, path='/General/Tracking/'):
+        return load_settings(filename, path='/General/Tracking/')
+    else:
+        return False
 
 def check_if_processed_position_data_available(filename, subset='ProcessedPos'):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'
@@ -401,7 +404,7 @@ def use_binary_pos(filename, postprocess=False, maxjump=25):
     if postprocess:
         posdata = remove_tracking_data_jumps(posdata, maxjump)
     # Save data to ProcessedPos position in NWB file
-    save_tracking_data(filename, posdata, ProcessedPos=True, overwrite=False)
+    save_tracking_data(filename, posdata, ProcessedPos=True, overwrite=True)
 
 def save_tetrode_idx_keep(filename, ntet, idx_keep, spike_name='spikes', overwrite=False):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/' + \
