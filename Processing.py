@@ -4,7 +4,7 @@ try:
 except:
     matlab_available = False
 # To install matlab engine, go to folder /usr/local/MATLAB/R2017a/extern/engines/python
-# and run terminal command: sudo python setup.py installfrom TrackingDataProcessing import process_tracking_data
+# and run terminal command: sudo python setup.py install
 import argparse
 import numpy as np
 import os
