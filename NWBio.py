@@ -7,6 +7,7 @@ from HelperFunctions import tetrode_channels
 from pprint import pprint
 from copy import copy
 import argparse
+from TrackingDataProcessing import remove_tracking_data_jumps
 
 def get_filename(folder_path):
     if not os.path.isfile(folder_path):
@@ -378,7 +379,7 @@ def check_if_binary_pos(filename):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/events/binary1/'
     return check_if_path_exists(filename, path)
 
-def use_binary_pos(filename, postprocess=False):
+def use_binary_pos(filename, postprocess=False, maxjump=25):
     '''
     Copies binary position data into tracking data
     Apply postprocessing with postprocess=True
@@ -389,29 +390,18 @@ def use_binary_pos(filename, postprocess=False):
         timestamps = np.array(h5file['acquisition']['timeseries'][recordingKey]['events']['binary1']['timestamps'])
         xy = np.array(h5file['acquisition']['timeseries'][recordingKey]['events']['binary1']['data'][:,:2])
     data = {'xy': xy, 'timestamps': timestamps}
-    # Postprocess the data if requested
-    if postprocess:
-        maxjump = 25
-        keepPos = []
-        lastPos = data['xy'][0,:]
-        for npos in range(data['xy'].shape[0]):
-            currpos = data['xy'][npos,:]
-            if np.max(np.abs(lastPos - currpos)) < maxjump:
-                keepPos.append(npos)
-                lastPos = currpos
-        keepPos = np.array(keepPos)
-        print(str(data['xy'].shape[0] - keepPos.size) + ' of ' + 
-              str(data['xy'].shape[0]) + ' removed in postprocessing')
-        data['xy'] = data['xy'][keepPos,:]
-        data['timestamps'] = data['timestamps'][keepPos]
-    # Save data to ProcessedPos position with correct format
-    TrackingData = np.append(data['timestamps'][:,None], data['xy'].astype(np.float64), axis=1)
-    if TrackingData.shape[1] < 5:
-        # Add NaNs for second LED if missing
+    # Construct data into repository familiar posdata format (single array with times in first column)
+    posdata = np.append(data['timestamps'][:,None], data['xy'].astype(np.float64), axis=1)
+    # Add NaNs for second LED if missing
+    if posdata.shape[1] < 5:
         nanarray = np.zeros(data['xy'].shape, dtype=np.float64)
         nanarray[:] = np.nan
-        TrackingData = np.append(TrackingData, nanarray, axis=1)
-    save_tracking_data(filename, TrackingData, ProcessedPos=True, overwrite=False)
+        posdata = np.append(posdata, nanarray, axis=1)
+    # Postprocess the data if requested
+    if postprocess:
+        posdata = remove_tracking_data_jumps(posdata, maxjump)
+    # Save data to ProcessedPos position in NWB file
+    save_tracking_data(filename, posdata, ProcessedPos=True, overwrite=False)
 
 def save_tetrode_idx_keep(filename, ntet, idx_keep, spike_name='spikes', overwrite=False):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/' + \

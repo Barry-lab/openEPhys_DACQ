@@ -290,7 +290,7 @@ def get_channel_map(OpenEphysDataPaths):
 
     return channel_map
 
-def ensure_processed_position_data_is_available(OpenEphysDataPath):
+def ensure_processed_position_data_is_available(OpenEphysDataPath, postprocess=False, maxjump=25):
     if not NWBio.check_if_processed_position_data_available(OpenEphysDataPath):
         if NWBio.check_if_tracking_data_available(OpenEphysDataPath):
             print('Processing tracking data for: ' + OpenEphysDataPath)
@@ -298,7 +298,7 @@ def ensure_processed_position_data_is_available(OpenEphysDataPath):
             NWBio.save_tracking_data(OpenEphysDataPath, ProcessedPos, ProcessedPos=True)
             print('ProcessedPos saved to ' + OpenEphysDataPath)
         elif NWBio.check_if_binary_pos(OpenEphysDataPath):
-            NWBio.use_binary_pos(OpenEphysDataPath, postprocess=False)
+            NWBio.use_binary_pos(OpenEphysDataPath, postprocess=postprocess, maxjump=maxjump)
             print('Using binary position data for: ' + OpenEphysDataPath)
         else:
             print('Proceeding without position data for: ' + OpenEphysDataPath)
@@ -575,14 +575,14 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
 
 def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, 
          noise_cut_off=1000, threshold=50, make_AxonaData=False, 
-         axonaDataArgs=(None, False), max_clusters=31):
+         axonaDataArgs=(None, False), max_clusters=31, pos_data_processing_kwargs={}):
     # Ensure correct format for data paths
     if isinstance(OpenEphysDataPaths, basestring):
         OpenEphysDataPaths = [OpenEphysDataPaths]
     OpenEphysDataPaths = clarify_OpenEphysDataPaths(OpenEphysDataPaths)
     # Create ProcessedPos if not yet available
     for OpenEphysDataPath in OpenEphysDataPaths:
-        ensure_processed_position_data_is_available(OpenEphysDataPath)
+        ensure_processed_position_data_is_available(OpenEphysDataPath, **pos_data_processing_kwargs)
     # Get channel_map if not available
     if channel_map is None:
         channel_map = get_channel_map(OpenEphysDataPaths)
@@ -637,7 +637,8 @@ def process_data_tree(root_path, downsample=False, max_clusters=31):
                        (raw_data_available or downsampled_data_available):
                         main(fpath, processing_method='klustakwik', 
                             noise_cut_off=1000, threshold=50, make_AxonaData=True, 
-                            axonaDataArgs=(None, False), max_clusters=max_clusters)
+                            axonaDataArgs=(None, False), max_clusters=max_clusters, 
+                            pos_data_processing_kwargs=pos_data_processing_kwargs)
     if downsample:
         import DeleteRAWdata
         DeleteRAWdata.main(root_path)
@@ -663,6 +664,10 @@ if __name__ == '__main__':
                         help='to skip conversion into AxonaData format after processing')
     parser.add_argument('--ppm', type=int, nargs = 1, 
                         help='(for AxonaData) enter pixels_per_metre to assume position data is in pixels')
+    parser.add_argument('--position_postprocessing', action='store_true',
+                        help='instruct position data postprocessing (default is no postprocessing)')
+    parser.add_argument('--position_maxjump', type=float, nargs = 1, 
+                        help='enter maximum allowed jump in position data values for position data postprocessing')
     parser.add_argument('--max_clusters', type=int, nargs = 1, 
                         help='Specifies the maximum number of cluster to find. Default is 31.')
     parser.add_argument('--show_output', action='store_true', 
@@ -710,6 +715,14 @@ if __name__ == '__main__':
             processing_method = 'kilosort'
         else:
             processing_method = 'klustakwik'
+        # Specify position data processing options
+        pos_data_processing_kwargs = {}
+        if args.position_postprocessing:
+            pos_data_processing_kwargs['postprocess'] = True
+        else:
+            pos_data_processing_kwargs['postprocess'] = False
+        if args.position_maxjump:
+            pos_data_processing_kwargs['maxjump'] = args.position_maxjump[0]
         # Specify axona data options
         if args.noAxonaData:
             make_AxonaData = False
@@ -730,4 +743,5 @@ if __name__ == '__main__':
         axonaDataArgs = (pixels_per_metre, show_output)
         # Run the script
         main(OpenEphysDataPaths, processing_method, channel_map, noise_cut_off, 
-             threshold, make_AxonaData, axonaDataArgs, max_clusters)
+             threshold, make_AxonaData, axonaDataArgs, max_clusters, 
+             pos_data_processing_kwargs)

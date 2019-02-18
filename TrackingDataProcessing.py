@@ -156,6 +156,35 @@ def remove_tracking_data_outside_boundaries(posdata, arena_size, max_error=20):
 
     return posdata
 
+
+def remove_tracking_data_jumps(posdata, maxjump):
+    """
+    Removes data with too large jumps based on euclidean distance
+
+    posdata - numpy array with columns:
+              timestamps
+              LED 1 xpos
+              LED 1 ypos
+              LED 2 xpos
+              LED 2 ypos
+              , where NaN for missing LED 2 data
+    maxjump - int or float specifying maximum allowed shift in euclidean distance
+    """
+    keepPos = []
+    lastPos = posdata[0,1:3]
+    for npos in range(posdata.shape[0]):
+        currpos = posdata[npos,1:3]
+        if euclidean(lastPos, currpos) < maxjump:
+            keepPos.append(npos)
+            lastPos = currpos
+    keepPos = np.array(keepPos)
+    print(str(posdata.shape[0] - keepPos.size) + ' of ' + 
+          str(posdata.shape[0]) + ' removed in postprocessing')
+    posdata = posdata[keepPos,:]
+
+    return posdata
+
+
 def process_tracking_data(filename, save_to_file=False):
     # Get CameraSettings
     CameraSettings = NWBio.load_settings(filename, '/CameraSettings/')
