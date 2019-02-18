@@ -2108,6 +2108,7 @@ class MilkTrial_LightSignal(object):
         self.actuator_method_call = actuator_method_call
         self.MessageToOE = MessageToOE
         # Prepare internal variables
+        self.light_on = False
         self._waiting_on_delay = False
         self._cancel_delay = False
 
@@ -2115,6 +2116,7 @@ class MilkTrial_LightSignal(object):
         OEmessage = 'LightSignal Start'
         self.MessageToOE(OEmessage)
         self.actuator_method_call(ID, 'startLightSignal')
+        self.light_on = True
 
     def stop(self, ID):
         if self._waiting_on_delay:
@@ -2123,6 +2125,7 @@ class MilkTrial_LightSignal(object):
             OEmessage = 'LightSignal Stop'
             self.MessageToOE(OEmessage)
             self.actuator_method_call(ID, 'stopLightSignal')
+            self.light_on = False
 
     def _delayed_starter(self, ID, delay):
         '''
@@ -2179,7 +2182,7 @@ class MilkTrialSignals(object):
 
     def stop(self, ID):
         self.MilkTrial_AudioSignal.stop(ID)
-        if self.FirstTrialLightOn or self.OtherTrialLightOn:
+        if hasattr(self, 'MilkTrial_LightSignal') and self.MilkTrial_LightSignal.light_on:
             self.MilkTrial_LightSignal.stop(ID)
 
     def fail(self, ID):
