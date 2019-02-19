@@ -11,7 +11,6 @@
 import numpy as np
 import pickle
 import os
-import NWBio
 from itertools import combinations
 from scipy.spatial.distance import euclidean
 
@@ -185,16 +184,16 @@ def remove_tracking_data_jumps(posdata, maxjump):
     return posdata
 
 
-def process_tracking_data(filename, save_to_file=False):
-    # Get CameraSettings
-    CameraSettings = NWBio.load_settings(filename, '/CameraSettings/')
+def iteratively_combine_multicamera_data_for_recording(
+    CameraSettings, arena_size, posdatas, OE_GC_times):
+    """Return ProcessedPos
+
+    Combines raw tracking data from multiple cameras into a single ProcessedPos array.
+    If a single camera data is provided, this will be converted into same format.
+    """
     cameraIDs = sorted(CameraSettings['CameraSpecific'].keys())
-    # Get arena_size
-    arena_size = NWBio.load_settings(filename, '/General/arena_size')
     # Load position data for all cameras
-    posdatas = []
-    for cameraID in cameraIDs:
-        posdata = NWBio.load_raw_tracking_data(filename, cameraID)
+    for i, posdata in enumerate(posdatas):
         if isinstance(posdata, dict):
             # This is conditional because for early recordings tracking data was immediately stored in Open Ephys time.
             # Remove datapoints where all position data is None
@@ -206,12 +205,10 @@ def process_tracking_data(filename, save_to_file=False):
             # Compute position data timestamps in OpenEphys time
             RPi_frame_times = posdata['OnlineTrackerData_timestamps']
             RPi_GC_times = posdata['GlobalClock_timestamps']
-            if not ('OE_GC_times' in locals()):
-                OE_GC_times = NWBio.load_GlobalClock_timestamps(filename)
             RPi_frame_in_OE_times = estimate_OpenEphys_timestamps_for_tracking_data(OE_GC_times, RPi_GC_times, RPi_frame_times)
             # Combine timestamps and position data into a single array
             posdata = np.concatenate((RPi_frame_in_OE_times.astype(np.float64)[:, None], posdata['OnlineTrackerData']), axis=1)
-            posdatas.append(posdata)
+            posdatas[i] = posdata
     if len(posdatas) > 1:
         # If data from multiple cameras available, combine it
         PosDataFramesPerSecond = 20.0
@@ -259,8 +256,5 @@ def process_tracking_data(filename, save_to_file=False):
         ProcessedPos = posdatas[0]
     ProcessedPos = remove_tracking_data_outside_boundaries(ProcessedPos, arena_size, max_error=10)
     ProcessedPos = ProcessedPos.astype(np.float64)
-    if save_to_file:
-        # Save corrected data to file
-        NWBio.save_tracking_data(filename, ProcessedPos, ProcessedPos=True, ReProcess=False)
 
     return ProcessedPos

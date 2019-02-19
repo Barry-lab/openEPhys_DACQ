@@ -15,7 +15,6 @@ import NWBio
 from createAxonaData import createAxonaData_for_NWBfile
 import HelperFunctions as hfunct
 from KlustaKwikWrapper import applyKlustaKwik_on_spike_data_tet
-from TrackingDataProcessing import process_tracking_data
 import h5py
 
 class continuous_data_preloader(object):
@@ -294,7 +293,7 @@ def get_channel_map(OpenEphysDataPaths):
 def process_position_data(OpenEphysDataPath, postprocess=False, maxjump=25):
     if NWBio.check_if_tracking_data_available(OpenEphysDataPath):
         print('Processing tracking data for: ' + OpenEphysDataPath)
-        ProcessedPos = process_tracking_data(OpenEphysDataPath)
+        ProcessedPos = NWBio.process_tracking_data(OpenEphysDataPath)
         NWBio.save_tracking_data(OpenEphysDataPath, ProcessedPos, ProcessedPos=True, overwrite=True)
         print('ProcessedPos saved to ' + OpenEphysDataPath)
     elif NWBio.check_if_binary_pos(OpenEphysDataPath):

@@ -8,6 +8,7 @@ from pprint import pprint
 from copy import copy
 import argparse
 from TrackingDataProcessing import remove_tracking_data_jumps
+from TrackingDataProcessing import iteratively_combine_multicamera_data_for_recording
 
 def get_filename(folder_path):
     if not os.path.isfile(folder_path):
@@ -478,6 +479,28 @@ def extract_recording_info(filename, selection='default'):
         recording_info = fill_empty_dictionary_from_source(selection, full_recording_info)
 
     return recording_info
+
+
+def process_tracking_data(filename, save_to_file=False):
+    # Get CameraSettings
+    CameraSettings = load_settings(filename, '/CameraSettings/')
+    cameraIDs = sorted(CameraSettings['CameraSpecific'].keys())
+    # Get global clock timestamps
+    OE_GC_times = load_GlobalClock_timestamps(filename)
+    # Get arena_size
+    arena_size = load_settings(filename, '/General/arena_size')
+    # Load position data for all cameras
+    posdatas = []
+    for cameraID in cameraIDs:
+        posdatas.append(load_raw_tracking_data(filename, cameraID))
+    ProcessedPos = iteratively_combine_multicamera_data_for_recording(
+        CameraSettings, arena_size, posdatas, OE_GC_times)
+    if save_to_file:
+        # Save corrected data to file
+        save_tracking_data(filename, ProcessedPos, ProcessedPos=True, ReProcess=False)
+
+    return ProcessedPos
+
 
 def display_recording_data(root_path, selection='default'):
     '''
