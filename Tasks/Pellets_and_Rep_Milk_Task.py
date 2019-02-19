@@ -113,9 +113,9 @@ class SettingsGUI(object):
         self.populate_further_settings_layout(further_settings_layout)
 
     def make_space_for_frame(self, frame):
-        self.min_size[0] = max(self.min_size[0], frame.minimumHeight())
-        self.min_size[1] = self.min_size[1] + frame.minimumWidth()
-
+        self.min_size[0] = self.min_size[0] + frame.minimumWidth()
+        self.min_size[1] = max(self.min_size[1], frame.minimumHeight())
+ 
     def populate_main_settings_layout(self, main_settings_layout):
         vbox = QtGui.QVBoxLayout()
         font = QtGui.QFont('SansSerif', 15)
@@ -224,11 +224,6 @@ class SettingsGUI(object):
         self.settings['MaxInactivityDuration'] = QtGui.QLineEdit('90')
         hbox.addWidget(self.settings['MaxInactivityDuration'])
         vbox.addLayout(setDoubleHBoxStretch(hbox))
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Milk Trial Fail Penalty (s)'))
-        self.settings['MilkTrialFailPenalty'] = QtGui.QLineEdit('10')
-        hbox.addWidget(self.settings['MilkTrialFailPenalty'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
         # Specify chewing signal TTL channel
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Chewing TTL channel'))
@@ -250,7 +245,7 @@ class SettingsGUI(object):
         frame.setLayout(vbox)
         frame.setFrameStyle(3)
         # Set minimum size for frame
-        frame.setMinimumSize(400, 1000)
+        frame.setMinimumSize(400, 900)
 
         return frame
 
@@ -280,11 +275,20 @@ class SettingsGUI(object):
         hbox.addWidget(self.settings['AudioSignalMode']['localised'])
         grid.addLayout(setTripleHBoxStretch(hbox), 1, 0)
         # Add Milk reward quantity
+        self.settings['MilkQuantity'] = {}
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Reward Quantity'))
-        self.settings['MilkQuantity'] = QtGui.QLineEdit('1')
-        hbox.addWidget(self.settings['MilkQuantity'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 2, 0)
+        sub_hbox = QtGui.QHBoxLayout()
+        sub_hbox.addWidget(QtGui.QLabel('present'))
+        self.settings['MilkQuantity']['presentation'] = QtGui.QLineEdit('1')
+        sub_hbox.addWidget(self.settings['MilkQuantity']['presentation'])
+        hbox.addLayout(setDoubleHBoxStretch(sub_hbox))
+        sub_hbox = QtGui.QHBoxLayout()
+        sub_hbox.addWidget(QtGui.QLabel('repeat'))
+        self.settings['MilkQuantity']['repeat'] = QtGui.QLineEdit('1')
+        sub_hbox.addWidget(self.settings['MilkQuantity']['repeat'])
+        hbox.addLayout(setDoubleHBoxStretch(sub_hbox))
+        grid.addLayout(setTripleHBoxStretch(hbox), 2, 0)
         # Specify light signal pins to use, separated by comma
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Light Signal Pin(s)'))
@@ -293,12 +297,12 @@ class SettingsGUI(object):
         grid.addLayout(setDoubleHBoxStretch(hbox), 3, 0)
         # Specify light signal settings regarding repeating trials
         hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Light Signal On (repetitions)'))
-        self.settings['LightSignalOnRepetitions'] = {'first': QtGui.QCheckBox('First'), 
-                                                     'others': QtGui.QCheckBox('Others')}
-        self.settings['LightSignalOnRepetitions']['first'].setChecked(True)
-        hbox.addWidget(self.settings['LightSignalOnRepetitions']['first'])
-        hbox.addWidget(self.settings['LightSignalOnRepetitions']['others'])
+        hbox.addWidget(QtGui.QLabel('Light Signal On'))
+        self.settings['LightSignalOnRepetitions'] = {'presentation': QtGui.QCheckBox('present'), 
+                                                     'repeat': QtGui.QCheckBox('repeat')}
+        self.settings['LightSignalOnRepetitions']['presentation'].setChecked(True)
+        hbox.addWidget(self.settings['LightSignalOnRepetitions']['presentation'])
+        hbox.addWidget(self.settings['LightSignalOnRepetitions']['repeat'])
         grid.addLayout(setTripleHBoxStretch(hbox), 4, 0)
         # Specify light signal intensity
         hbox = QtGui.QHBoxLayout()
@@ -318,6 +322,12 @@ class SettingsGUI(object):
         self.settings['NegativeAudioSignal'] = QtGui.QLineEdit('0')
         hbox.addWidget(self.settings['NegativeAudioSignal'])
         grid.addLayout(setDoubleHBoxStretch(hbox), 7, 0)
+        # Specify milk trial fail penalty duration
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Milk Trial Fail Penalty (s)'))
+        self.settings['MilkTrialFailPenalty'] = QtGui.QLineEdit('10')
+        hbox.addWidget(self.settings['MilkTrialFailPenalty'])
+        grid.addLayout(setDoubleHBoxStretch(hbox), 8, 0)
         # Specify milk trial mean separation
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Min Separation (s)'))
@@ -381,7 +391,7 @@ class SettingsGUI(object):
         frame.setLayout(vbox)
         frame.setFrameStyle(3)
         # Set minimum size for frame
-        frame.setMinimumSize(800, 1000)
+        frame.setMinimumSize(800, 800)
 
         return frame
 
@@ -561,7 +571,6 @@ class SettingsGUI(object):
                         'MaxInactivityDuration': np.int64(float(str(self.settings['MaxInactivityDuration'].text()))), 
                         'MilkTrialFailPenalty': np.int64(float(str(self.settings['MilkTrialFailPenalty'].text()))), 
                         'InitMilk': np.float64(str(self.settings['InitMilk'].text())), 
-                        'MilkQuantity': np.float64(str(self.settings['MilkQuantity'].text())), 
                         'MilkTrialMinSeparationMean': np.int64(float(str(self.settings['MilkTrialMinSeparationMean'].text()))), 
                         'MilkTrialMinSeparationVariance': np.float64(str(self.settings['MilkTrialMinSeparationVariance'].text())), 
                         'MilkTaskMinStartDistance': np.int64(float(str(self.settings['MilkTaskMinStartDistance'].text()))), 
@@ -574,6 +583,10 @@ class SettingsGUI(object):
         for key in self.settings['games_active'].keys():
             state = self.settings['games_active'][key].isChecked()
             TaskSettings['games_active'][key] = np.array(state)
+        # Get milk reward quantity options
+        TaskSettings['MilkQuantity'] = {}
+        for key in self.settings['MilkQuantity']:
+            TaskSettings['MilkQuantity'][key] = np.float64(str(self.settings['MilkQuantity'][key].text()))
         # Get radio button selection
         for key in self.settings['AudioSignalMode'].keys():
             if self.settings['AudioSignalMode'][key].isChecked():
@@ -636,6 +649,9 @@ class SettingsGUI(object):
                     for ID in sorted(TaskSettings['FEEDERs'][FEEDER_type].keys(), key=int):
                         FEEDER_settings = TaskSettings['FEEDERs'][FEEDER_type][ID]
                         self.addFeedersToList(FEEDER_type, FEEDER_settings)
+            elif isinstance(TaskSettings[key], dict):
+                for sub_key in TaskSettings[key]:
+                    self.settings[key][sub_key].setText(str(TaskSettings[key][sub_key]))
             elif key in self.settings.keys():
                 self.settings[key].setText(str(TaskSettings[key]))
 
@@ -1901,7 +1917,9 @@ class GameState_MilkTrial(GameState):
         # Send timestamp to Open Ephys GUI
         OEmessage = 'GameState_MilkTrial ' + kwargs['action'] + ' ' + self.MilkGoal.copy_ID()
         if first_repetition:
-            OEmessage += ' first_repetition'
+            OEmessage += ' presentation_trial'
+        else:
+            OEmessage += ' repeat_trial'
         self.MessageToOE(OEmessage)
         # Reset milk trial timers
         self.MilkGame_Variables.update_min_trial_separation()
@@ -1922,7 +1940,7 @@ class GameState_MilkTrial(GameState):
             self.MilkTrialSignals.stop(self.MilkGoal.copy_ID())
             ID = self.MilkGoal.copy_ID()
             self.MilkGoal.next()
-            return 'GameState_MilkReward', {'action': 'GameState_MilkTrial', 'ID': ID}
+            return 'GameState_MilkReward', {'action': 'GameState_MilkTrial', 'ID': ID, 'trial_type': 'presentation'}
         elif conditions['milk_trial_duration']:
             # If time limit for task duration has passed, stop milk trial without reward.
             # Milk Trial goal is not updated if first trial fails.
@@ -1940,7 +1958,7 @@ class GameState_MilkTrial(GameState):
             self.MilkTrialSignals.stop(self.MilkGoal.copy_ID())
             ID = self.MilkGoal.copy_ID()
             self.MilkGoal.next()
-            return 'GameState_MilkReward', {'action': 'GameState_MilkTrial', 'ID': ID}
+            return 'GameState_MilkReward', {'action': 'GameState_MilkTrial', 'ID': ID, 'trial_type': 'repeat'}
         elif conditions['milk_trial_duration']:
             # If time limit for task duration has passed, stop milk trial without reward
             self.MilkTrialSignals.stop(self.MilkGoal.copy_ID())
@@ -2000,12 +2018,19 @@ class GameState_MilkReward(GameState):
         # Parse input arguments
         ID = kwargs['ID']
         if 'quantity' in kwargs.keys():
-            self.quantity = kwargs['quantity']
+            quantity = kwargs['quantity']
+        else:
+            if 'trial_type' in kwargs:
+                quantity = self.quantity[kwargs['trial_type']]
+            else:
+                quantity = 0
+                for key in self.quantity:
+                    quantity = max(quantity, self.quantity[key])
         # Send command to release reward and wait for positive feedback
-        feedback = self.reward_device.actuator_method_call(ID, 'release', self.quantity)
+        feedback = self.reward_device.actuator_method_call(ID, 'release', quantity)
         if feedback:
             # Send message to Open Ephys GUI
-            OEmessage = 'Reward milk ' + ID + ' ' + str(self.quantity)
+            OEmessage = 'Reward milk ' + ID + ' ' + str(quantity)
             self.MessageToOE(OEmessage)
         else:
             # If failed, remove feeder from game and change button(s) red
@@ -2204,8 +2229,8 @@ class MilkTrialSignals(object):
         FEEDERsettings  - dict - key (ID) and value (feeder specific parameters)
         '''
         # Parse TaskSettings
-        self.FirstTrialLightOn = TaskSettings['LightSignalOnRepetitions']['first']
-        self.OtherTrialLightOn = TaskSettings['LightSignalOnRepetitions']['others']
+        self.FirstTrialLightOn = TaskSettings['LightSignalOnRepetitions']['presentation']
+        self.OtherTrialLightOn = TaskSettings['LightSignalOnRepetitions']['repeat']
         self.lightSignalDelay  = TaskSettings['lightSignalDelay']
         AudioSignalMode        = TaskSettings['AudioSignalMode']
         # Initialize signals
