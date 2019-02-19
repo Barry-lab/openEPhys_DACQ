@@ -6,6 +6,8 @@ from copy import copy
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
+from scipy.spatial.distance import euclidean
 # Ensure repository root directory is on path
 from os.path import dirname as up
 sys.path.insert(0, up(up(os.path.abspath(__file__))))
@@ -82,25 +84,114 @@ def plot_milk_task_performance_by_feeder(milk_task_data_frame):
     return fig, ax
 
 
-def load_task_data(filename):
+def append_trial_end_closest_feeder_id(task_data, posdata, task_settings,
+                                       column_name='closest_feeder_id'):
     """
-    Returns data frame for task related data from NWB recording file.
+    Appends a column to DataFrame that contains the identities of the
+    closest feeders at the end of the each trial.
+
+    :param task_data: output from :py:func:`Task.load_milk_task_data`
+    :type task_data: pandas.DataFrame
+    :param posdata: output from :py:func:`NWBio.load_processed_tracking_data`
+    :type posdata: numpy.ndarray
+    :param task_settings: TaskSettings as returned by :py:func:`NWBio.load_settings`
+    :type task_settings: dict
+    :param column_name: name of the appended column ('closest_feeder_id' by default)
+    :type column_name: str
+    """
+    # Parse input posdata
+    pos_timestamps = posdata[:, 0]
+    pos_xy = posdata[:, 1:3]
+    # Parse input task_settings
+    feeder_ids = sorted(task_settings['FEEDERs']['milk'].keys())
+    feeder_locs = [task_settings['FEEDERs']['milk'][x]['Position'] for x in feeder_ids]
+    # Find positions at the end of each trial
+    trial_end_positions = []
+    for timestamp in [ts[1] for ts in task_data['timestamps']]:
+        best_match_pos_timestamp = np.argmin(np.abs(pos_timestamps - timestamp))
+        trial_end_positions.append(pos_xy[best_match_pos_timestamp, :])
+    # Find closest feeder for each trial end position
+    closest_feeder_id = []
+    for position in trial_end_positions:
+        closest_feeder_id.append(
+            feeder_ids[int(np.argmin([euclidean(position, loc) for loc in feeder_locs]))]
+        )
+    # Append closest_feeder_id to DataFrame
+    task_data[column_name] = closest_feeder_id
+
+
+def append_trial_first_visited_feeder_id(task_data, posdata, task_settings,
+                                         column_name='first_feeder_id'):
+    """
+    Appends a column to DataFrame that contains the identities of the
+    first feeders in each trial.
+
+    :param task_data: output from :py:func:`Task.load_milk_task_data`
+    :type task_data: pandas.DataFrame
+    :param posdata: output from :py:func:`NWBio.load_processed_tracking_data`
+    :type posdata: numpy.ndarray
+    :param task_settings: TaskSettings as returned by :py:func:`NWBio.load_settings`
+    :type task_settings: dict
+    :param column_name: name of the appended column ('first_feeder_id' by default)
+    :type column_name: str
+    """
+    # Parse input posdata
+    pos_timestamps = posdata[:, 0]
+    pos_xy = posdata[:, 1:3]
+    # Parse input task_settings
+    feeder_ids = sorted(task_settings['FEEDERs']['milk'].keys())
+    feeder_locs = [task_settings['FEEDERs']['milk'][x]['Position'] for x in feeder_ids]
+    min_distance = task_settings['MilkTaskMinGoalDistance']
+    # Find positions series for each trial
+    trial_positions = []
+    for trial_start_t, trial_end_t in task_data['timestamps']:
+        start_position_ind = np.argmin(np.abs(pos_timestamps - trial_start_t))
+        end_position_ind = np.argmin(np.abs(pos_timestamps - trial_end_t))
+        trial_positions.append(pos_xy[start_position_ind:end_position_ind, :])
+    # Find closest feeder for each trial end position
+    first_feeder_id = []
+    successful = False
+    for positions in trial_positions:
+        for npos in range(positions.shape[0]):
+            feeder_distances = [euclidean(positions[npos, :], feeder_loc) for feeder_loc in feeder_locs]
+            if any(np.array(feeder_distances) < min_distance):
+                first_feeder_id.append(feeder_ids[int(np.argmin(feeder_distances))])
+                successful = True
+                break
+        if successful:
+            successful = False
+        else:
+            first_feeder_id.append('')
+    # Append closest_feeder_id to DataFrame
+    task_data[column_name] = first_feeder_id
+
+
+def load_milk_task_data(filename, full_data=True):
+    """
+    Returns data frame for milk task related data from NWB recording file.
 
     :param filename: absolute path to NWB recording file
     :type filename: str
+    :param full_data: (optional) appends all additional columns
+    :type full_data: bool
     :return: task_data
     :rtype: pandas.DataFrame
     """
     data = NWBio.load_network_events(filename)
     TaskLogParser = import_task_specific_log_parser(load_task_name(filename))
-    log_parser = TaskLogParser.LogParser(**data)
+    log_parser = TaskLogParser.LogParser(data['messages'], data['timestamps'])
     df = pd.DataFrame(TaskLogParser.extract_milk_task_performance(log_parser.data['GameState']))
     df = df.set_index('nr')
+    if full_data:
+        posdata = NWBio.load_processed_tracking_data(filename)
+        task_settings = NWBio.load_settings(filename, '/TaskSettings/')
+        append_trial_end_closest_feeder_id(df, posdata, task_settings)
+        append_trial_first_visited_feeder_id(df, posdata, task_settings)
 
     return df
 
 #
 # if __name__ == '__main__':
 #     filename = '/media/sander/BarryL_STF1/MilkTaskTrainingData/2019-02-06_16-02-51/experiment_1.nwb'
-#     fig, ax = plot_milk_task_performance_by_feeder(load_task_data(sys.argv[1]))
+#     fig, ax = plot_milk_task_performance_by_feeder(load_milk_task_data(sys.argv[1]))
 #     fig.show()
