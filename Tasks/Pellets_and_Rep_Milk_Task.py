@@ -95,22 +95,34 @@ def distance_from_boundaries(point, arena_size):
 
 class SettingsGUI(object):
 
-    def __init__(self, top_grid_layout, bottom_hbox_layout, arena_size):
+    def __init__(self, main_settings_layout, further_settings_layout, arena_size):
         '''
-        top_grid_layout    - QtGui Grid Layout
-        bottom_hbox_layout - QtGui HBox Layout
-        arena_size         - list or numpy array of x and y size of the arena
+        main_settings_layout    - QtGui VBox Layout
+        further_settings_layout - QtGui HBox Layout
+        arena_size              - list or numpy array of x and y size of the arena
         '''
 
         # Create empty settings variables
         self.arena_size = arena_size
         self.settings = {}
         self.settings['FEEDERs'] = {'pellet': [], 'milk': []}
+        # Create GUI size requirements
+        self.min_size = [0, 0]
         # Create settings menu
-        self.populate_top_grid_layout(top_grid_layout)
-        self.populate_bottom_hbox_layout(bottom_hbox_layout)
+        self.populate_main_settings_layout(main_settings_layout)
+        self.populate_further_settings_layout(further_settings_layout)
 
-    def populate_top_grid_layout(self, top_grid_layout):
+    def make_space_for_frame(self, frame):
+        self.min_size[0] = max(self.min_size[0], frame.minimumHeight())
+        self.min_size[1] = self.min_size[1] + frame.minimumWidth()
+
+    def populate_main_settings_layout(self, main_settings_layout):
+        vbox = QtGui.QVBoxLayout()
+        font = QtGui.QFont('SansSerif', 15)
+        string = QtGui.QLabel('General Settings')
+        string.setFont(font)
+        string.setMaximumHeight(40)
+        vbox.addWidget(string)
         # Specify which game is active Pellet, Milk or both
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Games active'))
@@ -120,99 +132,62 @@ class SettingsGUI(object):
         self.settings['games_active']['milk'].setChecked(True)
         hbox.addWidget(self.settings['games_active']['pellet'])
         hbox.addWidget(self.settings['games_active']['milk'])
-        top_grid_layout.addLayout(setTripleHBoxStretch(hbox),0,0)
+        vbox.addLayout(setTripleHBoxStretch(hbox))
         # Add option to specify how far into past to check travel distance
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Last travel time (s)'))
         self.settings['LastTravelTime'] = QtGui.QLineEdit('2')
         hbox.addWidget(self.settings['LastTravelTime'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),1,0)
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
         # Add smoothing factor for calculating last travel distance
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Last travel smoothing (dp)'))
         self.settings['LastTravelSmooth'] = QtGui.QLineEdit('3')
         hbox.addWidget(self.settings['LastTravelSmooth'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),2,0)
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
         # Add minimum distance for last travel
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Last travel min distance (cm)'))
         self.settings['LastTravelDist'] = QtGui.QLineEdit('50')
         hbox.addWidget(self.settings['LastTravelDist'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),3,0)
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
         # Specify pellet vs milk reward ratio
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Pellet vs Milk Reward ratio'))
         self.settings['PelletMilkRatio'] = QtGui.QLineEdit('0.25')
         hbox.addWidget(self.settings['PelletMilkRatio'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),4,0)
-        # Specify chewing signal TTL channel
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Chewing TTL channel'))
-        self.settings['Chewing_TTLchan'] = QtGui.QLineEdit('5')
-        hbox.addWidget(self.settings['Chewing_TTLchan'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),5,0)
-        # Specify number of repretitions of each milk trial goal
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Milk goal repetitions'))
-        self.settings['MilkGoalRepetition'] = QtGui.QLineEdit('0')
-        hbox.addWidget(self.settings['MilkGoalRepetition'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),6,0)
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
         # Specify raspberry pi username
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Raspberry Pi usernames'))
         self.settings['Username'] = QtGui.QLineEdit('pi')
         hbox.addWidget(self.settings['Username'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),0,1)
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
         # Specify raspberry pi password
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Raspberry Pi passwords'))
         self.settings['Password'] = QtGui.QLineEdit('raspberry')
         hbox.addWidget(self.settings['Password'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),1,1)
-        # Specify audio signal mode
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Audio Signal Mode'))
-        self.settings['AudioSignalMode'] = {'ambient': QtGui.QRadioButton('Ambient'), 
-                                            'localised': QtGui.QRadioButton('Localised')}
-        self.settings['AudioSignalMode']['ambient'].setChecked(True)
-        hbox.addWidget(self.settings['AudioSignalMode']['ambient'])
-        hbox.addWidget(self.settings['AudioSignalMode']['localised'])
-        top_grid_layout.addLayout(setTripleHBoxStretch(hbox),2,1)
-        # Option to set duration of negative audio feedback
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Negative Audio Feedback (s)'))
-        self.settings['NegativeAudioSignal'] = QtGui.QLineEdit('0')
-        hbox.addWidget(self.settings['NegativeAudioSignal'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),3,1)
-        # Specify light signal settings regarding repeating trials
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Light Signal On (repetitions)'))
-        self.settings['LightSignalOnRepetitions'] = {'first': QtGui.QCheckBox('First'), 
-                                                     'others': QtGui.QCheckBox('Others')}
-        self.settings['LightSignalOnRepetitions']['first'].setChecked(True)
-        hbox.addWidget(self.settings['LightSignalOnRepetitions']['first'])
-        hbox.addWidget(self.settings['LightSignalOnRepetitions']['others'])
-        top_grid_layout.addLayout(setTripleHBoxStretch(hbox),4,1)
-        # Specify light signal intensity
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Light Signal intensity (0 - 100)'))
-        self.settings['lightSignalIntensity'] = QtGui.QLineEdit('100')
-        hbox.addWidget(self.settings['lightSignalIntensity'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),5,1)
-        # Specify light signal delay relative to trial start
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Light Signal delay (s)'))
-        self.settings['lightSignalDelay'] = QtGui.QLineEdit('0')
-        hbox.addWidget(self.settings['lightSignalDelay'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),6,1)
-        # Specify light signal pins to use, separated by comma
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Light Signal Pin(s)'))
-        self.settings['lightSignalPins'] = QtGui.QLineEdit('1')
-        hbox.addWidget(self.settings['lightSignalPins'])
-        top_grid_layout.addLayout(setDoubleHBoxStretch(hbox),7,1)
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        # Put these settings into a frame
+        frame = QtGui.QFrame()
+        frame.setLayout(vbox)
+        frame.setFrameStyle(3)
+        # Set minimum size for frame
+        frame.setFixedSize(300, 300)
+        # Put frame into main settings layout
+        main_settings_layout.addWidget(frame)
+        self.make_space_for_frame(frame)
 
-    def populate_bottom_hbox_layout(self, bottom_hbox_layout):
+    def populate_further_settings_layout(self, further_settings_layout):
+        pellet_settings_frame = self.create_pellet_task_settings()
+        further_settings_layout.addWidget(pellet_settings_frame)
+        self.make_space_for_frame(pellet_settings_frame)
+        milk_settings_frame = self.create_milk_task_settings()
+        further_settings_layout.addWidget(milk_settings_frame)
+        self.make_space_for_frame(milk_settings_frame)
+
+    def create_pellet_task_settings(self):
         # Create Pellet task specific menu items
         vbox = QtGui.QVBoxLayout()
         font = QtGui.QFont('SansSerif', 15)
@@ -254,6 +229,12 @@ class SettingsGUI(object):
         self.settings['MilkTrialFailPenalty'] = QtGui.QLineEdit('10')
         hbox.addWidget(self.settings['MilkTrialFailPenalty'])
         vbox.addLayout(setDoubleHBoxStretch(hbox))
+        # Specify chewing signal TTL channel
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Chewing TTL channel'))
+        self.settings['Chewing_TTLchan'] = QtGui.QLineEdit('5')
+        hbox.addWidget(self.settings['Chewing_TTLchan'])
+        vbox.addLayout(setDoubleHBoxStretch(hbox))
         # Create Pellet FEEDER items
         scroll_widget = QtGui.QWidget()
         self.pellet_feeder_settings_layout = QtGui.QVBoxLayout(scroll_widget)
@@ -268,58 +249,123 @@ class SettingsGUI(object):
         frame = QtGui.QFrame()
         frame.setLayout(vbox)
         frame.setFrameStyle(3)
-        bottom_hbox_layout.addWidget(frame)
-        # Create Milk task specific menu items
+        # Set minimum size for frame
+        frame.setMinimumSize(400, 1000)
+
+        return frame
+
+    def create_milk_task_settings(self):
         vbox = QtGui.QVBoxLayout()
+        # Create Milk task label
         font = QtGui.QFont('SansSerif', 15)
         string = QtGui.QLabel('Milk Game Settings')
         string.setFont(font)
         vbox.addWidget(string)
+        # Create top grid layout
+        grid = QtGui.QGridLayout()
+        vbox.addLayout(grid)
+        # Add initiation milk amount
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Initial Milk'))
         self.settings['InitMilk'] = QtGui.QLineEdit('2')
         hbox.addWidget(self.settings['InitMilk'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        grid.addLayout(setDoubleHBoxStretch(hbox), 0, 0)
+        # Specify audio signal mode
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Audio Signal Mode'))
+        self.settings['AudioSignalMode'] = {'ambient': QtGui.QRadioButton('Ambient'), 
+                                            'localised': QtGui.QRadioButton('Localised')}
+        self.settings['AudioSignalMode']['ambient'].setChecked(True)
+        hbox.addWidget(self.settings['AudioSignalMode']['ambient'])
+        hbox.addWidget(self.settings['AudioSignalMode']['localised'])
+        grid.addLayout(setTripleHBoxStretch(hbox), 1, 0)
+        # Add Milk reward quantity
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Reward Quantity'))
         self.settings['MilkQuantity'] = QtGui.QLineEdit('1')
         hbox.addWidget(self.settings['MilkQuantity'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        grid.addLayout(setDoubleHBoxStretch(hbox), 2, 0)
+        # Specify light signal pins to use, separated by comma
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Light Signal Pin(s)'))
+        self.settings['lightSignalPins'] = QtGui.QLineEdit('1')
+        hbox.addWidget(self.settings['lightSignalPins'])
+        grid.addLayout(setDoubleHBoxStretch(hbox), 3, 0)
+        # Specify light signal settings regarding repeating trials
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Light Signal On (repetitions)'))
+        self.settings['LightSignalOnRepetitions'] = {'first': QtGui.QCheckBox('First'), 
+                                                     'others': QtGui.QCheckBox('Others')}
+        self.settings['LightSignalOnRepetitions']['first'].setChecked(True)
+        hbox.addWidget(self.settings['LightSignalOnRepetitions']['first'])
+        hbox.addWidget(self.settings['LightSignalOnRepetitions']['others'])
+        grid.addLayout(setTripleHBoxStretch(hbox), 4, 0)
+        # Specify light signal intensity
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Light Signal intensity (0 - 100)'))
+        self.settings['lightSignalIntensity'] = QtGui.QLineEdit('100')
+        hbox.addWidget(self.settings['lightSignalIntensity'])
+        grid.addLayout(setDoubleHBoxStretch(hbox), 5, 0)
+        # Specify light signal delay relative to trial start
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Light Signal delay (s)'))
+        self.settings['lightSignalDelay'] = QtGui.QLineEdit('0')
+        hbox.addWidget(self.settings['lightSignalDelay'])
+        grid.addLayout(setDoubleHBoxStretch(hbox), 6, 0)
+        # Option to set duration of negative audio feedback
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Negative Audio Feedback (s)'))
+        self.settings['NegativeAudioSignal'] = QtGui.QLineEdit('0')
+        hbox.addWidget(self.settings['NegativeAudioSignal'])
+        grid.addLayout(setDoubleHBoxStretch(hbox), 7, 0)
+        # Specify milk trial mean separation
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Min Separation (s)'))
         self.settings['MilkTrialMinSeparationMean'] = QtGui.QLineEdit('40')
         hbox.addWidget(self.settings['MilkTrialMinSeparationMean'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        grid.addLayout(setDoubleHBoxStretch(hbox), 0, 1)
+        # Specify milk trial separation variance
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Min Separation variance (%)'))
         self.settings['MilkTrialMinSeparationVariance'] = QtGui.QLineEdit('0.5')
         hbox.addWidget(self.settings['MilkTrialMinSeparationVariance'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        grid.addLayout(setDoubleHBoxStretch(hbox), 1, 1)
+        # Specify minimum distance to feeder for starting a trial
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Minimum Start Distance (cm)'))
         self.settings['MilkTaskMinStartDistance'] = QtGui.QLineEdit('50')
         hbox.addWidget(self.settings['MilkTaskMinStartDistance'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Minimum Goal Distance (cm)'))
-        self.settings['MilkTaskMinGoalDistance'] = QtGui.QLineEdit('10')
-        hbox.addWidget(self.settings['MilkTaskMinGoalDistance'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        grid.addLayout(setDoubleHBoxStretch(hbox), 2, 1)
+        # Specify minimum angular distance to goal for starting a trial
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Minimum Goal angular distance (deg)'))
         self.settings['MilkTaskMinGoalAngularDistance'] = QtGui.QLineEdit('45')
         hbox.addWidget(self.settings['MilkTaskMinGoalAngularDistance'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        grid.addLayout(setDoubleHBoxStretch(hbox), 3, 1)
+        # Specify position history period for computing goal angular distance
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Goal angular distance time (s)'))
         self.settings['MilkTaskGoalAngularDistanceTime'] = QtGui.QLineEdit('2')
         hbox.addWidget(self.settings['MilkTaskGoalAngularDistanceTime'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        grid.addLayout(setDoubleHBoxStretch(hbox), 4, 1)
+        # Specify minimum distance to goal feeder for ending the trial
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Minimum Goal Distance (cm)'))
+        self.settings['MilkTaskMinGoalDistance'] = QtGui.QLineEdit('10')
+        hbox.addWidget(self.settings['MilkTaskMinGoalDistance'])
+        grid.addLayout(setDoubleHBoxStretch(hbox), 5, 1)
+        # Specify maximum trial duration
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Maximum Trial Duration (s)'))
         self.settings['MilkTrialMaxDuration'] = QtGui.QLineEdit('9')
         hbox.addWidget(self.settings['MilkTrialMaxDuration'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        grid.addLayout(setDoubleHBoxStretch(hbox), 6, 1)
+        # Specify number of repretitions of each milk trial goal
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Milk goal repetitions'))
+        self.settings['MilkGoalRepetition'] = QtGui.QLineEdit('0')
+        hbox.addWidget(self.settings['MilkGoalRepetition'])
+        grid.addLayout(setDoubleHBoxStretch(hbox), 7, 1)
         # Create Milk FEEDER items
         scroll_widget = QtGui.QWidget()
         self.milk_feeder_settings_layout = QtGui.QVBoxLayout(scroll_widget)
@@ -334,7 +380,10 @@ class SettingsGUI(object):
         frame = QtGui.QFrame()
         frame.setLayout(vbox)
         frame.setFrameStyle(3)
-        bottom_hbox_layout.addWidget(frame)
+        # Set minimum size for frame
+        frame.setMinimumSize(800, 1000)
+
+        return frame
 
     def autoFeederPosition(self, target_feeder, max_attempts=1000):
         target_feeder_spacing = np.int64(float(target_feeder['Spacing'].text()))
