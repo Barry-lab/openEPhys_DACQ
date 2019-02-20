@@ -105,7 +105,7 @@ ENV/
 # Reference: https://intellij-support.jetbrains.com/hc/en-us/articles/206544839
 
 # Ignore to whole PyCharm .idea folder
-.idea/
+.idea/*
 
 # User-specific stuff
 .idea/**/workspace.xml
