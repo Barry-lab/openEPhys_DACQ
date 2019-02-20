@@ -39,14 +39,14 @@ def import_task_specific_log_parser(task_name):
     return importlib.import_module('Tasks.' + task_name + '_LogParser')
 
 
-def plot_milk_task_performance_by_feeder(milk_task_data_frame):
+def compute_milk_task_performance_by_feeder(milk_task_data_frame):
     """
     Returns LogParser module for the specific task.
 
-    :param milk_task_data_frame: task data
+    :param milk_task_data_frame: output from :py:func:`Task.load_milk_task_data`
     :type milk_task_data_frame: pandas.DataFrame
-    :return: fig, ax
-    :rtype: matplotlib.figure.Figure, array of matplotlib.axes._subplots.AxesSubplot
+    :return: milk_task_performance_data
+    :rtype: dict
     """
     df = copy(milk_task_data_frame)
     # Set outcome to binary
@@ -54,16 +54,13 @@ def plot_milk_task_performance_by_feeder(milk_task_data_frame):
     df.outcome.replace(to_replace=['successful'], value=1, inplace=True)
     # Compute outcome as percentage and count
     df_mean = df.groupby(['type', 'feeder_id']).outcome.mean().to_frame().reset_index()
-    success_rate = df_mean.outcome
     df_total = df.groupby(['type', 'feeder_id']).outcome.count().to_frame().reset_index()
-    total_trials = df_total.outcome
-    successful_trials = (total_trials * success_rate).map(int)
     # Append first_feeder_correct_column as 0s and 1s
     first_feeder_correct = [f_id == first_f_id for f_id, first_f_id in zip(df.feeder_id, df.first_feeder_id)]
     df['first_feeder_correct'] = list(map(int, first_feeder_correct))
     # Compute percentage of presentation trials correct based on first feeder visit
     s_present_first_success = df.loc[df.type == 'present'].groupby(['feeder_id']).first_feeder_correct.mean()
-    # Append present_first_feeder_correct for all series
+    # Append preceding present_first_feeder_correct for all trials
     present_first_feeder_correct = []
     last_presentation_first_feeder_correct = False
     for trial_type, first_correct in zip(df.type, df.first_feeder_correct):
@@ -74,11 +71,33 @@ def plot_milk_task_performance_by_feeder(milk_task_data_frame):
     # Calculate repeat trial success rate where presentation trial was successful at first feeder
     df_repeat_present_first_success = df.loc[(df.type == 'repeat') & df.present_first_feeder_correct]
     s_present_first_success_repeat_success = df_repeat_present_first_success.groupby(['feeder_id']).outcome.mean()
+
+    return {'df_mean': df_mean,
+            'df_total': df_total,
+            's_present_first_success': s_present_first_success,
+            's_present_first_success_repeat_success': s_present_first_success_repeat_success}
+
+
+def plot_milk_task_performance_by_feeder(data):
+    """
+    Returns figure and plot for the provided milk task performance data.
+
+    :param data: output from :py:func:`Task.compute_milk_task_performance_by_feeder`
+    :type data: dict
+    :return: fig, ax
+    :rtype: matplotlib.figure.Figure, array of matplotlib.axes._subplots.AxesSubplot
+    """
+    # Extract plotting from input data
+    success_rate = data['df_mean'].outcome
+    total_trials = data['df_total'].outcome
+    successful_trials = (total_trials * success_rate).map(int)
+    s_present_first_success = data['s_present_first_success']
+    s_present_first_success_repeat_success = data['s_present_first_success_repeat_success']
     # Prepare plotting variables
-    colors = sns.color_palette(n_colors=len(pd.unique(df.feeder_id)))
+    colors = sns.color_palette(n_colors=len(pd.unique(data['df_mean'].feeder_id)))
     ccolors = colors + colors
     dark_ccolors = list(map(lambda x: [c * 0.5 for c in x], ccolors))
-    x_labels = df_mean['type'] + df_mean['feeder_id'].map(lambda x: ', ' + str(x))
+    x_labels = data['df_mean']['type'] + data['df_mean']['feeder_id'].map(lambda x: ', ' + str(x))
     fig, ax = plt.subplots(2, 2, sharex='col', figsize=(16, 6))
     plt.subplots_adjust(wspace=0.5)
     # Plot data
@@ -102,11 +121,11 @@ def plot_milk_task_performance_by_feeder(milk_task_data_frame):
     ax[0][1].set_ylim([0, 1])
     ax[1][1].set_ylim([0, 1])
     # Create custom labels for both left column subplots
-    n_legend_lines = int(df_mean['feeder_id'].size / 2)
+    n_legend_lines = int(data['df_mean']['feeder_id'].size / 2)
     from matplotlib.lines import Line2D
     for plt_nr, color_map, label_str in zip([0, 1], [ccolors, dark_ccolors], ['successful', 'failed']):
         custom_lines = [Line2D([0], [0], color=color, lw=8) for color in color_map[:n_legend_lines]]
-        legend_labels = [label_str + ' feeder ' + str(nr) for nr in df_mean['feeder_id'][:n_legend_lines]]
+        legend_labels = [label_str + ' feeder ' + str(nr) for nr in data['df_mean'].feeder_id[:n_legend_lines]]
         ax[plt_nr][0].legend(custom_lines, legend_labels, loc='center left', bbox_to_anchor=(1, 0.5))
 
     return fig, ax
@@ -205,11 +224,13 @@ def load_milk_task_data(filename, full_data=True):
     :return: task_data
     :rtype: pandas.DataFrame
     """
+    # Load milk task data with task specific LogParser
     data = NWBio.load_network_events(filename)
     TaskLogParser = import_task_specific_log_parser(load_task_name(filename))
     log_parser = TaskLogParser.LogParser(**data)
     df = pd.DataFrame(TaskLogParser.extract_milk_task_performance(log_parser.data['GameState']))
     df = df.set_index('nr')
+    # If full_data requested, append all additional columns
     if full_data:
         posdata = NWBio.load_processed_tracking_data(filename)
         task_settings = NWBio.load_settings(filename, '/TaskSettings/')
@@ -220,6 +241,6 @@ def load_milk_task_data(filename, full_data=True):
 
 
 if __name__ == '__main__':
-    filename = '/media/sander/BarryL_STF1/MilkTaskTrainingData/2019-02-06_16-02-51/experiment_1.nwb'
-    fig, ax = plot_milk_task_performance_by_feeder(load_milk_task_data(sys.argv[1]))
+    milk_task_performance_data = compute_milk_task_performance_by_feeder(load_milk_task_data(sys.argv[1]))
+    fig, ax = plot_milk_task_performance_by_feeder(milk_task_performance_data)
     plt.show(block=True)
