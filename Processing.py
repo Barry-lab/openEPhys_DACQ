@@ -646,8 +646,7 @@ def process_data_tree(root_path, downsample=False, max_clusters=31):
                        (raw_data_available or downsampled_data_available):
                         main(fpath, processing_method='klustakwik', 
                             noise_cut_off=1000, threshold=50, make_AxonaData=True, 
-                            axonaDataArgs=(None, False), max_clusters=max_clusters, 
-                            pos_data_processing_kwargs=pos_data_processing_kwargs)
+                            axonaDataArgs=(None, False), max_clusters=max_clusters)
     if downsample:
         import DeleteRAWdata
         DeleteRAWdata.main(root_path)
