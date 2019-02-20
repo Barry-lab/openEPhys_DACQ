@@ -343,7 +343,8 @@ def extract_milk_task_performance(game_state_data):
     # Create dictionary for accumulating trial information
     task_data = {'nr': [],
                  'type': [],
-                 'timestamps': [],
+                 'start_timestamp': [],
+                 'end_timestamp': [],
                  'outcome': [],
                  'feeder_id': []}
     # Loop through all milk trials
@@ -351,7 +352,8 @@ def extract_milk_task_performance(game_state_data):
     for timestamps, data in zip(milk_state['timestamps'], milk_state['data']):
         trial_counter += 1
         task_data['nr'].append(trial_counter)
-        task_data['timestamps'].append(timestamps)
+        task_data['start_timestamp'].append(timestamps[0])
+        task_data['end_timestamp'].append(timestamps[1])
         # Identify feeder id
         task_data['feeder_id'].append(data[1])
         # Identify whether first or repeat trial

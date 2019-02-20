@@ -63,7 +63,7 @@ def plot_milk_task_performance_by_feeder(milk_task_data_frame):
     colors = colors + colors
     dark_colors = list(map(lambda x: [c * 0.5 for c in x], colors))
     x_labels = df_mean['type'] + df_mean['feeder_id'].map(lambda x: ', ' + str(x))
-    fig, ax = plt.subplots(2, 1, sharex=True, figsize=(8, 6))
+    fig, ax = plt.subplots(2, 1, sharex='col', figsize=(8, 6))
     # Plot data
     ax[0].bar(x_labels, success_rate, color=colors)
     ax[1].bar(x_labels, total_trials, color=dark_colors)
@@ -107,7 +107,7 @@ def append_trial_end_closest_feeder_id(task_data, posdata, task_settings,
     feeder_locs = [task_settings['FEEDERs']['milk'][x]['Position'] for x in feeder_ids]
     # Find positions at the end of each trial
     trial_end_positions = []
-    for timestamp in [ts[1] for ts in task_data['timestamps']]:
+    for timestamp in task_data['end_timestamp']:
         best_match_pos_timestamp = np.argmin(np.abs(pos_timestamps - timestamp))
         trial_end_positions.append(pos_xy[best_match_pos_timestamp, :])
     # Find closest feeder for each trial end position
@@ -144,7 +144,7 @@ def append_trial_first_visited_feeder_id(task_data, posdata, task_settings,
     min_distance = task_settings['MilkTaskMinGoalDistance']
     # Find positions series for each trial
     trial_positions = []
-    for trial_start_t, trial_end_t in task_data['timestamps']:
+    for trial_start_t, trial_end_t in zip(task_data['start_timestamp'], task_data['end_timestamp']):
         start_position_ind = np.argmin(np.abs(pos_timestamps - trial_start_t))
         end_position_ind = np.argmin(np.abs(pos_timestamps - trial_end_t))
         trial_positions.append(pos_xy[start_position_ind:end_position_ind, :])
@@ -179,7 +179,7 @@ def load_milk_task_data(filename, full_data=True):
     """
     data = NWBio.load_network_events(filename)
     TaskLogParser = import_task_specific_log_parser(load_task_name(filename))
-    log_parser = TaskLogParser.LogParser(data['messages'], data['timestamps'])
+    log_parser = TaskLogParser.LogParser(**data)
     df = pd.DataFrame(TaskLogParser.extract_milk_task_performance(log_parser.data['GameState']))
     df = df.set_index('nr')
     if full_data:
