@@ -11,6 +11,11 @@ import threading
 from time import sleep
 import psutil
 from PyQt4.QtCore import QThread, pyqtSignal
+from datetime import datetime
+
+
+def time_string():
+    return datetime.now().strftime('%H:%M:%S')
 
 
 class CPU_availability_tracker(object):

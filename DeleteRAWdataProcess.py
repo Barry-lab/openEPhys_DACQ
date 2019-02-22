@@ -47,10 +47,12 @@ def lowpass_and_downsample_channel_on_each_tetrode(fpath, path_processor, downsa
     multiprocessor = hfunct.multiprocess()
     for chan in processed_chans:
         if hfunct.proceed_when_enough_memory_available(percent=0.66):
+            print(hfunct.time_string() + ' Starting lowpass_and_downsample_channel for chan ' + str(chan))
             multiprocessor.run(lowpass_and_downsample_channel, 
                                args=(fpath, path_processor, chan, lowpass_freq, downsampling))
             sleep(4)
     processed_data_list = multiprocessor.results()
+    print(hfunct.time_string() + ' Completed lowpass_and_downsample_channel for all channels')
     for n_tet, processed_data in zip(processed_tets, processed_data_list):
         processed_data_array[:, n_tet] = np.int16(processed_data)
     del processed_data_list
