@@ -118,8 +118,8 @@ if __name__ == '__main__':
         input_args = (fpath, path_processor, lowpass_freq, downsampling, 
                       n_tetrodes, auxChanStart, nwb_raw_deleted, nwb_repacked)
         nwb_raw_deleted, nwb_repacked = downsample_and_repack(*input_args)
-        print('successful 1 int')
-        print('nwb_raw_deleted ' + str(nwb_raw_deleted) + ' int')
-        print('nwb_repacked ' + str(nwb_repacked) + ' int')
+        print(','.join(['successful 1 int', 
+                        'nwb_raw_deleted ' + str(nwb_raw_deleted) + ' int', 
+                        'nwb_repacked ' + str(nwb_repacked) + ' int']))
     except:
         print('successful 0 int')
