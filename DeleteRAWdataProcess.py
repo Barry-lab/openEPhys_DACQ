@@ -46,7 +46,7 @@ def lowpass_and_downsample_channel_on_each_tetrode(fpath, path_processor, downsa
             processed_tets.append(n_tet)
     multiprocessor = hfunct.multiprocess()
     for chan in processed_chans:
-        if hfunct.proceed_when_enough_memory_available(percent=0.33):
+        if hfunct.proceed_when_enough_memory_available(percent=0.50):
             print(hfunct.time_string() + ' Starting lowpass_and_downsample_channel for chan ' + str(chan))
             multiprocessor.run(lowpass_and_downsample_channel, 
                                args=(fpath, path_processor, chan, lowpass_freq, downsampling))
