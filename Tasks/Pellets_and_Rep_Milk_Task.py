@@ -628,32 +628,35 @@ class SettingsGUI(object):
     def importSettingsToGUI(self, TaskSettings):
         # Load all settings
         for key in TaskSettings.keys():
-            if isinstance(TaskSettings[key], np.ndarray) and TaskSettings[key].dtype == 'bool':
-                self.settings[key].setChecked(TaskSettings[key])
-            elif key == 'games_active':
-                for repeat_key in TaskSettings['games_active'].keys():
-                    state = TaskSettings['games_active'][repeat_key]
-                    self.settings['games_active'][repeat_key].setChecked(state)
-            elif key == 'AudioSignalMode':
-                for mode_key in self.settings['AudioSignalMode'].keys():
-                    if TaskSettings['AudioSignalMode'] == mode_key:
-                        self.settings['AudioSignalMode'][mode_key].setChecked(True)
-                    else:
-                        self.settings['AudioSignalMode'][mode_key].setChecked(False)
-            elif key == 'LightSignalOnRepetitions':
-                for repeat_key in TaskSettings['LightSignalOnRepetitions'].keys():
-                    state = TaskSettings['LightSignalOnRepetitions'][repeat_key]
-                    self.settings['LightSignalOnRepetitions'][repeat_key].setChecked(state)
-            elif key == 'FEEDERs':
-                for FEEDER_type in TaskSettings['FEEDERs'].keys():
-                    for ID in sorted(TaskSettings['FEEDERs'][FEEDER_type].keys(), key=int):
-                        FEEDER_settings = TaskSettings['FEEDERs'][FEEDER_type][ID]
-                        self.addFeedersToList(FEEDER_type, FEEDER_settings)
-            elif isinstance(TaskSettings[key], dict):
-                for sub_key in TaskSettings[key]:
-                    self.settings[key][sub_key].setText(str(TaskSettings[key][sub_key]))
-            elif key in self.settings.keys():
-                self.settings[key].setText(str(TaskSettings[key]))
+            try:
+                if isinstance(TaskSettings[key], np.ndarray) and TaskSettings[key].dtype == 'bool':
+                    self.settings[key].setChecked(TaskSettings[key])
+                elif key == 'games_active':
+                    for repeat_key in TaskSettings['games_active'].keys():
+                        state = TaskSettings['games_active'][repeat_key]
+                        self.settings['games_active'][repeat_key].setChecked(state)
+                elif key == 'AudioSignalMode':
+                    for mode_key in self.settings['AudioSignalMode'].keys():
+                        if TaskSettings['AudioSignalMode'] == mode_key:
+                            self.settings['AudioSignalMode'][mode_key].setChecked(True)
+                        else:
+                            self.settings['AudioSignalMode'][mode_key].setChecked(False)
+                elif key == 'LightSignalOnRepetitions':
+                    for repeat_key in TaskSettings['LightSignalOnRepetitions'].keys():
+                        state = TaskSettings['LightSignalOnRepetitions'][repeat_key]
+                        self.settings['LightSignalOnRepetitions'][repeat_key].setChecked(state)
+                elif key == 'FEEDERs':
+                    for FEEDER_type in TaskSettings['FEEDERs'].keys():
+                        for ID in sorted(TaskSettings['FEEDERs'][FEEDER_type].keys(), key=int):
+                            FEEDER_settings = TaskSettings['FEEDERs'][FEEDER_type][ID]
+                            self.addFeedersToList(FEEDER_type, FEEDER_settings)
+                elif isinstance(TaskSettings[key], dict):
+                    for sub_key in TaskSettings[key]:
+                        self.settings[key][sub_key].setText(str(TaskSettings[key][sub_key]))
+                elif key in self.settings.keys():
+                    self.settings[key].setText(str(TaskSettings[key]))
+            except:
+                print('Failed to load setting: ' + str(key))
 
 
 def smooth_edge_padding(data, smoothing):
