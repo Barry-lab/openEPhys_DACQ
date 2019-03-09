@@ -98,7 +98,7 @@ def plot_milk_task_performance_by_feeder(data):
     ccolors = colors + colors
     dark_ccolors = list(map(lambda x: [c * 0.5 for c in x], ccolors))
     x_labels = data['df_mean']['type'] + data['df_mean']['feeder_id'].map(lambda x: ', ' + str(x))
-    fig, ax = plt.subplots(2, 2, sharex='col', figsize=(16, 6))
+    fig, ax = plt.subplots(2, 2, sharex='col', figsize=(16, 9))
     plt.subplots_adjust(wspace=0.5)
     # Plot data
     ax[0][0].bar(x_labels, success_rate, color=ccolors)

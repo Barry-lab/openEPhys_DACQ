@@ -357,7 +357,7 @@ def extract_milk_task_performance(game_state_data):
         # Identify feeder id
         task_data['feeder_id'].append(data[1])
         # Identify whether presentation or repeat trial
-        if len(data) > 2 and (data[2] == 'presentation' or data[2] == 'first_repetition'):
+        if len(data) > 2 and (data[2] == 'presentation_trial' or data[2] == 'first_repetition'):
             task_data['type'].append('present')
         else:
             task_data['type'].append('repeat')
