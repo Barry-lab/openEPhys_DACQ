@@ -3,14 +3,20 @@ import sys
 from scipy.signal import butter, lfilter
 import os
 import numpy as np
-from PyQt4 import QtGui
+try:
+    from PyQt4 import QtGui
+    from PyQt4.QtCore import QThread, pyqtSignal
+except:
+    QtGui = None
+    QThread = None
+    pyqtSignal = None
+    print('PyQt4 not found. Some functions may not be available')
 import subprocess
 import copy
 import multiprocessing as mp
 import threading
 from time import sleep
 import psutil
-from PyQt4.QtCore import QThread, pyqtSignal
 
 
 class CPU_availability_tracker(object):
