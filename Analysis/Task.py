@@ -78,6 +78,70 @@ def compute_milk_task_performance_by_feeder(milk_task_data_frame):
             's_present_first_success_repeat_success': s_present_first_success_repeat_success}
 
 
+def extract_milk_task_outcome_with_delay(data):
+    """
+    Returns DataFrame with delay from previous trial and outcome of the trial,
+    for trials after successful trial to the same feeder.
+
+    :param milk_task_data_frame: output from :py:func:`Task.load_milk_task_data`
+    :type milk_task_data_frame: pandas.DataFrame
+    :return: trial_outcome_with_delay
+    :rtype: pandas.DataFrame
+    """
+    data = data.reset_index(drop=True)
+    repeat_trials = np.diff(list(map(int, data['feeder_id'].values))) == 0
+    repeat_trials = np.where(np.concatenate(([False], repeat_trials)))[0]
+    delays = []
+    outcomes = []
+    feeder_ids = []
+    for trial in repeat_trials:
+        if data.loc[trial - 1, 'outcome'] == 'successful':
+            dur = data.loc[trial, 'start_timestamp'] - data.loc[trial - 1, 'end_timestamp']
+            delays.append(dur)
+            outcomes.append(data.loc[trial, 'outcome'])
+            feeder_ids.append(data.loc[trial, 'feeder_id'])
+
+    return pd.DataFrame({'delay': delays, 'outcome': outcomes, 'feeder_id': feeder_ids})
+
+
+def compute_milk_task_outcome_by_delay_and_feeder_id(data, bin_edges):
+    """
+    Computes the outcome for groups by delay and feeder_id
+
+    :param data: output from :py:func:`Task.compute_milk_task_performance_by_delay`
+    :type milk_task_data_frame: pandas.DataFrame
+    :param bin_edges: bin edges for grouping delay
+    :type list
+    :return: milk_task_outcome_by_delay_and_feeder
+    :rtype: pandas.Series
+    """
+    data['delay_range'] = [''] * data.shape[0]
+    for nbin in range(len(bin_edges) - 1):
+        idx = data[(data['delay'] >= bin_edges[nbin]) & (data['delay'] < bin_edges[nbin + 1])].index
+        data.loc[idx, 'delay_range'] = '{}-{}'.format(bin_edges[nbin], bin_edges[nbin + 1])
+    data['delay'] = data['delay_range']
+    data.drop(columns=['delay_range'], inplace=True)
+    data['delay'].replace('', np.nan, inplace=True)
+    data.dropna(axis=0, inplace=True)
+    # data['outcome'].replace({'successful': 1, 'incorrect_feeder': 0}, inplace=True)
+
+    return data
+
+
+
+
+def plot_milk_task_performance_by_delay(data, ax):
+    """
+    Plots the task performance relative to delay in the provided axes.
+
+    :param data: output from :py:func:`Task.compute_milk_task_performance_by_delay`
+    :param ax: matplotlib axes to plot the data
+    :return: None
+    """
+
+
+
+
 def plot_milk_task_performance_by_feeder(data):
     """
     Returns figure and plot for the provided milk task performance data.
@@ -120,6 +184,14 @@ def plot_milk_task_performance_by_feeder(data):
     ax[0][0].set_ylim([0, 1])
     ax[0][1].set_ylim([0, 1])
     ax[1][1].set_ylim([0, 1])
+    # Set y ticks on success rate plots
+    ax[0][0].set_yticks(np.arange(0, 1.1, 0.1))
+    ax[0][1].set_yticks(np.arange(0, 1.1, 0.1))
+    ax[1][1].set_yticks(np.arange(0, 1.1, 0.1))
+    # Draw horizontal line at 0.5 success rate on all the success rate plots
+    ax[0][0].plot(np.array(ax[0][0].get_xlim()), np.array([0.5, 0.5]), '--r')
+    ax[0][1].plot(np.array(ax[0][1].get_xlim()), np.array([0.5, 0.5]), '--r')
+    ax[1][1].plot(np.array(ax[1][1].get_xlim()), np.array([0.5, 0.5]), '--r')
     # Create custom labels for both left column subplots
     n_legend_lines = int(data['df_mean']['feeder_id'].size / 2)
     from matplotlib.lines import Line2D
