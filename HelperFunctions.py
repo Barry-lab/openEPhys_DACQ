@@ -6,11 +6,10 @@ import numpy as np
 try:
     from PyQt4 import QtGui
     from PyQt4.QtCore import QThread, pyqtSignal
+    PyQt4_Available = True
 except:
-    QtGui = None
-    QThread = None
-    pyqtSignal = None
     print('PyQt4 not found. Some functions may not be available')
+    PyQt4_Available = False
 import subprocess
 import copy
 import multiprocessing as mp
@@ -332,34 +331,6 @@ def import_subdirectory_module(subdirectory, module_name):
 
     return module
 
-def openSingleFileDialog(loadsave, directory=os.path.expanduser("~"), suffix='', caption='Choose File'):
-    # Pops up a GUI to select a single file.
-    dialog = QtGui.QFileDialog(directory=directory, caption=caption)
-    if loadsave is 'save':
-        dialog.setFileMode(QtGui.QFileDialog.AnyFile)
-    elif loadsave is 'load':
-        dialog.setFileMode(QtGui.QFileDialog.ExistingFile)
-    dialog.setViewMode(QtGui.QFileDialog.List) # or Detail
-    if len(suffix) > 0:
-        dialog.setNameFilter('*.' + suffix)
-        dialog.setDefaultSuffix(suffix)
-    if dialog.exec_():
-        # Get path and file name of selection
-        tmp = dialog.selectedFiles()
-        selected_file = str(tmp[0])
-        return selected_file
-
-def show_message(message, message_more=None):
-    # This function is used to display a message in a separate window
-    msg = QtGui.QMessageBox()
-    msg.setIcon(QtGui.QMessageBox.Information)
-    msg.setText(message)
-    if message_more:
-        msg.setInformativeText(message_more)
-    msg.setWindowTitle('Message')
-    msg.setStandardButtons(QtGui.QMessageBox.Ok)
-    msg.exec_()
-
 def test_pinging_address(address='localhost'):
     '''
     Returns True if successful in pinging the input IP address, False otherwise
@@ -371,31 +342,61 @@ def test_pinging_address(address='localhost'):
     else:
         return False
 
-class QThread_with_completion_callback(QThread):
-    finishedSignal = pyqtSignal()
-    '''
-    Allows calling funcitons in separate threads with a callback function executed at completion.
+if PyQt4_Available:
 
-    Note! Make sure QThread_with_completion_callback instance does not go out of scope during execution.
-    '''
-    def __init__(self, callback_function, function, return_output=False, callback_args=(), function_args=()):
-        '''
-        The callback_function is called when function has finished.
-        The function is called with any input arguments that follow it.
-        '''
-        super(QThread_with_completion_callback, self).__init__()
-        if return_output:
-            self.finishedSignal.connect(lambda: callback_function(self.function_output, *self.callback_args))
-        else:
-            self.finishedSignal.connect(lambda: callback_function(*self.callback_args))
-        self.function = function
-        self.callback_args = callback_args
-        self.function_args = function_args
-        self.start()
+    def openSingleFileDialog(loadsave, directory=os.path.expanduser("~"), suffix='', caption='Choose File'):
+        # Pops up a GUI to select a single file.
+        dialog = QtGui.QFileDialog(directory=directory, caption=caption)
+        if loadsave is 'save':
+            dialog.setFileMode(QtGui.QFileDialog.AnyFile)
+        elif loadsave is 'load':
+            dialog.setFileMode(QtGui.QFileDialog.ExistingFile)
+        dialog.setViewMode(QtGui.QFileDialog.List) # or Detail
+        if len(suffix) > 0:
+            dialog.setNameFilter('*.' + suffix)
+            dialog.setDefaultSuffix(suffix)
+        if dialog.exec_():
+            # Get path and file name of selection
+            tmp = dialog.selectedFiles()
+            selected_file = str(tmp[0])
+            return selected_file
 
-    def run(self):
-        self.function_output = self.function(*self.function_args)
-        self.finishedSignal.emit()
+    def show_message(message, message_more=None):
+        # This function is used to display a message in a separate window
+        msg = QtGui.QMessageBox()
+        msg.setIcon(QtGui.QMessageBox.Information)
+        msg.setText(message)
+        if message_more:
+            msg.setInformativeText(message_more)
+        msg.setWindowTitle('Message')
+        msg.setStandardButtons(QtGui.QMessageBox.Ok)
+        msg.exec_()
+
+    class QThread_with_completion_callback(QThread):
+        finishedSignal = pyqtSignal()
+        '''
+        Allows calling funcitons in separate threads with a callback function executed at completion.
+
+        Note! Make sure QThread_with_completion_callback instance does not go out of scope during execution.
+        '''
+        def __init__(self, callback_function, function, return_output=False, callback_args=(), function_args=()):
+            '''
+            The callback_function is called when function has finished.
+            The function is called with any input arguments that follow it.
+            '''
+            super(QThread_with_completion_callback, self).__init__()
+            if return_output:
+                self.finishedSignal.connect(lambda: callback_function(self.function_output, *self.callback_args))
+            else:
+                self.finishedSignal.connect(lambda: callback_function(*self.callback_args))
+            self.function = function
+            self.callback_args = callback_args
+            self.function_args = function_args
+            self.start()
+
+        def run(self):
+            self.function_output = self.function(*self.function_args)
+            self.finishedSignal.emit()
 
 
 def clearLayout(layout, keep=0):
