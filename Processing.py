@@ -370,7 +370,7 @@ def save_spike_data_to_disk(OpenEphysDataPath, processing_method, tetrode_nr, wa
     spike_name = NWBio.get_spike_name_for_processing_method(processing_method)
     if not (waveforms is None) and not (timestamps is None):
         NWBio.save_spikes(OpenEphysDataPath, tetrode_nr, waveforms, 
-                          timestamps, spike_name=spike_name)
+                          timestamps, spike_name=spike_name, overwrite=True)
     if not (idx_keep is None):
         NWBio.save_tetrode_idx_keep(OpenEphysDataPath, tetrode_nr, idx_keep, 
                                     spike_name=spike_name, overwrite=True)

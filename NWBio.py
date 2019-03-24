@@ -168,7 +168,7 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
         
         return data
 
-def save_spikes(filename, tetrode_nr, data, timestamps, spike_name='spikes'):
+def save_spikes(filename, tetrode_nr, data, timestamps, spike_name='spikes', overwrite=False):
     '''
     Stores spike data in NWB file in the same format as with OpenEphysGUI.
     tetrode_nr=0 for first tetrode.
@@ -180,10 +180,18 @@ def save_spikes(filename, tetrode_nr, data, timestamps, spike_name='spikes'):
     recordingKey = get_recordingKey(filename)
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/' + \
            'electrode' + str(tetrode_nr + 1) + '/'
-    if not check_if_path_exists(filename, path):
-        with h5py.File(filename, 'r+') as h5file:
-            h5file[path + 'data'] = data
-            h5file[path + 'timestamps'] = np.float64(timestamps).squeeze()
+    if check_if_path_exists(filename, path):
+        if overwrite:
+            # If overwrite is true, path is first cleared
+            with h5py.File(filename, 'r+') as h5file:
+                del h5file[path]
+        else:
+            raise Exception('Spikes already in file and overwrite not requested.\n' \
+                            + 'File: ' + filename + '\n' \
+                            + 'path: ' + path)
+    with h5py.File(filename, 'r+') as h5file:
+        h5file[path + 'data'] = data
+        h5file[path + 'timestamps'] = np.float64(timestamps).squeeze()
 
 def processing_method_and_spike_name_combinations():
     '''
