@@ -3,7 +3,7 @@
 import h5py
 import numpy as np
 import os
-from HelperFunctions import tetrode_channels
+from HelperFunctions import tetrode_channels, time_string
 from pprint import pprint
 from copy import copy
 import argparse
@@ -33,6 +33,22 @@ def load_continuous(filename):
         continuous = h5file[path + '/data'] # not converted to microvolts!!!! need to multiply by 0.195
         timestamps = h5file[path + '/timestamps']
         data = {'continuous': continuous, 'timestamps': timestamps, 'file_handle': h5file}
+    else:
+        data = None
+
+    return data
+
+def load_continuous_as_array(filename, channels):
+    # Load timestamps and continuous data
+    recordingKey = get_recordingKey(filename)
+    processorKey = get_processorKey(filename)
+    path = '/acquisition/timeseries/' + recordingKey + '/continuous/' + processorKey
+    if check_if_path_exists(filename, path + '/data'):
+        with h5py.File(filename, 'r') as h5file:
+                continuous = h5file[path + '/data'] # not converted to microvolts!!!! need to multiply by 0.195
+                continuous = np.array(continuous[:, channels])
+                timestamps = np.array(h5file[path + '/timestamps'])
+                data = {'continuous': continuous, 'timestamps': timestamps}
     else:
         data = None
 
@@ -106,6 +122,7 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
             data = []
             for nr_tetrode in tetrode_nrs:
                 if nr_tetrode in tetrode_keys_int:
+                    print([time_string(), 'DEBUG: loading tetrode ', nr_tetrode])
                     # If data is available for this tetrode
                     ntet = tetrode_keys_int.index(nr_tetrode)
                     waveforms = h5file['/acquisition/timeseries/' + recordingKey + '/' + spike_name + '/' + \
@@ -151,7 +168,7 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
         
         return data
 
-def save_spikes(filename, tetrode_nr, data, timestamps, spike_name='spikes'):
+def save_spikes(filename, tetrode_nr, data, timestamps, spike_name='spikes', overwrite=False):
     '''
     Stores spike data in NWB file in the same format as with OpenEphysGUI.
     tetrode_nr=0 for first tetrode.
@@ -163,10 +180,18 @@ def save_spikes(filename, tetrode_nr, data, timestamps, spike_name='spikes'):
     recordingKey = get_recordingKey(filename)
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/' + \
            'electrode' + str(tetrode_nr + 1) + '/'
-    if not check_if_path_exists(filename, path):
-        with h5py.File(filename, 'r+') as h5file:
-            h5file[path + 'data'] = data
-            h5file[path + 'timestamps'] = np.float64(timestamps).squeeze()
+    if check_if_path_exists(filename, path):
+        if overwrite:
+            # If overwrite is true, path is first cleared
+            with h5py.File(filename, 'r+') as h5file:
+                del h5file[path]
+        else:
+            raise Exception('Spikes already in file and overwrite not requested.\n' \
+                            + 'File: ' + filename + '\n' \
+                            + 'path: ' + path)
+    with h5py.File(filename, 'r+') as h5file:
+        h5file[path + 'data'] = data
+        h5file[path + 'timestamps'] = np.float64(timestamps).squeeze()
 
 def processing_method_and_spike_name_combinations():
     '''
