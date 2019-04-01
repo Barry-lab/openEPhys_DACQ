@@ -854,7 +854,8 @@ class MilkGoal(object):
         if self.repetitions > 0:
             self.choice_method = 'random_cycle'
         else:
-            self.choice_method = 'random'
+            self.choice_method = 'random_cycle'
+            # self.choice_method = 'random'
         self._initialize_sequence()
         self.next()
 
@@ -907,7 +908,10 @@ class MilkGoal(object):
             n_feeder = np.random.choice(len(activeMfeeders))
 
     def check_if_first_repetition(self):
-        return self.repetition_counter == 0
+        if self.repetitions > 0:
+            return self.repetition_counter == 0
+        else:
+            return True
 
     def copy_ID(self):
         return copy(self.ID)
