@@ -36,6 +36,81 @@ def load_continuous(filename):
 
     return data
 
+
+def load_continuous_channel_segment_as_array(filename, data_path, first_channel, last_channel):
+    '''
+    Loads a contiguous chunk of channels efficiently from HDF5 dataset.
+    '''
+    with h5py.File(filename, 'r') as h5file:
+        continuous = h5file[data_path]
+        continuous = continuous[:, first_channel:last_channel]
+
+    return continuous
+
+
+def load_continuous_as_array(filename, channels):
+    """
+    Fast way of reading a single channel or a set of channels.
+    filename - str - full path to file
+    channels - list - channel numbers to include (starting from 0).
+               Single channel can be given as a single list element or int.
+               Channels are output in sorted order (ascending).
+    """
+    # Make channels variable into a list if int given
+    if isinstance(channels, int):
+        channels = [channels]
+    # Check that all elements of channel are integers
+    if isinstance(channels, list):
+        for channel in channels:
+            if not isinstance(channel, int):
+                raise ValueError('channels argument must be a list of int values.')
+    else:
+        raise ValueError('channels argument must be list or int.')
+    # Sort channel numbers
+    sorted_channels = sorted(channels)
+    if sorted_channels != channels:
+        channels = sorted_channels
+        raise Warning('Channels were not in sorted order.\n'
+                      + 'Output channels will be in sorted order (ascending).')
+    # Generate path to raw continuous data
+    root_path = '/acquisition/timeseries/' + get_recordingKey(filename) \
+                + '/continuous/' + get_processorKey(filename)
+    data_path = root_path + '/data'
+    timestamps_path = root_path + '/timestamps'
+    # Check that data is available, otherwise return None
+    if not check_if_path_exists(filename, data_path):
+        return None
+    if not check_if_path_exists(filename, timestamps_path):
+        return None
+    # Find contiguous channel groups
+    current_chan = channels[0]
+    channel_groups = [current_chan]
+    for i in range(1, len(channels)):
+        if (channels[i] - channels[i - 1]) == 1:
+            channel_groups.append(current_chan)
+        else:
+            channel_groups.append(channels[i])
+            current_chan = channels[i]
+    # Find start and end channel numbers for contiguous groups
+    channel_ranges = []
+    for first_channel in sorted(set(channel_groups)):
+        last_channel = first_channel + channel_groups.count(first_channel)
+        channel_ranges.append((first_channel, last_channel))
+    # Get contiguous channel segments for each group
+    channel_group_data = []
+    for channel_range in channel_ranges:
+        channel_group_data.append(
+            load_continuous_channel_segment_as_array(filename, data_path, *channel_range))
+    # Concatenate channel groups
+    continuous = np.concatenate(channel_group_data, axis=1)
+    # Load timestamps for data
+    with h5py.File(filename, 'r') as h5file:
+        timestamps = np.array(h5file[timestamps_path])
+    # Arrange output into a dictionary
+    data = {'continuous': continuous, 'timestamps': timestamps}
+
+    return data
+
 def load_tetrode_lowpass(filename):
     # Load timestamps and continuous data
     recordingKey = get_recordingKey(filename)
