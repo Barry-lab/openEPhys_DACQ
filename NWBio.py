@@ -37,15 +37,65 @@ def load_continuous(filename):
     return data
 
 
-def load_continuous_channel_segment_as_array(filename, data_path, first_channel, last_channel):
+def load_data_columns_as_array(filename, data_path, first_column, last_column):
     '''
-    Loads a contiguous chunk of channels efficiently from HDF5 dataset.
+    Loads a contiguous columns of dataset efficiently from HDF5 dataset.
     '''
     with h5py.File(filename, 'r') as h5file:
-        continuous = h5file[data_path]
-        continuous = continuous[:, first_channel:last_channel]
+        data = h5file[data_path]
+        data = h5file[data_path][:, first_column:last_column]
 
-    return continuous
+    return data
+
+
+def load_data_as_array(filename, data_path, columns):
+    """
+    Fast way of reading a single column or a set of columns.
+    filename - str - full path to file
+    columns  - list - column numbers to include (starting from 0).
+               Single column can be given as a single list element or int.
+               Columns in the list must be in sorted (ascending) order.
+    """
+    # Make columns variable into a list if int given
+    if isinstance(columns, int):
+        columns = [columns]
+    # Check that all elements of columns are integers
+    if isinstance(columns, list):
+        for column in columns:
+            if not isinstance(column, int):
+                raise ValueError('columns argument must be a list of int values.')
+    else:
+        raise ValueError('columns argument must be list or int.')
+    # Check that column number are sorted
+    if sorted(columns) != columns:
+        raise ValueError('columns was not in sorted (ascending) order.')
+    # Check that data is available, otherwise return None
+    if not check_if_path_exists(filename, data_path):
+        raise ValueError('File ' + filename + '\n'
+                         + 'Does not contain path ' + data_path)
+    # Find contiguous column groups
+    current_column = columns[0]
+    column_groups = [current_column]
+    for i in range(1, len(columns)):
+        if (columns[i] - columns[i - 1]) == 1:
+            column_groups.append(current_column)
+        else:
+            column_groups.append(columns[i])
+            current_column = columns[i]
+    # Find start and end column numbers for contiguous groups
+    column_ranges = []
+    for first_channel in sorted(set(column_groups)):
+        last_channel = first_channel + column_groups.count(first_channel)
+        column_ranges.append((first_channel, last_channel))
+    # Get contiguous column segments for each group
+    column_group_data = []
+    for column_range in column_ranges:
+        column_group_data.append(
+            load_data_columns_as_array(filename, data_path, *column_range))
+    # Concatenate column groups
+    data = np.concatenate(column_group_data, axis=1)
+
+    return data
 
 
 def load_continuous_as_array(filename, channels):
@@ -54,24 +104,8 @@ def load_continuous_as_array(filename, channels):
     filename - str - full path to file
     channels - list - channel numbers to include (starting from 0).
                Single channel can be given as a single list element or int.
-               Channels are output in sorted order (ascending).
+               Channels in the list must be in sorted (ascending) order.
     """
-    # Make channels variable into a list if int given
-    if isinstance(channels, int):
-        channels = [channels]
-    # Check that all elements of channel are integers
-    if isinstance(channels, list):
-        for channel in channels:
-            if not isinstance(channel, int):
-                raise ValueError('channels argument must be a list of int values.')
-    else:
-        raise ValueError('channels argument must be list or int.')
-    # Sort channel numbers
-    sorted_channels = sorted(channels)
-    if sorted_channels != channels:
-        channels = sorted_channels
-        raise Warning('Channels were not in sorted order.\n'
-                      + 'Output channels will be in sorted order (ascending).')
     # Generate path to raw continuous data
     root_path = '/acquisition/timeseries/' + get_recordingKey(filename) \
                 + '/continuous/' + get_processorKey(filename)
@@ -82,27 +116,8 @@ def load_continuous_as_array(filename, channels):
         return None
     if not check_if_path_exists(filename, timestamps_path):
         return None
-    # Find contiguous channel groups
-    current_chan = channels[0]
-    channel_groups = [current_chan]
-    for i in range(1, len(channels)):
-        if (channels[i] - channels[i - 1]) == 1:
-            channel_groups.append(current_chan)
-        else:
-            channel_groups.append(channels[i])
-            current_chan = channels[i]
-    # Find start and end channel numbers for contiguous groups
-    channel_ranges = []
-    for first_channel in sorted(set(channel_groups)):
-        last_channel = first_channel + channel_groups.count(first_channel)
-        channel_ranges.append((first_channel, last_channel))
-    # Get contiguous channel segments for each group
-    channel_group_data = []
-    for channel_range in channel_ranges:
-        channel_group_data.append(
-            load_continuous_channel_segment_as_array(filename, data_path, *channel_range))
-    # Concatenate channel groups
-    continuous = np.concatenate(channel_group_data, axis=1)
+    # Load continuous data
+    continuous = load_data_as_array(filename, data_path, channels)
     # Load timestamps for data
     with h5py.File(filename, 'r') as h5file:
         timestamps = np.array(h5file[timestamps_path])
@@ -111,24 +126,69 @@ def load_continuous_as_array(filename, channels):
 
     return data
 
-def load_tetrode_lowpass(filename):
-    # Load timestamps and continuous data
-    recordingKey = get_recordingKey(filename)
-    processorKey = get_processorKey(filename)
-    path = '/acquisition/timeseries/' + recordingKey + '/continuous/' + processorKey
-    if check_if_path_exists(filename, path + '/tetrode_lowpass'):
-        with h5py.File(filename, 'r') as f:
-            tetrode_lowpass = f[path + '/tetrode_lowpass'][()] # not converted to microvolts!!!! need to multiply by 0.195
-            tetrode_lowpass_timestamps = f[path + '/tetrode_lowpass_timestamps'][()]
-            tetrode_lowpass_info = list(f[path + '/tetrode_lowpass_info'][()])
-            tetrode_lowpass_info = [str(i) for i in tetrode_lowpass_info]
-            data = {'tetrode_lowpass': tetrode_lowpass, 
-                    'tetrode_lowpass_timestamps': tetrode_lowpass_timestamps, 
-                    'tetrode_lowpass_info': tetrode_lowpass_info}
-    else:
-        data = None
+
+def get_downsampling_info(filename):
+    # Generate path to downsampling data info
+    root_path = '/acquisition/timeseries/' + get_recordingKey(filename) \
+                + '/continuous/' + get_processorKey(filename)
+    data_path = root_path + '/downsampling_info'
+    # Load info from file
+    with h5py.File(filename, 'r') as h5file:
+        data = h5file[data_path]
+        data = [str(i) for i in data]
+    # Parse elements in loaded data
+    info_dict = {}
+    for x in data:
+        key, value = x.split(' ')
+        info_dict[key] = value
+
+    return info_dict
+
+
+def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs):
+    """
+    Returns a dict with downsampled continuous data for requested tetrodes
+    filename    - str - full path to file
+    tetrode_nrs - list - tetrode numbers to include (starting from 0).
+                  Single tetrode can be given as a single list element or int.
+                  Tetrode numbers in the list must be in sorted (ascending) order.
+    """
+    # Generate path to raw continuous data
+    root_path = '/acquisition/timeseries/' + get_recordingKey(filename) \
+                + '/continuous/' + get_processorKey(filename)
+    data_path = root_path + '/downsampled_tetrode_data'
+    timestamps_path = root_path + '/downsampled_timestamps'
+    # Check that data is available, otherwise return None
+    if not check_if_path_exists(filename, data_path):
+        return None
+    if not check_if_path_exists(filename, timestamps_path):
+        return None
+    # Get list of channels in downsampled data
+    downsampling_info = get_downsampling_info(filename)
+    downsampled_channels = map(int, downsampling_info['downsampled_channels'].split(','))
+    # Map tetrode_nrs elements to columns in downsampled_tetrode_data
+    columns = []
+    tetrode_nrs_remaining = copy(tetrode_nrs)
+    for tetrode_nr in tetrode_nrs:
+        for chan in tetrode_channels(tetrode_nr):
+            if chan in downsampled_channels:
+                columns.append(downsampled_channels.index(chan))
+                tetrode_nrs_remaining.pop(tetrode_nrs_remaining.index(tetrode_nr))
+                break
+    # Check that all tetrode numbers were mapped
+    if len(tetrode_nrs_remaining) > 0:
+        raise Exception('The following tetrodes were not represented in downsampled data\n' \
+                        + ','.join(tetrode_nrs_remaining))
+    # Load continuous data
+    continuous = load_data_as_array(filename, data_path, columns)
+    # Load timestamps for data
+    with h5py.File(filename, 'r') as h5file:
+        timestamps = np.array(h5file[timestamps_path])
+    # Arrange output into a dictionary
+    data = {'continuous': continuous, 'timestamps': timestamps}
 
     return data
+
 
 def empty_spike_data():
     '''
