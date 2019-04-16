@@ -17,9 +17,6 @@ import argparse
 from copy import copy
 
 
-def OpenEphys_SamplingRate():
-    return 30000
-
 def AxonaDataEEG_SamplingRate():
     return 250
 
@@ -549,12 +546,12 @@ def load_eegData(fpath, eegChans, bitVolts=0.195):
         timestamps = np.array(continuous_data['timestamps'])
         print([hfunct.time_string(), 'DEBUG: transforming into float32'])
         data = continuous_data['continuous'].astype(np.float32)
-        sampling_rate = OpenEphys_SamplingRate()
+        sampling_rate = NWBio.OpenEphys_SamplingRate()
     else:
         # If no raw data available, load downsampled data for that tetrode
         lowpass_data = NWBio.load_tetrode_lowpass(fpath)
         timestamps = np.array(lowpass_data['tetrode_lowpass_timestamps'])
-        sampling_rate = OpenEphys_SamplingRate() / float(lowpass_downsampling)
+        sampling_rate = NWBio.OpenEphys_SamplingRate() / float(lowpass_downsampling)
         if not isinstance(eegChans, list):
             eegChans = [eegChans]
         tetrodes = []

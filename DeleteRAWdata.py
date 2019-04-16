@@ -50,9 +50,8 @@ def main(root_path):
     nwb_processing_failed = 0
     nwb_noSpikes = 0
     ioError = 0
-    # Set downsampling parameters
-    downsampling = 30
-    lowpass_freq = 500
+    # Set downsampling parameter
+    downsampling = 20
     # Commence directory walk
     for dirName, subdirList, fileList in os.walk(root_path):
         for fname in fileList:
@@ -86,7 +85,7 @@ def main(root_path):
                                 # Process the dataset
                                 print('Downsample and Repack: ' + fpath)
                                 input_args = ('python', 'DeleteRAWdataProcess.py', 
-                                              fpath, path_processor, str(lowpass_freq), str(downsampling), 
+                                              fpath, path_processor, str(downsampling), 
                                               str(n_tetrodes), str(int(auxChanStart)), str(nwb_raw_deleted), str(nwb_repacked))
                                 subprocess_output = subprocess_with_stdout(input_args)
                                 subprocess_output = parse_subprocess_output(subprocess_output)
