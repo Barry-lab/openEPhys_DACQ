@@ -12,9 +12,9 @@ def parse_subprocess_output(subprocess_output):
     e.g. 'successful 1 bool' or 'duration 3.6 float'
     '''
     output = {}
-    for line in subprocess_output.split('\n'):
-        if len(line) > 0:
-            datapoints = line.split(' ')
+    for part in subprocess_output.split(','):
+        if len(part) > 0:
+            datapoints = part.split(' ')
             if len(datapoints) == 2:
                 output[datapoints[0]] = datapoints[1]
             elif len(datapoints) == 3:
@@ -24,6 +24,24 @@ def parse_subprocess_output(subprocess_output):
 
     return output
 
+def subprocess_with_stdout(args):
+    """
+    Calls subprocess.Popen with args tuple.
+    Prints stdout output while the call is in progress.
+
+    Returns the last output as string.
+    """
+    process = subprocess.Popen(args, stdout=subprocess.PIPE)
+    while True:
+        output = process.stdout.readline()
+        if output == '' and process.poll() is not None:
+            break
+        if output:
+            last_output = output.strip()
+            print(last_output)
+
+    return last_output
+
 def main(root_path):
     # Prepare counters
     nwb_noRawData = 0
@@ -32,9 +50,8 @@ def main(root_path):
     nwb_processing_failed = 0
     nwb_noSpikes = 0
     ioError = 0
-    # Set downsampling parameters
-    downsampling = 30
-    lowpass_freq = 500
+    # Set downsampling parameter
+    downsampling = 20
     # Commence directory walk
     for dirName, subdirList, fileList in os.walk(root_path):
         for fname in fileList:
@@ -67,10 +84,10 @@ def main(root_path):
                             if SpikesAvailable:
                                 # Process the dataset
                                 print('Downsample and Repack: ' + fpath)
-                                input_args = ['python', 'DeleteRAWdataProcess.py', 
-                                              fpath, path_processor, str(lowpass_freq), str(downsampling), 
-                                              str(n_tetrodes), str(int(auxChanStart)), str(nwb_raw_deleted), str(nwb_repacked)]
-                                subprocess_output = subprocess.check_output(input_args)
+                                input_args = ('python', 'DeleteRAWdataProcess.py', 
+                                              fpath, path_processor, str(downsampling), 
+                                              str(n_tetrodes), str(int(auxChanStart)), str(nwb_raw_deleted), str(nwb_repacked))
+                                subprocess_output = subprocess_with_stdout(input_args)
                                 subprocess_output = parse_subprocess_output(subprocess_output)
                                 if subprocess_output['successful'] == 1:
                                     print('Successfully processed: ' + fpath)

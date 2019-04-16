@@ -2,39 +2,39 @@ import os
 import sys
 import h5py
 import HelperFunctions as hfunct
-from NWBio import listBadChannels, check_if_path_exists
+import NWBio
 import numpy as np
 from time import sleep
 
-def lowpass_and_downsample_channel(fpath, path_processor, chan, lowpass_freq, downsampling):
-    with h5py.File(fpath,'r') as h5file:
-        data = h5file[path_processor + '/data']
-        data = data[:, chan:chan + 1]
-    data_array = np.array(data).squeeze()
-    del data
-    signal = np.float32(data_array)
-    del data_array
-    processed_signal = hfunct.butter_lowpass_filter(signal, lowpass_freq, sampling_rate=30000.0, filt_order=4)
-    del signal
-    processed_signal = np.int16(processed_signal[::downsampling])
-    # NOTE! The following line roughly corrects the phase shift due to filtering
-    # given that filtering is done lowpass at 500 Hz on a signal with 30 kHz samling rate,
-    # which is then downsampled to 1 kHz.
-    # The phase shift is unavoidable, unless filtering is done both ways, using the future of the signal.
-    processed_signal = np.append(processed_signal[1:], processed_signal[-1])
+def lowpass_and_downsample_channel(
+        fpath, path_processor, chan, original_sampling_rate, target_sampling_rate):
+    data = NWBio.load_continuous_as_array(fpath, chan)['continuous'].squeeze()
+    data = hfunct.lowpass_and_downsample(data, original_sampling_rate, target_sampling_rate)
 
-    return processed_signal
+    return data
 
-def lowpass_and_downsample_channel_on_each_tetrode(fpath, path_processor, downsampling, lowpass_freq, n_tetrodes, badChans):
-    with h5py.File(fpath,'r') as h5file:
-        data = h5file[path_processor + '/data']
-        tmp = range(data.shape[0])
-        new_data_size = len(tmp[::downsampling])
-        del tmp
-    processed_data_array = np.zeros((new_data_size, n_tetrodes), dtype=np.int16)
+def lowpass_and_downsample_channels(
+        fpath, path_processor, channels, original_sampling_rate, target_sampling_rate):
+    # Load, lowpass filter and downsample each channel in a separate process
+    multiprocessor = hfunct.multiprocess()
+    for chan in channels:
+        hfunct.proceed_when_enough_memory_available(percent=0.50)
+        print(hfunct.time_string() + ' Starting lowpass_and_downsample_channel for chan ' + str(chan))
+        multiprocessor.run(lowpass_and_downsample_channel, 
+                           args=(fpath, path_processor, chan, 
+                                 original_sampling_rate, target_sampling_rate))
+        sleep(4)
+    # Collect processed data from multiprocess class
+    out = multiprocessor.results()
+    print(hfunct.time_string() + ' Completed lowpass_and_downsample_channel for all channels')
+    
+    return out
+
+def lowpass_and_downsample_channel_on_each_tetrode(
+        fpath, path_processor, original_sampling_rate, 
+        target_sampling_rate, n_tetrodes, badChans):
     processed_chans = []
     processed_tets = []
-    processed_data_list = []
     for n_tet in range(n_tetrodes):
         chans = hfunct.tetrode_channels(n_tet)
         chan = []
@@ -44,61 +44,75 @@ def lowpass_and_downsample_channel_on_each_tetrode(fpath, path_processor, downsa
         if len(chan) > 0:
             processed_chans.append(chan[0])
             processed_tets.append(n_tet)
-    multiprocessor = hfunct.multiprocess()
-    for chan in processed_chans:
-        if hfunct.proceed_when_enough_memory_available(percent=0.66):
-            multiprocessor.run(lowpass_and_downsample_channel, 
-                               args=(fpath, path_processor, chan, lowpass_freq, downsampling))
-            sleep(4)
-    processed_data_list = multiprocessor.results()
+    processed_data_list = lowpass_and_downsample_channels(
+        fpath, path_processor, processed_chans, original_sampling_rate, target_sampling_rate)
+    new_data_size = processed_data_list[0].size
+    processed_data_array = np.zeros((new_data_size, n_tetrodes), dtype=np.int16)
     for n_tet, processed_data in zip(processed_tets, processed_data_list):
         processed_data_array[:, n_tet] = np.int16(processed_data)
-    del processed_data_list
 
-    return processed_data_array
+    return processed_data_array, processed_chans
 
-def downsample_and_repack(fpath, path_processor, lowpass_freq, downsampling, n_tetrodes, auxChanStart, nwb_raw_deleted, nwb_repacked):
-    badChans = listBadChannels(fpath)
+def downsample_and_repack(fpath, path_processor, downsampling, n_tetrodes, auxChanStart, nwb_raw_deleted, nwb_repacked):
+    # Get original sampling rate and compute target rate based on downsampling factor
+    original_sampling_rate = NWBio.OpenEphys_SamplingRate()
+    target_sampling_rate = int(NWBio.OpenEphys_SamplingRate() / downsampling)
+    # Get list of bad channels
+    badChans = NWBio.listBadChannels(fpath)
+    # Get downsampled data
+    downsampled_data, used_chans = lowpass_and_downsample_channel_on_each_tetrode(
+        fpath, path_processor, original_sampling_rate, target_sampling_rate, n_tetrodes, badChans)
+    downsampling_settings_list = ['original_sampling_rate ' + str(original_sampling_rate), 
+                                  'downsampled_sampling_rate ' + str(target_sampling_rate), 
+                                  'downsampled_channels ' + str(','.join(map(str, used_chans)))]
     # Get timestamps for downsampled data
     with h5py.File(fpath,'r') as h5file:
-        timestamps = h5file[path_processor + '/timestamps'].value
-    downsampled_data_timestamps = timestamps[::downsampling]
-    del timestamps
-    # Get downsampled data
-    downsampled_data = lowpass_and_downsample_channel_on_each_tetrode(fpath, path_processor, downsampling, lowpass_freq, n_tetrodes, badChans)
-    downsampling_settings_list = ['downsampling ' + str(downsampling), 
-                                  'lowpass_frequency ' + str(lowpass_freq)]
+        timestamps = np.array(h5file[path_processor + '/timestamps']).squeeze()
+    timestamps = timestamps[::downsampling]
+    # Ensure timestamps and downsampled data have same number of samples
+    assert timestamps.size == downsampled_data.shape[0], \
+        'Downsampled timestamps does not match number of samples in downsampled continuous data.'
     # Write downsampled data to file
     with h5py.File(fpath,'r+') as h5file:
-        h5file[path_processor + '/tetrode_lowpass'] = downsampled_data
-        h5file[path_processor + '/tetrode_lowpass_timestamps'] = downsampled_data_timestamps
+        h5file[path_processor + '/downsampled_tetrode_data'] = downsampled_data
+        h5file[path_processor + '/downsampled_timestamps'] = timestamps
         asciiList = [n.encode("ascii", "ignore") for n in downsampling_settings_list]
-        h5file[path_processor + '/tetrode_lowpass_info'] = h5file.create_dataset(None, (len(asciiList),),'S100', asciiList)
-        # Copy AUX channels to separate array in file
-        data = h5file[path_processor + '/data']
-        data_AUX = np.array(data[:,auxChanStart:])
-        h5file[path_processor + '/data_AUX'] = data_AUX
+        h5file[path_processor + '/downsampling_info'] = h5file.create_dataset(None, (len(asciiList),),'S100', asciiList)
     # Clear up memory
-    del data
     del downsampled_data
-    del downsampled_data_timestamps
-    del data_AUX
-    # Delete raw data from file
+    del timestamps
+    # List AUX channels
+    with h5py.File(fpath, 'r') as h5file:
+        n_raw_channels = h5file[path_processor + '/data'].shape[1]
+    aux_chan_list = range(auxChanStart, n_raw_channels)
+    # Get downsampled AUX channels
+    processed_data_list = lowpass_and_downsample_channels(
+                              fpath, path_processor, aux_chan_list, 
+                              original_sampling_rate, target_sampling_rate)
+    downsampled_AUX = np.concatenate([x[:, None] for x in processed_data_list], axis=1)
+    downsampled_AUX = downsampled_AUX.astype(np.int16)
+    # Write downsampled_AUX to file
+    with h5py.File(fpath,'r+') as h5file:
+        h5file[path_processor + '/downsampled_AUX_data'] = downsampled_AUX
+    # Clear up memory
+    del downsampled_AUX
+    # Delete raw data and original timestamps from file
     with h5py.File(fpath,'r+') as h5file:
         del h5file[path_processor + '/data']
+        del h5file[path_processor + '/timestamps']
     nwb_raw_deleted += 1
     # Repack NWB file to recover space
-    if check_if_path_exists(fpath, path_processor + '/tetrode_lowpass'):
+    if NWBio.check_if_path_exists(fpath, path_processor + '/downsampled_tetrode_data'):
         # Create a repacked copy of the file
         os.system('h5repack ' + fpath + ' ' + (fpath + '.repacked'))
         # Check that the new file is not corrupted
         with h5py.File(fpath + '.repacked','r') as h5file:
-            _ = h5file[path_processor + '/tetrode_lowpass'].shape
+            _ = h5file[path_processor + '/downsampled_tetrode_data'].shape
         # Replace original file with repacked file
         os.system('mv ' + (fpath + '.repacked') + ' ' + fpath)
         # Check that the new file is not corrupted
         with h5py.File(fpath,'r') as h5file:
-            _ = h5file[path_processor + '/tetrode_lowpass'].shape
+            _ = h5file[path_processor + '/downsampled_tetrode_data'].shape
         nwb_repacked += 1
 
     return nwb_raw_deleted, nwb_repacked
@@ -108,18 +122,17 @@ if __name__ == '__main__':
         # Parse input arguments into variables
         fpath = sys.argv[1]
         path_processor = sys.argv[2]
-        lowpass_freq = int(sys.argv[3])
-        downsampling = int(sys.argv[4])
-        n_tetrodes = int(sys.argv[5])
-        auxChanStart = int(sys.argv[6])
-        nwb_raw_deleted = int(sys.argv[7])
-        nwb_repacked = int(sys.argv[8])
+        downsampling = int(sys.argv[3])
+        n_tetrodes = int(sys.argv[4])
+        auxChanStart = int(sys.argv[5])
+        nwb_raw_deleted = int(sys.argv[6])
+        nwb_repacked = int(sys.argv[7])
         # Complete processing
-        input_args = (fpath, path_processor, lowpass_freq, downsampling, 
+        input_args = (fpath, path_processor, downsampling, 
                       n_tetrodes, auxChanStart, nwb_raw_deleted, nwb_repacked)
         nwb_raw_deleted, nwb_repacked = downsample_and_repack(*input_args)
-        print('successful 1 int')
-        print('nwb_raw_deleted ' + str(nwb_raw_deleted) + ' int')
-        print('nwb_repacked ' + str(nwb_repacked) + ' int')
+        print(','.join(['successful 1 int', 
+                        'nwb_raw_deleted ' + str(nwb_raw_deleted) + ' int', 
+                        'nwb_repacked ' + str(nwb_repacked) + ' int']))
     except:
         print('successful 0 int')

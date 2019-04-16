@@ -20,19 +20,25 @@ class TaskSettingsGUI(object):
         self.taskSelectionList.setMaximumWidth(200)
         self.taskSelectionList.itemActivated.connect(self.taskSelection)
         self.loadButton = QtGui.QPushButton('Load')
+        self.loadButton.setMaximumWidth(100)
         self.loadButton.clicked.connect(self.loadSettings)
         self.saveButton = QtGui.QPushButton('Save')
+        self.saveButton.setMaximumWidth(100)
         self.saveButton.clicked.connect(self.saveSettings)
         self.applyButton = QtGui.QPushButton('Apply')
+        self.applyButton.setMaximumWidth(100)
         self.applyButton.clicked.connect(self.applySettings)
         self.cancelButton = QtGui.QPushButton('Cancel')
+        self.cancelButton.setMaximumWidth(100)
         self.cancelButton.clicked.connect(self.cancelSettings)
+        top_menu_hbox = QtGui.QHBoxLayout()
+        top_menu_hbox.addWidget(self.taskSelectionList)
         top_menu_vbox = QtGui.QVBoxLayout()
-        top_menu_vbox.addWidget(self.taskSelectionList)
         top_menu_vbox.addWidget(self.loadButton)
         top_menu_vbox.addWidget(self.saveButton)
         top_menu_vbox.addWidget(self.applyButton)
         top_menu_vbox.addWidget(self.cancelButton)
+        top_menu_hbox.addLayout(top_menu_vbox)
         # Populate task selection list
         tmp_files = os.listdir('Tasks')
         if '__init__.py' in tmp_files:
@@ -41,19 +47,17 @@ class TaskSettingsGUI(object):
             if filename.endswith('.py'):
                 self.taskSelectionList.addItem(filename[:-3])
         # Create task general menu items
-        self.task_general_settings = QtGui.QWidget()
-        self.top_grid_layout = QtGui.QGridLayout(self.task_general_settings)
+        self.main_settings_layout = QtGui.QVBoxLayout()
         # Create task specific menu items
-        self.task_specific_settings = QtGui.QWidget()
-        self.bottom_hbox_layout = QtGui.QHBoxLayout(self.task_specific_settings)
+        self.further_settings_layout = QtGui.QHBoxLayout()
         # Put all boxes into main window
-        top_hbox = QtGui.QHBoxLayout()
-        top_hbox.addItem(top_menu_vbox)
-        top_hbox.addWidget(self.task_general_settings)
-        top_vbox = QtGui.QVBoxLayout()
-        top_vbox.addItem(top_hbox)
-        top_vbox.addWidget(self.task_specific_settings)
-        self.mainWindow.setLayout(top_vbox)
+        left_vbox = QtGui.QVBoxLayout()
+        left_vbox.addLayout(top_menu_hbox)
+        left_vbox.addLayout(self.main_settings_layout)
+        main_hbox = QtGui.QHBoxLayout()
+        main_hbox.addLayout(left_vbox)
+        main_hbox.addLayout(self.further_settings_layout)
+        self.mainWindow.setLayout(main_hbox)
         # Show MainWindow
         self.mainWindow.show()
 
@@ -64,10 +68,11 @@ class TaskSettingsGUI(object):
     def loadTaskGUI(self, currentTask):
         # Load the GUI for currently selected task
         TaskModule = import_module('Tasks.' + currentTask)
-        clearLayout(self.top_grid_layout)
-        clearLayout(self.bottom_hbox_layout)
-        self.TaskGUI = TaskModule.SettingsGUI(self.top_grid_layout, self.bottom_hbox_layout, 
+        clearLayout(self.main_settings_layout)
+        clearLayout(self.further_settings_layout)
+        self.TaskGUI = TaskModule.SettingsGUI(self.main_settings_layout, self.further_settings_layout, 
                                               self.arena_size)
+        self.mainWindow.resize(self.TaskGUI.min_size[0], self.TaskGUI.min_size[1])
 
     def loadSettings(self, TaskSettings=None):
         if not TaskSettings:

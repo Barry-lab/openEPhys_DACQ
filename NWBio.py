@@ -3,10 +3,17 @@
 import h5py
 import numpy as np
 import os
-from HelperFunctions import tetrode_channels
+from HelperFunctions import tetrode_channels, time_string, tetrode_channels
 from pprint import pprint
 from copy import copy
 import argparse
+from TrackingDataProcessing import remove_tracking_data_jumps
+from TrackingDataProcessing import iteratively_combine_multicamera_data_for_recording
+
+
+def OpenEphys_SamplingRate():
+    return 30000
+
 
 def get_filename(folder_path):
     if not os.path.isfile(folder_path):
@@ -51,6 +58,7 @@ def load_data_columns_as_array(filename, data_path, first_column, last_column):
 def load_data_as_array(filename, data_path, columns):
     """
     Fast way of reading a single column or a set of columns.
+    
     filename - str - full path to file
     columns  - list - column numbers to include (starting from 0).
                Single column can be given as a single list element or int.
@@ -101,6 +109,7 @@ def load_data_as_array(filename, data_path, columns):
 def load_continuous_as_array(filename, channels):
     """
     Fast way of reading a single channel or a set of channels.
+    
     filename - str - full path to file
     channels - list - channel numbers to include (starting from 0).
                Single channel can be given as a single list element or int.
@@ -148,6 +157,7 @@ def get_downsampling_info(filename):
 def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs):
     """
     Returns a dict with downsampled continuous data for requested tetrodes
+    
     filename    - str - full path to file
     tetrode_nrs - list - tetrode numbers to include (starting from 0).
                   Single tetrode can be given as a single list element or int.
@@ -239,6 +249,7 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
             data = []
             for nr_tetrode in tetrode_nrs:
                 if nr_tetrode in tetrode_keys_int:
+                    print([time_string(), 'DEBUG: loading tetrode ', nr_tetrode])
                     # If data is available for this tetrode
                     ntet = tetrode_keys_int.index(nr_tetrode)
                     waveforms = h5file['/acquisition/timeseries/' + recordingKey + '/' + spike_name + '/' + \
@@ -284,7 +295,7 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
         
         return data
 
-def save_spikes(filename, tetrode_nr, data, timestamps, spike_name='spikes'):
+def save_spikes(filename, tetrode_nr, data, timestamps, spike_name='spikes', overwrite=False):
     '''
     Stores spike data in NWB file in the same format as with OpenEphysGUI.
     tetrode_nr=0 for first tetrode.
@@ -296,10 +307,18 @@ def save_spikes(filename, tetrode_nr, data, timestamps, spike_name='spikes'):
     recordingKey = get_recordingKey(filename)
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/' + \
            'electrode' + str(tetrode_nr + 1) + '/'
-    if not check_if_path_exists(filename, path):
-        with h5py.File(filename, 'r+') as h5file:
-            h5file[path + 'data'] = data
-            h5file[path + 'timestamps'] = np.float64(timestamps).squeeze()
+    if check_if_path_exists(filename, path):
+        if overwrite:
+            # If overwrite is true, path is first cleared
+            with h5py.File(filename, 'r+') as h5file:
+                del h5file[path]
+        else:
+            raise Exception('Spikes already in file and overwrite not requested.\n' \
+                            + 'File: ' + filename + '\n' \
+                            + 'path: ' + path)
+    with h5py.File(filename, 'r+') as h5file:
+        h5file[path + 'data'] = data
+        h5file[path + 'timestamps'] = np.float64(timestamps).squeeze()
 
 def processing_method_and_spike_name_combinations():
     '''
@@ -495,10 +514,11 @@ def save_tracking_data(filename, TrackingData, ProcessedPos=False, overwrite=Fal
         if not ProcessedPos:
             recursively_save_dict_contents_to_group(h5file, full_path, TrackingData)
         elif ProcessedPos:
-            # If overwrite is true, path is first cleared
             processed_pos_path = full_path + 'ProcessedPos/'
-            if overwrite and 'ProcessedPos' in list(h5file[full_path].keys()):
-                del h5file[processed_pos_path]
+            # If overwrite is true, path is first cleared
+            if overwrite:
+                if full_path in h5file and 'ProcessedPos' in list(h5file[full_path].keys()):
+                    del h5file[processed_pos_path]
             h5file[processed_pos_path] = TrackingData
 
 def load_raw_tracking_data(filename, cameraID, specific_path=None):
@@ -531,8 +551,10 @@ def get_processed_tracking_data_timestamp_edges(filename, subset='ProcessedPos')
     return edges
 
 def check_if_tracking_data_available(filename):
-    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'
-    return check_if_path_exists(filename, path)
+    if check_if_settings_available(filename, path='/General/Tracking/'):
+        return load_settings(filename, path='/General/Tracking/')
+    else:
+        return False
 
 def check_if_processed_position_data_available(filename, subset='ProcessedPos'):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/'
@@ -544,7 +566,7 @@ def check_if_binary_pos(filename):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/events/binary1/'
     return check_if_path_exists(filename, path)
 
-def use_binary_pos(filename, postprocess=False):
+def use_binary_pos(filename, postprocess=False, maxjump=25):
     '''
     Copies binary position data into tracking data
     Apply postprocessing with postprocess=True
@@ -555,29 +577,18 @@ def use_binary_pos(filename, postprocess=False):
         timestamps = np.array(h5file['acquisition']['timeseries'][recordingKey]['events']['binary1']['timestamps'])
         xy = np.array(h5file['acquisition']['timeseries'][recordingKey]['events']['binary1']['data'][:,:2])
     data = {'xy': xy, 'timestamps': timestamps}
-    # Postprocess the data if requested
-    if postprocess:
-        maxjump = 25
-        keepPos = []
-        lastPos = data['xy'][0,:]
-        for npos in range(data['xy'].shape[0]):
-            currpos = data['xy'][npos,:]
-            if np.max(np.abs(lastPos - currpos)) < maxjump:
-                keepPos.append(npos)
-                lastPos = currpos
-        keepPos = np.array(keepPos)
-        print(str(data['xy'].shape[0] - keepPos.size) + ' of ' + 
-              str(data['xy'].shape[0]) + ' removed in postprocessing')
-        data['xy'] = data['xy'][keepPos,:]
-        data['timestamps'] = data['timestamps'][keepPos]
-    # Save data to ProcessedPos position with correct format
-    TrackingData = np.append(data['timestamps'][:,None], data['xy'].astype(np.float64), axis=1)
-    if TrackingData.shape[1] < 5:
-        # Add NaNs for second LED if missing
+    # Construct data into repository familiar posdata format (single array with times in first column)
+    posdata = np.append(data['timestamps'][:,None], data['xy'].astype(np.float64), axis=1)
+    # Add NaNs for second LED if missing
+    if posdata.shape[1] < 5:
         nanarray = np.zeros(data['xy'].shape, dtype=np.float64)
         nanarray[:] = np.nan
-        TrackingData = np.append(TrackingData, nanarray, axis=1)
-    save_tracking_data(filename, TrackingData, ProcessedPos=True, overwrite=False)
+        posdata = np.append(posdata, nanarray, axis=1)
+    # Postprocess the data if requested
+    if postprocess:
+        posdata = remove_tracking_data_jumps(posdata, maxjump)
+    # Save data to ProcessedPos position in NWB file
+    save_tracking_data(filename, posdata, ProcessedPos=True, overwrite=True)
 
 def save_tetrode_idx_keep(filename, ntet, idx_keep, spike_name='spikes', overwrite=False):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/' + \
@@ -651,6 +662,28 @@ def extract_recording_info(filename, selection='default'):
         recording_info = fill_empty_dictionary_from_source(selection, full_recording_info)
 
     return recording_info
+
+
+def process_tracking_data(filename, save_to_file=False):
+    # Get CameraSettings
+    CameraSettings = load_settings(filename, '/CameraSettings/')
+    cameraIDs = sorted(CameraSettings['CameraSpecific'].keys())
+    # Get global clock timestamps
+    OE_GC_times = load_GlobalClock_timestamps(filename)
+    # Get arena_size
+    arena_size = load_settings(filename, '/General/arena_size')
+    # Load position data for all cameras
+    posdatas = []
+    for cameraID in cameraIDs:
+        posdatas.append(load_raw_tracking_data(filename, cameraID))
+    ProcessedPos = iteratively_combine_multicamera_data_for_recording(
+        CameraSettings, arena_size, posdatas, OE_GC_times)
+    if save_to_file:
+        # Save corrected data to file
+        save_tracking_data(filename, ProcessedPos, ProcessedPos=True, ReProcess=False)
+
+    return ProcessedPos
+
 
 def display_recording_data(root_path, selection='default'):
     '''

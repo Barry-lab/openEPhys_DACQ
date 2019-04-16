@@ -17,9 +17,6 @@ import argparse
 from copy import copy
 
 
-def OpenEphys_SamplingRate():
-    return 30000
-
 def AxonaDataEEG_SamplingRate():
     return 250
 
@@ -201,8 +198,12 @@ def create_DACQ_pos_data(posdata, data_time_edges=None, pixels_per_metre=None, d
         # Realign position data start to 0 at data_time_edges[0]
         timestamps = timestamps - data_time_edges[0]
         # Set minumum value of x and y to be 0
-        x_min = min([np.nanmin(xy_pos[:, 0]), np.nanmin(xy_pos[:, 2])])
-        y_min = min([np.nanmin(xy_pos[:, 1]), np.nanmin(xy_pos[:, 3])])
+        x_min = np.nanmin(xy_pos[:, 0])
+        y_min = np.nanmin(xy_pos[:, 1])
+        if not all(np.isnan(xy_pos[:, 2])):
+            x_min = min(x_min, np.nanmin(xy_pos[:, 2]))
+        if not all(np.isnan(xy_pos[:, 3])):
+            y_min = min(y_min, np.nanmin(xy_pos[:, 3]))
         xy_pos[:, 0] = xy_pos[:, 0] - x_min
         xy_pos[:, 2] = xy_pos[:, 2] - x_min
         xy_pos[:, 1] = xy_pos[:, 1] - y_min
@@ -538,16 +539,19 @@ def write_set_file(setFileName, new_values_dict):
 
 def load_eegData(fpath, eegChans, bitVolts=0.195):
     # Load EEG data of selected channel
-    continuous_data = NWBio.load_continuous(fpath)
+    print([hfunct.time_string(), 'DEBUG: load from file'])
+    continuous_data = NWBio.load_continuous_as_array(fpath, eegChans)
     if not (continuous_data is None):
+        print([hfunct.time_string(), 'DEBUG: extract timestamps'])
         timestamps = np.array(continuous_data['timestamps'])
-        data = np.array(continuous_data['continuous'][:,eegChans]).astype(np.float32)
-        sampling_rate = OpenEphys_SamplingRate()
+        print([hfunct.time_string(), 'DEBUG: transforming into float32'])
+        data = continuous_data['continuous'].astype(np.float32)
+        sampling_rate = NWBio.OpenEphys_SamplingRate()
     else:
         # If no raw data available, load downsampled data for that tetrode
         lowpass_data = NWBio.load_tetrode_lowpass(fpath)
         timestamps = np.array(lowpass_data['tetrode_lowpass_timestamps'])
-        sampling_rate = OpenEphys_SamplingRate() / float(lowpass_downsampling)
+        sampling_rate = NWBio.OpenEphys_SamplingRate() / float(lowpass_downsampling)
         if not isinstance(eegChans, list):
             eegChans = [eegChans]
         tetrodes = []
@@ -555,6 +559,7 @@ def load_eegData(fpath, eegChans, bitVolts=0.195):
             tetrodes.append(hfunct.channels_tetrode(eegChan))
         data = np.array(lowpass_data['tetrode_lowpass'][:, tetrodes]).astype(np.float32)
     # Scale data with bitVolts value to convert from raw data to voltage values
+    print([hfunct.time_string(), 'DEBUG: converting to bitVolts'])
     data = data * bitVolts
 
     return {'data': data, 'timestamps': timestamps, 'sampling_rate': sampling_rate}
@@ -624,12 +629,14 @@ def concatenate_posdata_across_recordings(posdata, data_time_edges, recording_ed
 def concatenate_spike_data_across_recordings(spike_data, data_time_edges, recording_edges):
     new_spike_data = range(len(spike_data[0]))
     for n_tet in range(len(new_spike_data)):
+        print([hfunct.time_string(), 'DEBUG: concatenating data for tetrode ', n_tet])
         waveforms = [data[n_tet]['waveforms'] for data in spike_data]
         clusterIDs = [data[n_tet]['clusterIDs'] for data in spike_data]
         timestamps = [data[n_tet]['timestamps'] for data in spike_data]
         for n_rec in range(len(timestamps)):
             # Transform timestamps to continuous recordings
             timestamps[n_rec] = timestamps[n_rec] - data_time_edges[n_rec][0] + recording_edges[n_rec][0]
+        print([hfunct.time_string(), 'DEBUG: The concatenation'])
         new_spike_data[n_tet] = {'waveforms': np.concatenate(waveforms, axis=0), 
                                  'clusterIDs': np.concatenate(clusterIDs, axis=0), 
                                  'timestamps': np.concatenate(timestamps, axis=0)}
@@ -647,6 +654,7 @@ def concatenate_eegData_across_recordings(eegData, data_time_edges, recording_ed
         eegData[n_rec]['timestamps'] = eegData[n_rec]['timestamps'] - data_time_edges[n_rec][0] + recording_edges[n_rec][0]
         eegData[n_rec]['data'] = np.delete(eegData[n_rec]['data'], idx_outside_data_time, axis=0)
     # Concatenate data and timestamps
+    print([hfunct.time_string(), 'DEBUG: The concatenation'])
     new_eegData = {'data': np.concatenate([x['data'] for x in eegData], axis=0), 
                    'timestamps': np.concatenate([x['timestamps'] for x in eegData], axis=0), 
                    'sampling_rate': eegData[0]['sampling_rate']}
@@ -704,6 +712,7 @@ def createAxonaData_for_multiple_NWBfiles(OpenEphysDataPaths, AxonaDataPath,
                 spike_data.append(get_first_available_spike_data(OpenEphysDataPath, tetrode_nrs, 
                                                                  use_idx_keep=True, use_badChan=True))
             else:
+                print([hfunct.time_string(), 'DEBUG: loading spikes of tet ', tetrode_nrs, ' from ', OpenEphysDataPath])
                 spike_data.append(NWBio.load_spikes(OpenEphysDataPath, tetrode_nrs=tetrode_nrs, 
                                                     spike_name=spike_name, use_idx_keep=True, 
                                                     use_badChan=True))
@@ -719,7 +728,9 @@ def createAxonaData_for_multiple_NWBfiles(OpenEphysDataPaths, AxonaDataPath,
                 print('Loading LFP data for channels: ' +  ', '.join(map(str, eegChansInArea)))
                 eegData = []
                 for OpenEphysDataPath in OpenEphysDataPaths:
+                    print([hfunct.time_string(), 'DEBUG: loading eegData for ', OpenEphysDataPath])
                     eegData.append(load_eegData(OpenEphysDataPath, eegChansInArea))
+                print([hfunct.time_string(), 'DEBUG: concatenating eeg data'])
                 eegData = concatenate_eegData_across_recordings(eegData, data_time_edges, 
                                                                 recording_edges)
             else:

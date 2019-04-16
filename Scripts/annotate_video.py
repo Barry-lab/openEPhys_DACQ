@@ -67,7 +67,8 @@ class video_read_write(object):
         self.reader = cv2.VideoCapture(filename)
         out_filename = os.path.splitext(os.path.basename(filename))[0] + new_file_suffix + '.mp4'
         out_file_path = os.path.join(os.path.dirname(filename), out_filename)
-        self.writer = cv2.VideoWriter(out_file_path, 0x00000020, framerate, resolution)
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        self.writer = cv2.VideoWriter(out_file_path, fourcc, framerate, resolution)
 
     @property
     def frame_pos(self):

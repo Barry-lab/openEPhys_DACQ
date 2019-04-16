@@ -6,8 +6,10 @@ Recording PC setup for Data Processing
 
 This guide assumes you have already set up a PC with Ubuntu and installed much of the software as instructed in this guide: :ref:`recordingPCandOpenEphysGUI`. Possibly the relavant part may be just the instructions in the following parts: :ref:`settingUpTheOperatingSystem` and :ref:`otherUsefulSteps`.
 
-Install MATLAB
---------------
+Install MATLAB for KiloSort
+---------------------------
+
+MATLAB is only required to use KiloSort. If you do not intend to use KiloSort, you can skip this part.
 
 Instructions are available at `UCL Software Database website <http://swdb.ucl.ac.uk/>`_. But below is the summary of steps.
 
@@ -43,9 +45,23 @@ Install Scripts from GitHub
 
 You have likely already downloaded the scripts for processing Open Ephys recording from GitHub, if you worked through this guide: :ref:`RecordingManagerSetup`. In that case, you should have in your *Home* folder a folder called ``openEPhys_DACQ`` in which there are also scripts for processing recorded data. If not, use the referred guide to download the files into folder structure just described.
 
-You will need to download *scikit-learn* package for python to use these scripts. To do so, use the following terminal command ``pip install -U scikit-learn``.
+Install the prerequisites. The following packages should already be installed if you have already installed the recording system based on this guide: :ref:`recordingPCandOpenEphysGUI`. If you have not, run the following commands:
 
-You should not need to do this step if you installed Klustakwik to the location ``~/Programs/klustakwik/`` as you would have if you followed the commands above to the letter. Edit file ``ApplyKlustakwikScripts.py`` to specify to location of the *Klustakwik* install. Open the file with text editor, e.g. with terminal command ``gedit ~/openEPhys_DACQ/ApplyKlustakwikScripts.py`` and find the line where ``kk_path`` is specified (probably line 132). It should say something like ``kk_path = os.path.expanduser('~') + '/Programs/klustakwik/KlustaKwik'``. Edit the path to where you installed Klustakwik.
+.. code-block:: none
+
+	pip install h5py --user
+	pip install psutil --user
+	sudo apt-get install python-qt4
+
+In addition, you will need the following packages:
+
+.. code-block:: none
+
+	pip install -U scikit-learn
+
+The final step of setting up klustakwik path can be skipped if you installed Klustakwik to the location ``~/Programs/klustakwik/`` as you would have if you followed the commands above to the letter:
+
+Edit file ``ApplyKlustakwikScripts.py`` to specify to location of the *Klustakwik* install. Open the file with text editor, e.g. with terminal command ``gedit ~/openEPhys_DACQ/ApplyKlustakwikScripts.py`` and find the line where ``kk_path`` is specified (probably line 132). It should say something like ``kk_path = os.path.expanduser('~') + '/Programs/klustakwik/KlustaKwik'``. Edit the path to where you installed Klustakwik.
 
 Install Google Chrome to use Waveform GUI
 -----------------------------------------

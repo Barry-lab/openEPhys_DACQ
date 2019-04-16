@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
-from scipy.signal import butter, lfilter
+from scipy.signal import butter, lfilter, decimate
 import os
 import numpy as np
 try:
@@ -16,6 +16,10 @@ import multiprocessing as mp
 import threading
 from time import sleep
 import psutil
+
+
+def time_string():
+    return datetime.now().strftime('%H:%M:%S')
 
 
 class CPU_availability_tracker(object):
@@ -221,6 +225,67 @@ def proceed_when_enough_memory_available(memory_needed=None, percent=None, array
             sleep(1)
 
     return memory_available
+
+
+def lowpass_and_downsample(signal_in, sampling_rate_in, sampling_rate_out, 
+                           suppress_division_by_two_error=False):
+    '''
+    Implements `scipy.signal.decimate` method with FIR forward pass filter and
+    phase shift correction.
+
+    signal_in         - numpy array with shape (N,).
+                        Input shapes (N, 1) and (1, N) are also accepted but these
+                        are flattened and output shape is (N,).
+                        The output will have the same dtype as signal_in.
+    sampling_rate_in  - int - sampling rate of input signal
+    sampling_rate_out - int - desired sampling rate of output signal.
+                        The division of sampling_rate_in by sampling_rate_out must have 
+                        zero remainder.
+                        Furthermore, the resulting quotient must have 0 remainder when
+                        divided by 2. Otherwise scipy package gives a warning about
+                        bad coefficients.
+
+    Optional:
+
+    suppress_division_by_two_error - bool - allows using sampling_rate_out that does not
+                                            satisfy the requirement that the resulting 
+                                            quotient with sampling_rate_in has remainder 0 
+                                            when divided by sampling_rate_in. 
+                                            Default is False.
+
+    '''
+
+    # Ensure input signal has the correct shape
+    if len(signal_in.shape) > 1:
+        if len(signal_in.shape) == 2 and signal_in.shape[1] == 1:
+            signal_in = signal_in.squeeze()
+        elif len(signal_in.shape) == 2 and signal_in.shape[0] == 1:
+            signal_in = signal_in.squeeze()
+        else:
+            raise Exception('signal_in must have shape (N,), (N, 1) or (1, N)')
+
+    # Ensure sampling rates can be divided without remainder
+    if sampling_rate_in % sampling_rate_out != 0:
+        raise Exception('sampling_rate_out must be a factor of sampling_rate_in.')
+
+    # Compute downsampling factor
+    downsampling_factor = int(sampling_rate_in / sampling_rate_out)
+
+    # Verify that downsampling factor can be divided by 2 without remainder
+    if not suppress_division_by_two_error:
+        if downsampling_factor % 2 != 0:
+            raise Exception('Quotient of sampling_rate_in and sampling_rate_out '
+                            + 'must have zero remainder when divided by 2.')
+
+    # Filter and downsample the signal
+    signal_out = decimate(signal_in, downsampling_factor, ftype='fir', zero_phase=True)
+
+    # Ensure output is in same dtype as input signal
+    if not (signal_in.dtype is signal_out.dtype):
+        signal_out = signal_out.astype(signal_in.dtype)
+
+    return signal_out
+
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
     nyq = 0.5 * fs

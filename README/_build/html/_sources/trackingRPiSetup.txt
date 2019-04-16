@@ -89,6 +89,7 @@ Install simple to install packages
 	sudo python get-pip.py
 	pip install numpy --user
 	pip install picamera --user
+	pip install psutil --user
 	sudo apt-get install pigpio python-pygpio
 	sudo systemctl enable pigpiod
 	sudo apt-get install python-scipy

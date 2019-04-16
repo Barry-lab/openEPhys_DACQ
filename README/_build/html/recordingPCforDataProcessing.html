@@ -85,7 +85,7 @@
 <li class="toctree-l1"><a class="reference internal" href="recordingPCandOpenEphysGUI.html">Recording PC setup for Data Acquisition</a></li>
 <li class="toctree-l1"><a class="reference internal" href="trackingRPiSetup.html">Camera and GlobalClock Raspberry Pi setup</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="">Recording PC setup for Data Processing</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#install-matlab">Install MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#install-matlab-for-kilosort">Install MATLAB for KiloSort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#install-klustakwik">Install Klustakwik</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#install-scripts-from-github">Install Scripts from GitHub</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#install-google-chrome-to-use-waveform-gui">Install Google Chrome to use Waveform GUI</a></li>
@@ -140,8 +140,9 @@
   <div class="section" id="recording-pc-setup-for-data-processing">
 <span id="recordingpcfordataprocessing"></span><h1>Recording PC setup for Data Processing<a class="headerlink" href="#recording-pc-setup-for-data-processing" title="Permalink to this headline">¶</a></h1>
 <p>This guide assumes you have already set up a PC with Ubuntu and installed much of the software as instructed in this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recordingpcandopenephysgui"><span>Recording PC setup for Data Acquisition</span></a>. Possibly the relavant part may be just the instructions in the following parts: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#settinguptheoperatingsystem"><span>Setting up the Operating System</span></a> and <a class="reference internal" href="recordingPCandOpenEphysGUI.html#otherusefulsteps"><span>Other useful steps</span></a>.</p>
-<div class="section" id="install-matlab">
-<h2>Install MATLAB<a class="headerlink" href="#install-matlab" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="install-matlab-for-kilosort">
+<h2>Install MATLAB for KiloSort<a class="headerlink" href="#install-matlab-for-kilosort" title="Permalink to this headline">¶</a></h2>
+<p>MATLAB is only required to use KiloSort. If you do not intend to use KiloSort, you can skip this part.</p>
 <p>Instructions are available at <a class="reference external" href="http://swdb.ucl.ac.uk/">UCL Software Database website</a>. But below is the summary of steps.</p>
 <p>Download the <em>.iso</em> files for MATLAB on Linux from <a class="reference external" href="http://swdb.ucl.ac.uk/">UCL Software Database</a>. Right click on <em>...dvd1.iso</em> and select <em>Open With -&gt; Archive Manager</em>. Click on <em>Extract</em> in the top left corner of Archive Manager. Select the location for the files to be unpacked, preferably the Downloads folder. Create a new folder called <em>MATLAB_INSTALL</em> using the button on the top right of the Archive Manager. Select this folder and choose to <em>Extract All files</em> and to <em>Keep directory structure</em>.</p>
 <p>Unpacked files may be set to read-only mode. To fix this, right click on the <em>MATLAB_INSTALL</em> folder you just created and chose <em>Properties</em>. There go to <em>Permissions</em> tab and make sure all rights are set to <em>Create and delete files</em>. Click on <em>Change Permissions for Enclosed Files...</em> and make the same changes there.</p>
@@ -164,8 +165,18 @@ make
 <div class="section" id="install-scripts-from-github">
 <h2>Install Scripts from GitHub<a class="headerlink" href="#install-scripts-from-github" title="Permalink to this headline">¶</a></h2>
 <p>You have likely already downloaded the scripts for processing Open Ephys recording from GitHub, if you worked through this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recordingmanagersetup"><span>Setup Recording PC for using Recording Manager</span></a>. In that case, you should have in your <em>Home</em> folder a folder called <code class="docutils literal"><span class="pre">openEPhys_DACQ</span></code> in which there are also scripts for processing recorded data. If not, use the referred guide to download the files into folder structure just described.</p>
-<p>You will need to download <em>scikit-learn</em> package for python to use these scripts. To do so, use the following terminal command <code class="docutils literal"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-U</span> <span class="pre">scikit-learn</span></code>.</p>
-<p>You should not need to do this step if you installed Klustakwik to the location <code class="docutils literal"><span class="pre">~/Programs/klustakwik/</span></code> as you would have if you followed the commands above to the letter. Edit file <code class="docutils literal"><span class="pre">ApplyKlustakwikScripts.py</span></code> to specify to location of the <em>Klustakwik</em> install. Open the file with text editor, e.g. with terminal command <code class="docutils literal"><span class="pre">gedit</span> <span class="pre">~/openEPhys_DACQ/ApplyKlustakwikScripts.py</span></code> and find the line where <code class="docutils literal"><span class="pre">kk_path</span></code> is specified (probably line 132). It should say something like <code class="docutils literal"><span class="pre">kk_path</span> <span class="pre">=</span> <span class="pre">os.path.expanduser('~')</span> <span class="pre">+</span> <span class="pre">'/Programs/klustakwik/KlustaKwik'</span></code>. Edit the path to where you installed Klustakwik.</p>
+<p>Install the prerequisites. The following packages should already be installed if you have already installed the recording system based on this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recordingpcandopenephysgui"><span>Recording PC setup for Data Acquisition</span></a>. If you have not, run the following commands:</p>
+<div class="highlight-none"><div class="highlight"><pre>pip install h5py --user
+pip install psutil --user
+sudo apt-get install python-qt4
+</pre></div>
+</div>
+<p>In addition, you will need the following packages:</p>
+<div class="highlight-none"><div class="highlight"><pre>pip install -U scikit-learn
+</pre></div>
+</div>
+<p>The final step of setting up klustakwik path can be skipped if you installed Klustakwik to the location <code class="docutils literal"><span class="pre">~/Programs/klustakwik/</span></code> as you would have if you followed the commands above to the letter:</p>
+<p>Edit file <code class="docutils literal"><span class="pre">ApplyKlustakwikScripts.py</span></code> to specify to location of the <em>Klustakwik</em> install. Open the file with text editor, e.g. with terminal command <code class="docutils literal"><span class="pre">gedit</span> <span class="pre">~/openEPhys_DACQ/ApplyKlustakwikScripts.py</span></code> and find the line where <code class="docutils literal"><span class="pre">kk_path</span></code> is specified (probably line 132). It should say something like <code class="docutils literal"><span class="pre">kk_path</span> <span class="pre">=</span> <span class="pre">os.path.expanduser('~')</span> <span class="pre">+</span> <span class="pre">'/Programs/klustakwik/KlustaKwik'</span></code>. Edit the path to where you installed Klustakwik.</p>
 </div>
 <div class="section" id="install-google-chrome-to-use-waveform-gui">
 <h2>Install Google Chrome to use Waveform GUI<a class="headerlink" href="#install-google-chrome-to-use-waveform-gui" title="Permalink to this headline">¶</a></h2>
