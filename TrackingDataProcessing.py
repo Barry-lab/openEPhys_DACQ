@@ -120,11 +120,11 @@ def estimate_OpenEphys_timestamps_for_tracking_data(OE_GC_times, RPi_GC_times, R
     # Crop data if more timestamps recorded on either system.
     if OE_GC_times.size > RPi_GC_times.size:
         OE_GC_times = OE_GC_times[:RPi_GC_times.size]
-        print('[ Warning ] OpenEphys recorded more GlobalClock TTL pulses than RPi ' + str(n_rpi) + '.\n' + 
+        print('[ Warning ] OpenEphys recorded more GlobalClock TTL pulses than RPi.\n' + 
               'Dumping extra timestamps from the end.')
     elif OE_GC_times.size < RPi_GC_times.size:
         RPi_GC_times = RPi_GC_times[:OE_GC_times.size]
-        print('[ Warning ] RPi ' + str(n_rpi) + ' recorded more GlobalClock TTL pulses than Open Ephys.\n' + 
+        print('[ Warning ] RPi recorded more GlobalClock TTL pulses than Open Ephys.\n' + 
               'Dumping extra timestamps from the end.')
     # Find closest RPi GlobalClock timestamp to each RPi frame timestamp
     RPtimes_idx = []
