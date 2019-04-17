@@ -25,6 +25,8 @@ from tempfile import mkdtemp
 import numpy as np
 import NWBio
 from CameraSettings import CameraSettingsApp
+from importlib import import_module
+
 
 def list_window(items):
     '''
@@ -507,7 +509,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             TaskIO = {'RPIPos': self.RPIpos, 
                       'OEmessages': self.OEmessages, 
                       'MessageToOE': SendOpenEphysSingleMessage}
-            TaskModule = hfunct.import_subdirectory_module('Tasks', self.Settings['TaskSettings']['name'])
+            TaskModule = import_module('Tasks.' + self.Settings['TaskSettings']['name'] + '.Task')
             self.current_task = TaskModule.Core(deepcopy(self.Settings['TaskSettings']), TaskIO)
             print('Initializing Task Successful')
         print('Recording Initialization Successful')
