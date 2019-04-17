@@ -137,7 +137,7 @@ class Kluster():
         # specify path to KlustaKwik exe
         kk_path = os.path.expanduser('~') + '/Programs/klustakwik/KlustaKwik'
         if not os.path.exists(kk_path):
-            print kk_path
+            print(kk_path)
             raise IOError()
         # This FNULL stops klustakwik from printing progress reports
         FNULL = open(os.devnull, 'w')
@@ -169,7 +169,7 @@ class Kluster():
         kk_proc.communicate()
         if kk_proc.stderr:
             for line in kk_proc.stderr:
-                print line.replace('\n', '')
+                print(line.replace('\n', ''))
             
         '''
         now read in the .clu.n file that has been created as a result of this
