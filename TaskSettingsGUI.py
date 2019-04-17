@@ -40,12 +40,10 @@ class TaskSettingsGUI(object):
         top_menu_vbox.addWidget(self.cancelButton)
         top_menu_hbox.addLayout(top_menu_vbox)
         # Populate task selection list
-        tmp_files = os.listdir('Tasks')
-        if '__init__.py' in tmp_files:
-            tmp_files.remove('__init__.py')
-        for filename in tmp_files:
-            if filename.endswith('.py'):
-                self.taskSelectionList.addItem(filename[:-3])
+        tasks_dir = 'Tasks'
+        for x in os.listdir(tasks_dir):
+            if os.path.isdir(os.path.join(tasks_dir, x)):
+                self.taskSelectionList.addItem(x)
         # Create task general menu items
         self.main_settings_layout = QtGui.QVBoxLayout()
         # Create task specific menu items
@@ -67,7 +65,9 @@ class TaskSettingsGUI(object):
 
     def loadTaskGUI(self, currentTask):
         # Load the GUI for currently selected task
-        TaskModule = import_module('Tasks.' + currentTask)
+        if currentTask == 'Pellets_and_Rep_Milk_Task': # Temporary workaround after changes
+            currentTask = 'Pellets_and_Rep_Milk'
+        TaskModule = import_module('Tasks.' + currentTask + '.Task')
         clearLayout(self.main_settings_layout)
         clearLayout(self.further_settings_layout)
         self.TaskGUI = TaskModule.SettingsGUI(self.main_settings_layout, self.further_settings_layout, 
