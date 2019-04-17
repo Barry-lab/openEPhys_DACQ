@@ -36,7 +36,9 @@ def import_task_specific_log_parser(task_name):
     :return: TaskLogParser
     :rtype: module
     """
-    return importlib.import_module('Tasks.' + task_name + '_LogParser')
+    if task_name == 'Pellets_and_Rep_Milk_Task': # Temporary workaround to function with older files
+        task_name = 'Pellets_and_Rep_Milk'
+    return importlib.import_module('Tasks.' + task_name + '.LogParser')
 
 
 def compute_milk_task_performance_by_feeder(milk_task_data_frame):
