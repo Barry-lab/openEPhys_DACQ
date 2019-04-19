@@ -11,7 +11,6 @@ except:
     print('PyQt4 not found. Some functions may not be available')
     PyQt4_Available = False
 import subprocess
-import copy
 import multiprocessing as mp
 import threading
 from time import sleep
@@ -24,9 +23,9 @@ def time_string():
 
 
 class CPU_availability_tracker(object):
-    '''
+    """
     Keeps track of available cores.
-    '''
+    """
     def __init__(self, n_cores):
         self._available_cores = [False for i in range(n_cores)] # Start unavailable to debug locks
         self._core_locks = [mp.Lock() for i in range(n_cores)]
@@ -35,12 +34,12 @@ class CPU_availability_tracker(object):
         self._T__check_locks.start()
 
     def _check_locks(self, frequency=10):
-        '''
+        """
         Checks locks of all unavailable cores at set interval.
         Unlocked locks indicate a core is available.
 
         frequency - int - how many times per second to check locks
-        '''
+        """
         while True:
             sleep(1.0 / frequency)
             # Check for unavailable cores
@@ -55,14 +54,14 @@ class CPU_availability_tracker(object):
         return True in self._available_cores
 
     def wait_for_available_core(self, check_interval=0.01):
-        '''
+        """
         check_interval - seconds to wait between checking for available cores.
-        '''
+        """
         while not self.check_if_core_available():
             sleep(check_interval)
 
     def use_next_available(self, block=True):
-        '''
+        """
         Get available core number and set it to unavailable.
 
         block - bool - if True, waits until core is available.
@@ -73,7 +72,7 @@ class CPU_availability_tracker(object):
             lock - multiprocessing.Lock instance.
                    This must be called with lock.release()
                    for the CPU core nr to become available again.
-        '''
+        """
         if block:
             self.wait_for_available_core()
         elif not self.check_if_core_available():
@@ -88,11 +87,11 @@ class CPU_availability_tracker(object):
 
 
 class multiprocess(object):
-    '''
+    """
     This class makes it easy to use multiprocessing module in a loop.
     Use map method if memory usage is not an issue, otherwise
     use the map method as an example how to use run and results methods.
-    '''
+    """
     def __init__(self):
         self.CPU_availability_tracker = CPU_availability_tracker(mp.cpu_count()-1 or 1)
         self.multiprocessingManager = mp.Manager()
@@ -104,9 +103,9 @@ class multiprocess(object):
     @staticmethod
     def processor(output_list, output_list_Lock, list_pos, 
                   cpu_lock, f, args, kwargs):
-        '''
+        """
         This method called by run method in a separate process to utilize multiprocessing
-        '''
+        """
         # Evaluate the function with input arguments
         output = f(*args, **kwargs)
         # Update output list and active process counter
@@ -115,8 +114,8 @@ class multiprocess(object):
         # Release CPU core lock to inform CPU_availability_tracker
         cpu_lock.release()
 
-    def run(self, f, args=(), kwargs={}, single_cpu_affinity=False):
-        '''
+    def run(self, f, args=(), kwargs=None, single_cpu_affinity=False):
+        """
         This method processes the function in a separate multiprocessing.Process,
         allowing the use of multiple CPU cores.
         If all CPU cores are in use, this function blocks until a core is from a process.
@@ -130,7 +129,10 @@ class multiprocess(object):
                                   is added to kwargs or owerwritten. 
                                   The value of 'cpu_core_nr'
                                   circles through the list of available CPUs.
-        '''
+        """
+        # If kwargs is None, create empty dict
+        if kwargs is None:
+            kwargs = {}
         with self.run_Lock:
             # Wait for next available cpu core count
             cpu_nr, cpu_lock = self.CPU_availability_tracker.use_next_available(block=True)
@@ -149,12 +151,12 @@ class multiprocess(object):
             self.processor_list.append(p)
 
     def results(self):
-        '''
+        """
         This method returns a list, where each element corresponds to output
         from functions as they are passed into run method, in the same order.
         This method blocks if run method is currently being called or
         if processors have not yet finished.
-        '''
+        """
         # Ensure run method is not currently running
         with self.run_Lock:
             # Ensure all processors have finished
@@ -167,14 +169,14 @@ class multiprocess(object):
     def args_kwargs_list_check(n, args_list, kwargs_list):
         # Set empty argument lists if not provided
         if args_list is None:
-            args_list = [[] for x  in range(n)]
+            args_list = [[] for x in range(n)]
         if kwargs_list is None:
-            kwargs_list = [{} for x  in range(n)]
+            kwargs_list = [{} for x in range(n)]
 
         return args_list, kwargs_list
 
     def map(self, f, n, args_list=None, kwargs_list=None, single_cpu_affinity=False):
-        '''
+        """
         This function evaluates function f for number of times specified by argument n, 
         with each set of arguments in args_list and kwargs_list.
         It outputs a list where each element is the output
@@ -192,7 +194,7 @@ class multiprocess(object):
                                   is added to kwargs or owerwritten. 
                                   The value of 'cpu_core_nr'
                                   circles through the list of available CPUs.
-        '''
+        """
         args_list, kwargs_list = multiprocess.args_kwargs_list_check(n, args_list, kwargs_list)
         for args, kwargs in zip(args_list, kwargs_list):
             self.run(f, args, kwargs, single_cpu_affinity)
@@ -201,13 +203,13 @@ class multiprocess(object):
 
 
 def proceed_when_enough_memory_available(memory_needed=None, percent=None, array_size=None, dtype=None):
-    '''
+    """
     This function blocks until required memory is available.
     Input can be any of the following:
         memory_needed - in bytes
         percent - percent (e.g 0.75 for 75%) of total memory to be available
         array_size and dtype - to compute memory needed to store array in memory
-    '''
+    """
     # Compute the memory_needed if not provided directly
     if memory_needed is None:
         if percent is None:
@@ -230,7 +232,7 @@ def proceed_when_enough_memory_available(memory_needed=None, percent=None, array
 
 def lowpass_and_downsample(signal_in, sampling_rate_in, sampling_rate_out, 
                            suppress_division_by_two_error=False):
-    '''
+    """
     Implements `scipy.signal.decimate` method with FIR forward pass filter and
     phase shift correction.
 
@@ -254,7 +256,7 @@ def lowpass_and_downsample(signal_in, sampling_rate_in, sampling_rate_out,
                                             when divided by sampling_rate_in. 
                                             Default is False.
 
-    '''
+    """
 
     # Ensure input signal has the correct shape
     if len(signal_in.shape) > 1:
@@ -398,9 +400,9 @@ def import_subdirectory_module(subdirectory, module_name):
     return module
 
 def test_pinging_address(address='localhost'):
-    '''
+    """
     Returns True if successful in pinging the input IP address, False otherwise
-    '''
+    """
     with open(os.devnull, 'w') as devnull:
         result = subprocess.call(['ping', '-c', '3', address], stdout=devnull, stderr=devnull)
     if result == 0:
@@ -440,16 +442,16 @@ if PyQt4_Available:
 
     class QThread_with_completion_callback(QThread):
         finishedSignal = pyqtSignal()
-        '''
+        """
         Allows calling funcitons in separate threads with a callback function executed at completion.
 
         Note! Make sure QThread_with_completion_callback instance does not go out of scope during execution.
-        '''
+        """
         def __init__(self, callback_function, function, return_output=False, callback_args=(), function_args=()):
-            '''
+            """
             The callback_function is called when function has finished.
             The function is called with any input arguments that follow it.
-            '''
+            """
             super(QThread_with_completion_callback, self).__init__()
             if return_output:
                 self.finishedSignal.connect(lambda: callback_function(self.function_output, *self.callback_args))

@@ -19,13 +19,139 @@ def get_filename(folder_path):
     if not os.path.isfile(folder_path):
         return os.path.join(folder_path, 'experiment_1.nwb')
 
+
 def get_recordingKey(filename):
     with h5py.File(filename, 'r') as h5file:
         return list(h5file['acquisition']['timeseries'].keys())[0]
 
+
 def get_processorKey(filename):
     with h5py.File(filename, 'r') as h5file:
         return list(h5file['acquisition']['timeseries'][get_recordingKey(filename)]['continuous'].keys())[0]
+
+
+def get_processor_path(filename):
+    return '/acquisition/timeseries/' + get_recordingKey(filename) \
+           + '/continuous/' + get_processorKey(filename)
+
+
+def get_downsampled_data_paths(filename):
+    """
+    Returns paths to downsampled data in NWB file.
+
+    :param filename: path to NWB file
+    :type filename: str
+    :return: paths
+    :rtype: dict
+    """
+    processor_path = get_processor_path(filename)
+    return {'tetrode_data': processor_path + '/downsampled_tetrode_data',
+            'aux_data': processor_path + '/downsampled_AUX_data',
+            'timestamps': processor_path + '/downsampled_timestamps',
+            'info': processor_path + '/downsampling_info'}
+
+
+def check_if_downsampled_data_available(filename):
+    """
+    Checks if downsampled data is available in the NWB file.
+
+    :param filename: path to NWB file
+    :type filename: str
+    :return: available
+    :rtype: bool
+    """
+    paths = get_downsampled_data_paths(filename)
+    with h5py.File(filename, 'r') as h5file:
+        for path in [paths[key] for key in paths]:
+            if not (path in h5file):
+                return False
+        if h5file[paths['tetrode_data']].shape[0] == 0:
+            return False
+        if h5file[paths['tetrode_data']].shape[0] \
+                != h5file[paths['timestamps']].shape[0] \
+                != h5file[paths['aux_data']].shape[0]:
+            return False
+
+    return True
+
+
+def get_raw_data_paths(filename):
+    """
+    Returns paths to downsampled data in NWB file.
+
+    :param filename: path to NWB file
+    :type filename: str
+    :return: paths
+    :rtype: dict
+    """
+    processor_path = get_processor_path(filename)
+    return {'continuous': processor_path + '/data',
+            'timestamps': processor_path + '/timestamps'}
+
+
+def check_if_raw_data_available(filename):
+    """
+    Returns paths to raw data in NWB file.
+
+    :param filename:
+    :type filename: str
+    :return: paths
+    :rtype: dict
+    """
+    paths = get_raw_data_paths(filename)
+    if all([check_if_path_exists(filename, paths[key]) for key in paths]):
+        return True
+    else:
+        return False
+
+
+def save_downsampled_data_to_disk(filename, tetrode_data, timestamps, aux_data, info):
+    # Transform info into correct format for creating HDF5 dataset
+    info = [x.encode("ascii", "ignore") for x in info]
+    string_dtype = h5py.special_dtype(vlen=bytes)
+    # Get paths to respective dataset locations
+    paths = get_downsampled_data_paths(filename)
+    # Write data to disk
+    with h5py.File(filename, 'r+') as h5file:
+        h5file[paths['tetrode_data']] = tetrode_data
+        h5file[paths['timestamps']] = timestamps
+        h5file[paths['aux_data']] = aux_data
+        h5file[paths['info']] = h5file.create_dataset(None, (len(info),), string_dtype, info)
+
+
+def delete_raw_data(filename, only_if_downsampled_data_available=True):
+    if only_if_downsampled_data_available:
+        if not check_if_downsampled_data_available(filename):
+            raise Exception('Downsampled data not available in NWB file. Raw data deletion aborted.')
+    if not check_if_raw_data_available(filename):
+        raise Warning('Raw data not available to be deleted in: ' + filename)
+    else:
+        raw_data_paths = get_raw_data_paths(filename)
+        with h5py.File(filename,'r+') as h5file:
+            for path in [raw_data_paths[key] for key in raw_data_paths]:
+                del h5file[path]
+
+
+def repack_NWB_file(filename, replace_original=True, check_validity_with_downsampled_data=True):
+    # Create a repacked copy of the file
+    os.system('h5repack ' + filename + ' ' + (filename + '.repacked'))
+    # Check that the new file is not corrupted
+    if check_validity_with_downsampled_data:
+        if not check_if_downsampled_data_available(filename):
+            raise Exception('Downsampled data cannot be found in repacked file. Original file not replaced.')
+    # Replace original file with repacked file
+    if replace_original:
+        os.system('mv ' + (filename + '.repacked') + ' ' + filename)
+
+
+def list_AUX_channels(filename, n_tetrodes):
+    data = load_continuous(filename)
+    n_channels = data['continuous'].shape[1]
+    data['file_handle'].close()
+    aux_chan_list = range(n_tetrodes * 4 - 1, n_channels)
+
+    return aux_chan_list
+
 
 def load_continuous(filename):
     # Load data file
@@ -42,6 +168,14 @@ def load_continuous(filename):
         data = None
 
     return data
+
+
+def load_raw_data_timestamps_as_array(filename):
+    data = load_continuous(filename)
+    timestamps = np.array(data['timestamps']).squeeze()
+    data['file_handle'].close()
+
+    return timestamps
 
 
 def load_data_columns_as_array(filename, data_path, first_column, last_column):
@@ -136,6 +270,14 @@ def load_continuous_as_array(filename, channels):
     return data
 
 
+def remove_surrounding_binary_markers(text):
+    if text.startswith("b'"):
+        text = text[2:]
+    if text.endswith("'"):
+        text = text[:-1]
+    return text
+
+
 def get_downsampling_info(filename):
     # Generate path to downsampling data info
     root_path = '/acquisition/timeseries/' + get_recordingKey(filename) \
@@ -145,11 +287,13 @@ def get_downsampling_info(filename):
     with h5py.File(filename, 'r') as h5file:
         data = h5file[data_path]
         data = [str(i) for i in data]
+    # Remove b'x' markers from strings if present. Python 3 change.
+    data = list(map(remove_surrounding_binary_markers, data))
     # Parse elements in loaded data
     info_dict = {}
     for x in data:
         key, value = x.split(' ')
-        info_dict[key] = value
+        info_dict[str(key)] = str(value)
 
     return info_dict
 
@@ -175,7 +319,7 @@ def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs):
         return None
     # Get list of channels in downsampled data
     downsampling_info = get_downsampling_info(filename)
-    downsampled_channels = map(int, downsampling_info['downsampled_channels'].split(','))
+    downsampled_channels = list(map(int, downsampling_info['downsampled_channels'].split(',')))
     # Map tetrode_nrs elements to columns in downsampled_tetrode_data
     columns = []
     tetrode_nrs_remaining = copy(tetrode_nrs)
@@ -188,7 +332,7 @@ def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs):
     # Check that all tetrode numbers were mapped
     if len(tetrode_nrs_remaining) > 0:
         raise Exception('The following tetrodes were not represented in downsampled data\n' \
-                        + ','.join(tetrode_nrs_remaining))
+                        + ','.join(list(map(str, tetrode_nrs_remaining))))
     # Load continuous data
     continuous = load_data_as_array(filename, data_path, columns)
     # Load timestamps for data

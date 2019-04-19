@@ -15,14 +15,112 @@ import NWBio
 from createAxonaData import createAxonaData_for_NWBfile
 import HelperFunctions as hfunct
 from KlustaKwikWrapper import applyKlustaKwik_on_spike_data_tet
-import h5py
+from time import sleep
 
-class continuous_data_preloader(object):
-    '''
+
+def lowpass_and_downsample_channel(
+        fpath, chan, original_sampling_rate, target_sampling_rate):
+    data = NWBio.load_continuous_as_array(fpath, chan)['continuous'].squeeze()
+    data = hfunct.lowpass_and_downsample(data, original_sampling_rate, target_sampling_rate)
+
+    return data
+
+
+def lowpass_and_downsample_channels(
+        fpath, channels, original_sampling_rate, target_sampling_rate):
+    # Load, lowpass filter and downsample each channel in a separate process
+    multiprocessor = hfunct.multiprocess()
+    for chan in channels:
+        hfunct.proceed_when_enough_memory_available(percent=0.50)
+        print(hfunct.time_string() + ' Starting lowpass_and_downsample_channel for chan ' + str(chan))
+        multiprocessor.run(lowpass_and_downsample_channel,
+                           args=(fpath, chan, original_sampling_rate, target_sampling_rate))
+        sleep(4)
+    # Collect processed data from multiprocess class
+    out = multiprocessor.results()
+
+    return out
+
+
+def lowpass_and_downsample_channel_on_each_tetrode(
+        fpath, original_sampling_rate, target_sampling_rate, n_tetrodes, badChans):
+    processed_chans = []
+    processed_tets = []
+    for n_tet in range(n_tetrodes):
+        chans = hfunct.tetrode_channels(n_tet)
+        chan = []
+        for c in chans:
+            if c not in badChans:
+                chan.append(c)
+        if len(chan) > 0:
+            processed_chans.append(chan[0])
+            processed_tets.append(n_tet)
+    processed_data_list = lowpass_and_downsample_channels(
+        fpath, processed_chans, original_sampling_rate, target_sampling_rate)
+    new_data_size = processed_data_list[0].size
+    processed_data_array = np.zeros((new_data_size, n_tetrodes), dtype=np.int16)
+    for n_tet, processed_data in zip(processed_tets, processed_data_list):
+        processed_data_array[:, n_tet] = np.int16(processed_data)
+
+    return processed_data_array, processed_chans
+
+
+def lowpass_and_downsample_AUX_data(fpath, n_tetrodes, original_sampling_rate, target_sampling_rate):
+    aux_chan_list = NWBio.list_AUX_channels(fpath, n_tetrodes)
+    processed_data_list = lowpass_and_downsample_channels(
+        fpath, aux_chan_list, original_sampling_rate, target_sampling_rate)
+    downsampled_AUX = np.concatenate([x[:, None] for x in processed_data_list], axis=1)
+    downsampled_AUX = downsampled_AUX.astype(np.int16)
+
+    return downsampled_AUX
+
+
+def downsample_raw_timestamps(fpath, downsample_factor):
+    return NWBio.load_raw_data_timestamps_as_array(fpath)[::downsample_factor]
+
+
+def create_downsampled_data(fpath, n_tetrodes=32, downsample_factor=20):
+    # Get original sampling rate and compute target rate based on downsampling factor
+    original_sampling_rate = NWBio.OpenEphys_SamplingRate()
+    target_sampling_rate = int(NWBio.OpenEphys_SamplingRate() / downsample_factor)
+    # Get list of bad channels
+    badChans = NWBio.listBadChannels(fpath)
+    # Get downsampled data
+    downsampled_data, used_chans = lowpass_and_downsample_channel_on_each_tetrode(
+        fpath, original_sampling_rate, target_sampling_rate, n_tetrodes, badChans)
+    downsampled_AUX = lowpass_and_downsample_AUX_data(fpath, n_tetrodes, original_sampling_rate, target_sampling_rate)
+    downsampled_timestamps = downsample_raw_timestamps(fpath, downsample_factor)
+    # Ensure timestamps and downsampled data have same number of samples
+    assert downsampled_timestamps.size == downsampled_data.shape[0], \
+        'Downsampled timestamps does not match number of samples in downsampled continuous data.'
+    # Create downsampling_info
+    downsampling_info = ['original_sampling_rate ' + str(original_sampling_rate),
+                         'downsampled_sampling_rate ' + str(target_sampling_rate),
+                         'downsampled_channels ' + str(','.join(map(str, used_chans)))]
+    print(['DEBUG', 'downsampled_data.shape', downsampled_data.shape])
+    print(['DEBUG', 'used_chans', used_chans])
+    print(['DEBUG', 'downsampled_AUX.shape', downsampled_AUX.shape])
+    print(['DEBUG', 'downsampled_timestamps.shape', downsampled_timestamps.shape])
+    print(['DEBUG', 'downsampling_info', downsampling_info])
+    # Save downsampled data to disk
+    NWBio.save_downsampled_data_to_disk(
+        fpath, downsampled_data, downsampled_timestamps, downsampled_AUX, downsampling_info)
+
+
+def downsample_and_repack(fpath, n_tetrodes=32, downsample_factor=20):
+    create_downsampled_data(fpath, n_tetrodes=n_tetrodes, downsample_factor=downsample_factor)
+    print(hfunct.time_string() + ' Deleting raw data in ' + fpath)
+    NWBio.delete_raw_data(fpath, only_if_downsampled_data_available=True)
+    print(hfunct.time_string() + ' Repacking NWB file ' + fpath)
+    NWBio.repack_NWB_file(fpath, replace_original=True)
+
+
+class ContinuousDataPreloader(object):
+    """
     This class loads into memory and preprocesses continuous data.
     Data for specific channels can then be queried.
         channels - continuous list of channels to prepare, e.g. range(0,16,1) for first 4 tetrodes
-    '''
+    """
     def __init__(self, OpenEphysDataPath, channels):
         self.chan_nrs = list(channels)
         # Load data
@@ -38,9 +136,9 @@ class continuous_data_preloader(object):
         print('Loading continuous data from NWB file successful.')
 
     def get_chan_nrs_idx_in_continuous(self, chan_nrs_req):
-        '''
+        """
         Finds rows in self.continuous corresponding to chan_nrs requested
-        '''
+        """
         chan_nrs_idx = []
         for chan_nr in chan_nrs_req:
             chan_nrs_idx.append(self.chan_nrs.index(chan_nr))
@@ -48,10 +146,10 @@ class continuous_data_preloader(object):
         return chan_nrs_idx
 
     def prepare_referencing(self, referencing_method='other_channels'):
-        '''
-        Prepares variables for channel specific use of method continuous_data_preloader.referenced
+        """
+        Prepares variables for channel specific use of method ContinuousDataPreloader.referenced
             referencing_method options: 'other_channels' or 'all_channels'
-        '''
+        """
         self.referencing_method = referencing_method
         if referencing_method == 'other_channels':
             self.continuous_sum = np.sum(self.continuous, axis=0)
@@ -59,10 +157,10 @@ class continuous_data_preloader(object):
             self.continuous_mean = np.mean(self.continuous, axis=0).astype(np.int16)
 
     def referenced_continuous(self, chan_nrs_req):
-        '''
+        """
         Returns referenced continuous data for channels in list chan_nrs_req.
         If prepare_referencing method has not been called, calls it with default options.
-        '''
+        """
         if not hasattr(self, 'referencing_method'):
             self.prepare_referencing()
         chan_nrs_idx = self.get_chan_nrs_idx_in_continuous(chan_nrs_req)
@@ -89,11 +187,11 @@ class continuous_data_preloader(object):
         return signal_out
 
     def get_channels(self, chan_nrs_req, referenced=False, filter_freqs=False, no_badChan=False):
-        '''
+        """
         Returns an array where each row is continuous signal for en element in list chan_nrs_req.
             referenced=True - output data is referenced with method referenced_continuous
             filter_freqs=[300, 6000] - sets band-pass filtering frequency band limits
-        '''
+        """
         if referenced:
             data = self.referenced_continuous(chan_nrs_req)
         else:
@@ -112,9 +210,9 @@ class continuous_data_preloader(object):
         return data
 
     def close(self):
-        '''
+        """
         Deletes pre-loaded data from virtual memory
-        '''
+        """
         if hasattr(self, 'continuous'):
             del self.continuous
         if hasattr(self, 'timestamps'):
@@ -125,10 +223,10 @@ class continuous_data_preloader(object):
             del self.continuous_mean
 
 def set_bad_chan_to_0(data, chan_nrs, badChan):
-    '''
+    """
     Sets channels (rows in matrix data) to 0 values according to lists chan_nrs and badChan
     If badChan is an empty list, data will be unchanged
-    '''
+    """
     if len(badChan) > 0:
         for nchanBad in badChan:
             if nchanBad in chan_nrs:
@@ -138,13 +236,13 @@ def set_bad_chan_to_0(data, chan_nrs, badChan):
     return data
 
 def detect_threshold_crossings_on_tetrode(continuous_tetrode_data, threshold, tooclose, detection_method='negative'):
-    '''
+    """
     Finds all threshold crossings on a tetrode. Returns an empty array if no threshold crossings detected
         continuous_tetrode_data - 4 x N processed continuous data array for 4 channels at N datapoints
         threshold - threshold value in microvolts
         tooclose - minimum latency allowed between spikes (in datapoints)
         detection_method - 'negative', 'positive' or 'both' - the polarity of threshold crossing detection
-    '''
+    """
     threshold_int16 = np.int16(np.round(threshold / 0.195))
     # Find threshold crossings for each channel
     spike_indices = np.array([], dtype=np.int64)
@@ -168,12 +266,12 @@ def detect_threshold_crossings_on_tetrode(continuous_tetrode_data, threshold, to
     return spike_indices
 
 def extract_spikes_from_tetrode(continuous_tetrode_data, spike_indices, waveform_length=[6, 34]):
-    '''
+    """
     Extracts spike waveforms from continuous_data based on spike timestamps
         continuous_tetrode_data - 4 x N processed continuous data array for 4 channels at N datapoints
         spike_indices - indices for threshold crossing in the continuous_data
         waveform_length - [before, after] number of datapoints to include in the waveform
-    '''
+    """
     # Using spike_indices create an array of indices (windows) to extract waveforms from LFP trace
     # The following values are chosen to match OpenEphysGUI default window
     spike_indices = np.expand_dims(spike_indices, 1)
@@ -201,14 +299,14 @@ def extract_spikes_from_tetrode(continuous_tetrode_data, spike_indices, waveform
     return waveforms, spike_indices, idx_keep
 
 def filter_spike_data(spike_data_tet, pos_edges, threshold, noise_cut_off, verbose=True):
-    '''
+    """
     Filters data on all tetrodes according to multiple criteria
     Inputs:
         spike_data [list] - list of dictionaries with 'waveforms' and 'timestamps' for each tetrode
         pos_edges [list] - first and last position data timestamp
         threshold - threshold value in microvolts
         noise_cut_off - value for removing spikes above this cut off in microvolts
-    '''
+    """
     # Create idx_keep all True for all tetrodes. Then turn values to False with each filter
     idx_keep = np.ones(spike_data_tet['waveforms'].shape[0], dtype=np.bool)
     # Include spikes occured during position data
@@ -248,9 +346,9 @@ def clarify_OpenEphysDataPaths(OpenEphysDataPaths):
     return OpenEphysDataPaths
 
 def check_if_channel_maps_are_same(channel_map_1, channel_map_2):
-    '''
+    """
     Determines if two channel maps are identical
-    '''
+    """
     # Check that there are same number of areas in the dictionary
     if len(channel_map_1) != len(channel_map_2):
         return False
@@ -450,7 +548,7 @@ def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels,
     preloaded_datas = []
     for OpenEphysDataPath in OpenEphysDataPaths:
         print('Loading data for processing: ' + OpenEphysDataPath)
-        preloaded_data = continuous_data_preloader(OpenEphysDataPath, channels)
+        preloaded_data = ContinuousDataPreloader(OpenEphysDataPath, channels)
         preloaded_data.prepare_referencing('other_channels')
         preloaded_datas.append(preloaded_data)
     hfunct.print_progress(0, len(tetrode_nrs), prefix='Extract & KlustaKwik:', suffix=' T: 0/' + str(len(tetrode_nrs)), initiation=True)
@@ -507,7 +605,7 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
     preloaded_datas = []
     for OpenEphysDataPath in OpenEphysDataPaths:
         print('Loading data for processing: ' + OpenEphysDataPath)
-        preloaded_data = continuous_data_preloader(OpenEphysDataPath, channels)
+        preloaded_data = ContinuousDataPreloader(OpenEphysDataPath, channels)
         preloaded_data.prepare_referencing('other_channels')
         preloaded_datas.append(preloaded_data)
     # Start matlab engine
@@ -583,6 +681,10 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None,
          axonaDataArgs=(None, False), max_clusters=31, 
          force_position_processing=False, pos_data_processing_kwargs={}):
     # Ensure correct format for data paths
+    try: # Python 3 workaround
+        basestring
+    except NameError:
+        basestring = str
     if isinstance(OpenEphysDataPaths, basestring):
         OpenEphysDataPaths = [OpenEphysDataPaths]
     OpenEphysDataPaths = clarify_OpenEphysDataPaths(OpenEphysDataPaths)
@@ -623,33 +725,29 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None,
                                         channel_map=channel_map, pixels_per_metre=axonaDataArgs[0], 
                                         show_output=axonaDataArgs[1])
 
+
 def process_data_tree(root_path, downsample=False, max_clusters=31):
+    # Create list of dirnames skipped
+    dir_names_skipped = []
     # Commence directory walk
-    for dirName, subdirList, fileList in os.walk(root_path):
+    for dir_name, subdirList, fileList in os.walk(root_path):
         for fname in fileList:
-            if not ('Experiment' in dirName):
-                fpath = os.path.join(dirName, fname)
+            if 'Experiment' in dir_name:
+                if not (dir_name in dir_names_skipped):
+                    dir_names_skipped.append(dir_name)
+                    raise Warning('Experiment found in directory name, skipping: ' + dir_name)
+            else:
+                fpath = os.path.join(dir_name, fname)
                 if fname == 'experiment_1.nwb':
                     AxonaDataExists = any(['AxonaData' in subdir for subdir in subdirList])
-                    recordingKey = NWBio.get_recordingKey(fpath)
-                    processorKey = NWBio.get_processorKey(fpath)
-                    raw_data_path = '/acquisition/timeseries/' + recordingKey + \
-                                    '/continuous/' + processorKey + '/data'
-                    downsampled_data_path = '/acquisition/timeseries/' + recordingKey + \
-                                            '/continuous/' + processorKey + '/tetrode_lowpass'
-                    spike_data_path = '/acquisition/timeseries/' + recordingKey + '/spikes/'
-                    with h5py.File(fpath, 'r') as h5file:
-                        raw_data_available = raw_data_path in h5file
-                        downsampled_data_available = downsampled_data_path in h5file
-                        spikes_recorded = len(h5file[spike_data_path].items()) > 0
-                    if not AxonaDataExists and spikes_recorded and \
-                       (raw_data_available or downsampled_data_available):
-                        main(fpath, processing_method='klustakwik', 
-                            noise_cut_off=1000, threshold=50, make_AxonaData=True, 
-                            axonaDataArgs=(None, False), max_clusters=max_clusters)
-    if downsample:
-        import DeleteRAWdata
-        DeleteRAWdata.main(root_path)
+                    if not AxonaDataExists:
+                        print(hfunct.time_string() + ' Applying KlustaKwik on ' + fpath)
+                        main(fpath, processing_method='klustakwik',
+                             noise_cut_off=1000, threshold=50, make_AxonaData=True,
+                             axonaDataArgs=(None, False), max_clusters=max_clusters)
+                    if downsample:
+                        print(hfunct.time_string() + ' Downsampled and repack ' + fpath)
+                        downsample_and_repack(fpath, n_tetrodes=32, downsample_factor=20)
 
 if __name__ == '__main__':
     # Input argument handling and help info
