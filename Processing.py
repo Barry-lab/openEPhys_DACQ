@@ -107,10 +107,9 @@ def create_downsampled_data(fpath, n_tetrodes=32, downsample_factor=20):
         fpath, downsampled_data, downsampled_timestamps, downsampled_AUX, downsampling_info)
 
 
-def downsample_and_repack(fpath, n_tetrodes=32, downsample_factor=20):
-    create_downsampled_data(fpath, n_tetrodes=n_tetrodes, downsample_factor=downsample_factor)
+def delete_raw_data(fpath, only_if_downsampled_data_available=True):
     print(hfunct.time_string() + ' Deleting raw data in ' + fpath)
-    NWBio.delete_raw_data(fpath, only_if_downsampled_data_available=True)
+    NWBio.delete_raw_data(fpath, only_if_downsampled_data_available=only_if_downsampled_data_available)
     print(hfunct.time_string() + ' Repacking NWB file ' + fpath)
     NWBio.repack_NWB_file(fpath, replace_original=True)
 
@@ -726,7 +725,7 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None,
                                         show_output=axonaDataArgs[1])
 
 
-def process_data_tree(root_path, downsample=False, max_clusters=31):
+def process_data_tree(root_path, downsample=False, delete_raw=False, max_clusters=31):
     # Create list of dirnames skipped
     dir_names_skipped = []
     # Commence directory walk
@@ -746,8 +745,11 @@ def process_data_tree(root_path, downsample=False, max_clusters=31):
                              noise_cut_off=1000, threshold=50, make_AxonaData=True,
                              axonaDataArgs=(None, False), max_clusters=max_clusters)
                     if downsample:
-                        print(hfunct.time_string() + ' Downsampled and repack ' + fpath)
-                        downsample_and_repack(fpath, n_tetrodes=32, downsample_factor=20)
+                        print(hfunct.time_string() + ' Downsample and repack ' + fpath)
+                        create_downsampled_data(fpath, n_tetrodes=32, downsample_factor=20)
+                        if delete_raw:
+                            delete_raw_data(fpath, only_if_downsampled_data_available=True)
+
 
 if __name__ == '__main__':
     # Input argument handling and help info
@@ -783,7 +785,9 @@ if __name__ == '__main__':
     parser.add_argument('--datatree', action='store_true', 
                         help='to process a whole data tree with default arguments in method process_data_tree')
     parser.add_argument('--downsample', action='store_true', 
-                        help='to downsample a whole data tree after processing')
+                        help='to downsample a whole data tree after processing. Only available with datatree option.')
+    parser.add_argument('--delete_raw', action='store_true',
+                        help='to delete raw data after downsampling. Only available with datatree and downsample option.')
     args = parser.parse_args()
     # Get paths to recording files
     OpenEphysDataPaths = args.paths
@@ -793,7 +797,11 @@ if __name__ == '__main__':
             downsample = True
         else:
             downsample = False
-        process_data_tree(OpenEphysDataPaths[0], downsample)
+        if args.delete_raw:
+            delete_raw = True
+        else:
+            delete_raw = False
+        process_data_tree(OpenEphysDataPaths[0], downsample, delete_raw)
     else:
         # Get chan input variable
         if args.chan:
