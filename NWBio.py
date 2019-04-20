@@ -45,10 +45,10 @@ def get_downsampled_data_paths(filename):
     :rtype: dict
     """
     processor_path = get_processor_path(filename)
-    return {'tetrode_data': processor_path + '/downsampled_tetrode_data',
-            'aux_data': processor_path + '/downsampled_AUX_data',
-            'timestamps': processor_path + '/downsampled_timestamps',
-            'info': processor_path + '/downsampling_info'}
+    return {'tetrode_data': processor_path + '/downsampled_tetrode_data/',
+            'aux_data': processor_path + '/downsampled_AUX_data/',
+            'timestamps': processor_path + '/downsampled_timestamps/',
+            'info': processor_path + '/downsampling_info/'}
 
 
 def check_if_downsampled_data_available(filename):
@@ -105,18 +105,27 @@ def check_if_raw_data_available(filename):
         return False
 
 
+def save_downsampling_info_to_disk(filename, info):
+    # Get paths to respective dataset locations
+    paths = get_downsampled_data_paths(filename)
+    # Ensure dictionary fields are in correct format
+    info = {'original_sampling_rate': np.int64(info['original_sampling_rate']),
+            'downsampled_sampling_rate': np.int64(info['downsampled_sampling_rate']),
+            'downsampled_channels': np.array(info['downsampled_channels'], dtype=np.int64)}
+    # Write data to disk
+    with h5py.File(filename, 'r+') as h5file:
+        recursively_save_dict_contents_to_group(h5file, paths['info'], info)
+
+
 def save_downsampled_data_to_disk(filename, tetrode_data, timestamps, aux_data, info):
-    # Transform info into correct format for creating HDF5 dataset
-    info = [x.encode("ascii", "ignore") for x in info]
-    string_dtype = h5py.special_dtype(vlen=bytes)
     # Get paths to respective dataset locations
     paths = get_downsampled_data_paths(filename)
     # Write data to disk
+    save_downsampling_info_to_disk(filename, info)
     with h5py.File(filename, 'r+') as h5file:
         h5file[paths['tetrode_data']] = tetrode_data
         h5file[paths['timestamps']] = timestamps
         h5file[paths['aux_data']] = aux_data
-        h5file[paths['info']] = h5file.create_dataset(None, (len(info),), string_dtype, info)
 
 
 def delete_raw_data(filename, only_if_downsampled_data_available=True):
@@ -278,7 +287,7 @@ def remove_surrounding_binary_markers(text):
     return text
 
 
-def get_downsampling_info(filename):
+def get_downsampling_info_old(filename):
     # Generate path to downsampling data info
     root_path = '/acquisition/timeseries/' + get_recordingKey(filename) \
                 + '/continuous/' + get_processorKey(filename)
@@ -293,9 +302,22 @@ def get_downsampling_info(filename):
     info_dict = {}
     for x in data:
         key, value = x.split(' ')
-        info_dict[str(key)] = str(value)
+        if key == 'original_sampling_rate':
+            info_dict[key] = np.int64(value)
+        elif key == 'downsampled_sampling_rate':
+            info_dict[key] = np.int64(value)
+        elif key == 'downsampled_channels':
+            info_dict[key] = np.array(list(map(int, value.split(',')))).astype(np.int64)
 
     return info_dict
+
+
+def get_downsampling_info(filename):
+    root_path = '/acquisition/timeseries/' + get_recordingKey(filename) \
+                + '/continuous/' + get_processorKey(filename)
+    data_path = root_path + '/downsampling_info'
+    with h5py.File(filename, 'r') as h5file:
+        return recursively_load_dict_contents_from_group(h5file, data_path)
 
 
 def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs):
@@ -318,8 +340,7 @@ def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs):
     if not check_if_path_exists(filename, timestamps_path):
         return None
     # Get list of channels in downsampled data
-    downsampling_info = get_downsampling_info(filename)
-    downsampled_channels = list(map(int, downsampling_info['downsampled_channels'].split(',')))
+    downsampled_channels = list(get_downsampling_info(filename)['downsampled_channels'])
     # Map tetrode_nrs elements to columns in downsampled_tetrode_data
     columns = []
     tetrode_nrs_remaining = copy(tetrode_nrs)

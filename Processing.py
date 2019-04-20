@@ -94,14 +94,9 @@ def create_downsampled_data(fpath, n_tetrodes=32, downsample_factor=20):
     assert downsampled_timestamps.size == downsampled_data.shape[0], \
         'Downsampled timestamps does not match number of samples in downsampled continuous data.'
     # Create downsampling_info
-    downsampling_info = ['original_sampling_rate ' + str(original_sampling_rate),
-                         'downsampled_sampling_rate ' + str(target_sampling_rate),
-                         'downsampled_channels ' + str(','.join(map(str, used_chans)))]
-    print(['DEBUG', 'downsampled_data.shape', downsampled_data.shape])
-    print(['DEBUG', 'used_chans', used_chans])
-    print(['DEBUG', 'downsampled_AUX.shape', downsampled_AUX.shape])
-    print(['DEBUG', 'downsampled_timestamps.shape', downsampled_timestamps.shape])
-    print(['DEBUG', 'downsampling_info', downsampling_info])
+    downsampling_info = {'original_sampling_rate': original_sampling_rate,
+                         'downsampled_sampling_rate': target_sampling_rate,
+                         'downsampled_channels': np.array(used_chans)}
     # Save downsampled data to disk
     NWBio.save_downsampled_data_to_disk(
         fpath, downsampled_data, downsampled_timestamps, downsampled_AUX, downsampling_info)
