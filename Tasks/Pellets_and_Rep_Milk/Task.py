@@ -45,6 +45,14 @@ def setTripleHBoxStretch(hbox):
 
     return hbox
 
+def setQuadrupleHBoxStretch(hbox):
+    hbox.setStretch(0,2)
+    hbox.setStretch(1,1)
+    hbox.setStretch(2,1)
+    hbox.setStretch(3,1)
+
+    return hbox
+
 def playSignal(frequency, frequency_band_width, modulation_frequency, duration=2):
     if type(frequency) == QtGui.QLineEdit:
         frequency = np.int64(float(str(frequency.text())))
@@ -108,6 +116,8 @@ class SettingsGUI(object):
         self.settings['FEEDERs'] = {'pellet': [], 'milk': []}
         # Create GUI size requirements
         self.min_size = [0, 0]
+        # Create empty button groups dictionary
+        self.button_groups = {}
         # Create settings menu
         self.populate_main_settings_layout(main_settings_layout)
         self.populate_further_settings_layout(further_settings_layout)
@@ -273,6 +283,9 @@ class SettingsGUI(object):
         self.settings['AudioSignalMode']['ambient'].setChecked(True)
         hbox.addWidget(self.settings['AudioSignalMode']['ambient'])
         hbox.addWidget(self.settings['AudioSignalMode']['localised'])
+        self.button_groups['AudioSignalMode'] = QtGui.QButtonGroup()
+        self.button_groups['AudioSignalMode'].addButton(self.settings['AudioSignalMode']['ambient'])
+        self.button_groups['AudioSignalMode'].addButton(self.settings['AudioSignalMode']['localised'])
         grid.addLayout(setTripleHBoxStretch(hbox), 1, 0)
         # Add Milk reward quantity
         self.settings['MilkQuantity'] = {}
@@ -304,30 +317,36 @@ class SettingsGUI(object):
         hbox.addWidget(self.settings['LightSignalOnRepetitions']['presentation'])
         hbox.addWidget(self.settings['LightSignalOnRepetitions']['repeat'])
         grid.addLayout(setTripleHBoxStretch(hbox), 4, 0)
+        # Specify probability that light signal does turn on
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Light Signal probability (0 - 1)'))
+        self.settings['lightSignalProbability'] = QtGui.QLineEdit('1')
+        hbox.addWidget(self.settings['lightSignalProbability'])
+        grid.addLayout(setDoubleHBoxStretch(hbox), 5, 0)
         # Specify light signal intensity
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Light Signal intensity (0 - 100)'))
         self.settings['lightSignalIntensity'] = QtGui.QLineEdit('100')
         hbox.addWidget(self.settings['lightSignalIntensity'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 5, 0)
+        grid.addLayout(setDoubleHBoxStretch(hbox), 6, 0)
         # Specify light signal delay relative to trial start
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Light Signal delay (s)'))
         self.settings['lightSignalDelay'] = QtGui.QLineEdit('0')
         hbox.addWidget(self.settings['lightSignalDelay'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 6, 0)
+        grid.addLayout(setDoubleHBoxStretch(hbox), 7, 0)
         # Option to set duration of negative audio feedback
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Negative Audio Feedback (s)'))
         self.settings['NegativeAudioSignal'] = QtGui.QLineEdit('0')
         hbox.addWidget(self.settings['NegativeAudioSignal'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 7, 0)
+        grid.addLayout(setDoubleHBoxStretch(hbox), 8, 0)
         # Specify milk trial fail penalty duration
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Milk Trial Fail Penalty (s)'))
         self.settings['MilkTrialFailPenalty'] = QtGui.QLineEdit('10')
         hbox.addWidget(self.settings['MilkTrialFailPenalty'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 8, 0)
+        grid.addLayout(setDoubleHBoxStretch(hbox), 9, 0)
         # Specify milk trial mean separation
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Min Separation (s)'))
@@ -370,12 +389,30 @@ class SettingsGUI(object):
         self.settings['MilkTrialMaxDuration'] = QtGui.QLineEdit('9')
         hbox.addWidget(self.settings['MilkTrialMaxDuration'])
         grid.addLayout(setDoubleHBoxStretch(hbox), 6, 1)
+        # Specify method of choosing the next milk feeder
+        hbox = QtGui.QHBoxLayout()
+        hbox.addWidget(QtGui.QLabel('Next Goal'))
+        self.settings['MilkGoalNextFeederMethod'] = {'random': QtGui.QRadioButton('Random'), 
+                                                     'weighted': QtGui.QRadioButton('Weighted'), 
+                                                     'cycle': QtGui.QRadioButton('Cycle')}
+        self.settings['MilkGoalNextFeederMethod']['cycle'].setChecked(True)
+        hbox.addWidget(self.settings['MilkGoalNextFeederMethod']['random'])
+        hbox.addWidget(self.settings['MilkGoalNextFeederMethod']['weighted'])
+        hbox.addWidget(self.settings['MilkGoalNextFeederMethod']['cycle'])
+        self.button_groups['MilkGoalNextFeederMethod'] = QtGui.QButtonGroup()
+        self.button_groups['MilkGoalNextFeederMethod'].addButton(
+            self.settings['MilkGoalNextFeederMethod']['random'])
+        self.button_groups['MilkGoalNextFeederMethod'].addButton(
+            self.settings['MilkGoalNextFeederMethod']['weighted'])
+        self.button_groups['MilkGoalNextFeederMethod'].addButton(
+            self.settings['MilkGoalNextFeederMethod']['cycle'])
+        grid.addLayout(setQuadrupleHBoxStretch(hbox), 7, 1)
         # Specify number of repretitions of each milk trial goal
         hbox = QtGui.QHBoxLayout()
         hbox.addWidget(QtGui.QLabel('Milk goal repetitions'))
         self.settings['MilkGoalRepetition'] = QtGui.QLineEdit('0')
         hbox.addWidget(self.settings['MilkGoalRepetition'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 7, 1)
+        grid.addLayout(setDoubleHBoxStretch(hbox), 8, 1)
         # Create Milk FEEDER items
         scroll_widget = QtGui.QWidget()
         self.milk_feeder_settings_layout = QtGui.QVBoxLayout(scroll_widget)
@@ -560,6 +597,7 @@ class SettingsGUI(object):
                         'Username': str(self.settings['Username'].text()), 
                         'Password': str(self.settings['Password'].text()), 
                         'NegativeAudioSignal': np.float64(str(self.settings['NegativeAudioSignal'].text())), 
+                        'lightSignalProbability': np.float64(str(self.settings['lightSignalProbability'].text())), 
                         'lightSignalIntensity': np.int64(str(self.settings['lightSignalIntensity'].text())), 
                         'lightSignalDelay': np.float64(str(self.settings['lightSignalDelay'].text())), 
                         'lightSignalPins': str(self.settings['lightSignalPins'].text()), 
@@ -591,6 +629,9 @@ class SettingsGUI(object):
         for key in self.settings['AudioSignalMode'].keys():
             if self.settings['AudioSignalMode'][key].isChecked():
                 TaskSettings['AudioSignalMode'] = key
+        for key in self.settings['MilkGoalNextFeederMethod'].keys():
+            if self.settings['MilkGoalNextFeederMethod'][key].isChecked():
+                TaskSettings['MilkGoalNextFeederMethod'] = key
         # Get boolean selection for LightSignal repetition trial settings
         TaskSettings['LightSignalOnRepetitions'] = {}
         for key in self.settings['LightSignalOnRepetitions'].keys():
@@ -639,8 +680,10 @@ class SettingsGUI(object):
                     for mode_key in self.settings['AudioSignalMode'].keys():
                         if TaskSettings['AudioSignalMode'] == mode_key:
                             self.settings['AudioSignalMode'][mode_key].setChecked(True)
-                        else:
-                            self.settings['AudioSignalMode'][mode_key].setChecked(False)
+                elif key == 'MilkGoalNextFeederMethod':
+                    for mode_key in self.settings['MilkGoalNextFeederMethod'].keys():
+                        if TaskSettings['MilkGoalNextFeederMethod'] == mode_key:
+                            self.settings['MilkGoalNextFeederMethod'][mode_key].setChecked(True)
                 elif key == 'LightSignalOnRepetitions':
                     for repeat_key in TaskSettings['LightSignalOnRepetitions'].keys():
                         state = TaskSettings['LightSignalOnRepetitions'][repeat_key]
@@ -843,27 +886,30 @@ class MilkGoal(object):
     Query read MilkGoal.ID for current feeder.
     Use MilkGoal.next() method to choose next feeder.
     '''
-    def __init__(self, activeMfeeders, repetitions=0):
+    def __init__(self, activeMfeeders, next_feeder_method='random', repetitions=0):
         '''
         activeMfeeders - list - elements are returned with next() method as choices
-        repetitions - int - number of repetitions to do per each feeder in 'random_cycle' method,
-                      if repetitions == 0, milk feeders are chosen randomly.
+        next_feeder_method - str - 'random' (default) or 'cycle'
+        repetitions - int - number of repetitions to do per each feeder
         '''
         self.activeMfeeders = activeMfeeders
+        self.next_feeder_method = next_feeder_method
         self.repetitions = repetitions
-        if self.repetitions > 0:
-            self.choice_method = 'random_cycle'
+        if self.next_feeder_method == 'cycle':
+            self._initialize_sequence()
+            self.next()
+        elif self.next_feeder_method == 'weighted':
+            self.ID = self.activeMfeeders[MilkGoal.choose_randomly(self.activeMfeeders)]
+        elif self.next_feeder_method == 'random':
+            self.next()
         else:
-            self.choice_method = 'random_cycle'
-            # self.choice_method = 'random'
-        self._initialize_sequence()
-        self.next()
+            raise ValueError('Unexpected next_feeder_method argument.')
 
     def _initialize_sequence(self):
         '''
         Initializes the sequence of feeders and initial position.
         '''
-        if self.choice_method == 'random_cycle':
+        if self.next_feeder_method == 'cycle':
             self.sequence = range(len(self.activeMfeeders))
             np.random.shuffle(self.sequence)
             # Set repetition counter and position to very last in sequence,
@@ -871,17 +917,17 @@ class MilkGoal(object):
             self.repetition_counter = self.repetitions
             self.sequence_position = len(self.activeMfeeders)
 
-    def re_init(self, activeMfeeders=None, choice_method=None, repetitions=None):
+    def re_init(self, activeMfeeders=None, next_feeder_method=None, repetitions=None):
         '''
         Allows re-initializing the class with any subset of input variables.
         '''
         if not (activeMfeeders is None):
             self.activeMfeeders = activeMfeeders
-        if not (choice_method is None):
-            self.choice_method = choice_method
+        if not (next_feeder_method is None):
+            self.next_feeder_method = next_feeder_method
         if not (repetitions is None):
             self.repetitions = repetitions
-        if self.choice_method == 'random_cycle':
+        if self.next_feeder_method == 'cycle':
             self._initialize_sequence()
         self.next()
 
@@ -907,6 +953,10 @@ class MilkGoal(object):
             # If not trial has been successful, pick feeder randomly
             n_feeder = np.random.choice(len(activeMfeeders))
 
+    @staticmethod
+    def choose_randomly(activeMfeeders):
+        return np.random.choice(len(activeMfeeders))
+
     def check_if_first_repetition(self):
         if self.repetitions > 0:
             return self.repetition_counter == 0
@@ -924,13 +974,15 @@ class MilkGoal(object):
         game_counters - dict with specific structure (see choose_with_weighted_randomness() method)
                         only required for weighted random choice.
         '''
-        if self.choice_method == 'random':
+        if self.next_feeder_method == 'random':
+            n_feeder = MilkGoal.choose_randomly(self.activeMfeeders)
+        elif self.next_feeder_method == 'weighted':
             if game_counters is None:
-                n_feeder = np.random.choice(len(self.activeMfeeders))
-            else:
-                n_feeder = MilkGoal.choose_with_weighted_randomness(self.activeMfeeders, 
-                                                                    game_counters)
-        elif self.choice_method == 'random_cycle':
+                raise Exception('game_counters input required for weigthed randomness ' \
+                                + 'in next MilkGoal decision.')
+            n_feeder = MilkGoal.choose_with_weighted_randomness(self.activeMfeeders, 
+                                                                game_counters)
+        elif self.next_feeder_method == 'cycle':
             self.repetition_counter += 1
             if self.repetition_counter > self.repetitions:
                 # If counter has maxed out, move up in sequence position and reset counter
@@ -1946,7 +1998,7 @@ class GameState_MilkTrial(GameState):
             self.update_game_counters_successful(self.MilkGoal.copy_ID())
             self.MilkTrialSignals.stop(self.MilkGoal.copy_ID())
             ID = self.MilkGoal.copy_ID()
-            self.MilkGoal.next()
+            self.MilkGoal.next(game_counters=self.game_counters)
             return 'GameState_MilkReward', {'action': 'GameState_MilkTrial', 'ID': ID, 'trial_type': 'presentation'}
         elif conditions['milk_trial_duration']:
             # If time limit for task duration has passed, stop milk trial without reward.
@@ -1964,18 +2016,18 @@ class GameState_MilkTrial(GameState):
             self.update_game_counters_successful(self.MilkGoal.copy_ID())
             self.MilkTrialSignals.stop(self.MilkGoal.copy_ID())
             ID = self.MilkGoal.copy_ID()
-            self.MilkGoal.next()
+            self.MilkGoal.next(game_counters=self.game_counters)
             return 'GameState_MilkReward', {'action': 'GameState_MilkTrial', 'ID': ID, 'trial_type': 'repeat'}
         elif conditions['milk_trial_duration']:
             # If time limit for task duration has passed, stop milk trial without reward
             self.MilkTrialSignals.stop(self.MilkGoal.copy_ID())
-            self.MilkGoal.next()
+            self.MilkGoal.next(game_counters=self.game_counters)
             return 'GameState_MilkTrial_Fail', {'reason': 'timeout'}
         elif conditions['distance_from_other_feeders']:
             # If subject went to incorrect location, stop milk trial with negative feedback
             self.MilkTrialSignals.stop(self.MilkGoal.copy_ID())
             self.MilkTrialSignals.fail(self.MilkGame_Variables.closest_feeder_ID())
-            self.MilkGoal.next()
+            self.MilkGoal.next(game_counters=self.game_counters)
             return 'GameState_MilkTrial_Fail', {'reason': 'incorrect_feeder'}
         
     def repeat_logic(self, **kwargs):
@@ -2236,15 +2288,24 @@ class MilkTrialSignals(object):
         FEEDERsettings  - dict - key (ID) and value (feeder specific parameters)
         '''
         # Parse TaskSettings
-        self.FirstTrialLightOn = TaskSettings['LightSignalOnRepetitions']['presentation']
-        self.OtherTrialLightOn = TaskSettings['LightSignalOnRepetitions']['repeat']
-        self.lightSignalDelay  = TaskSettings['lightSignalDelay']
-        AudioSignalMode        = TaskSettings['AudioSignalMode']
+        self.FirstTrialLightOn      = TaskSettings['LightSignalOnRepetitions']['presentation']
+        self.OtherTrialLightOn      = TaskSettings['LightSignalOnRepetitions']['repeat']
+        self.lightSignalDelay       = TaskSettings['lightSignalDelay']
+        self.lightSignalProbability = TaskSettings['lightSignalProbability']
+        AudioSignalMode             = TaskSettings['AudioSignalMode']
         # Initialize signals
         self.MilkTrial_AudioSignal = MilkTrial_AudioSignal(actuator_method_call, MessageToOE, 
                                                            AudioSignalMode, FEEDERsettings)
         if self.FirstTrialLightOn or self.OtherTrialLightOn:
             self.MilkTrial_LightSignal = MilkTrial_LightSignal(actuator_method_call, MessageToOE)
+
+    def light_signal_probabilistic_determinant(self):
+        if self.lightSignalProbability > 0.99:
+            return True
+        if random.random() < self.lightSignalProbability:
+            return True
+        else:
+            return False
 
     def start(self, ID, first_repetition=False):
         self.MilkTrial_AudioSignal.start(ID)
@@ -2258,6 +2319,8 @@ class MilkTrialSignals(object):
             start_light_signal = True
         else:
             start_light_signal = False
+        if start_light_signal:
+            start_light_signal = self.light_signal_probabilistic_determinant()
         if start_light_signal:
             if self.lightSignalDelay > 0:
                 self.MilkTrial_LightSignal.start_delayed(ID, self.lightSignalDelay)
@@ -2768,6 +2831,7 @@ class Core(object):
                                                      self.MilkRewardDevices.actuator_method_call, 
                                                      self.TaskIO['MessageToOE'], FEEDERs['milk'])
             self.MilkGoal = MilkGoal(self.MilkRewardDevices.IDs_active, 
+                                     next_feeder_method=self.TaskSettings['MilkGoalNextFeederMethod'], 
                                      repetitions=self.TaskSettings['MilkGoalRepetition'])
         else:
             self.MilkTrialSignals = None

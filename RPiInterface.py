@@ -537,6 +537,8 @@ class RewardControl(object):
         self.lightSignalIntensity = lightSignalIntensity
         self.negativeAudioSignal = negativeAudioSignal
         self.lightSignalPins = lightSignalPins
+        # Ensure files on the FEEDER RPi are up to date
+        RewardControl.update_files_on_RPi(FEEDER_type, RPiIP, RPiUsername, verbose=False)
         # Set up SSH connection
         self.ssh_connection = ssh(RPiIP, RPiUsername, RPiPassword)
         self.ssh_connection.sendCommand('sudo pkill python') # Ensure any past processes have closed
@@ -549,6 +551,16 @@ class RewardControl(object):
         # If initialization was unsuccessful, crash this script
         if not init_successful:
             raise Exception('Initialization was unsuccessful at: ' + RPiIP)
+
+    @staticmethod
+    def update_files_on_RPi(FEEDER_type, address, username, verbose=False):
+        if FEEDER_type == 'milk':
+            files = ('milkFeederController.py',)
+        elif FEEDER_type == 'pellet':
+            files = ('pelletFeederController.py',)
+        else:
+            raise ValueError('Unexpected FEEDER_type argument.')
+        write_files_to_RPi(files, address, username=username, verbose=verbose)
 
     def Controller_message_parser(self, message):
         if message == 'init_successful':

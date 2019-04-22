@@ -191,12 +191,14 @@ class Controller(object):
                 self.ZMQmessenger.sendMessage('releaseMilk successful')
 
     def startLightSignal(self):
-        for LEDcontroller in self.LEDcontrollers:
-            LEDcontroller.turnLEDon()
+        if hasattr(self, 'LEDcontrollers'):
+            for LEDcontroller in self.LEDcontrollers:
+                LEDcontroller.turnLEDon()
 
     def stopLightSignal(self):
-        for LEDcontroller in self.LEDcontrollers:
-            LEDcontroller.turnLEDoff()
+        if hasattr(self, 'LEDcontrollers'):
+            for LEDcontroller in self.LEDcontrollers:
+                LEDcontroller.turnLEDoff()
 
     def startTrialAudioSignal(self):
         self.audioSignalController.playAudioSignal('trialAudioSignal')
@@ -232,7 +234,7 @@ class Controller(object):
         self.closeCommandReceived = False
         while not self.closeCommandReceived:
             try:
-                time.sleep(0.1)
+                sleep(0.1)
             except KeyboardInterrupt:
                 self.close()
 
