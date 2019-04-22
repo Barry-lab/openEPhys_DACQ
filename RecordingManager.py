@@ -106,9 +106,11 @@ def store_camera_data_to_recording_file(CameraSettings, rec_file_path):
     # Initialize file_manager for each camera
     file_managers = {}
     for cameraID in CameraSettings['CameraSpecific'].keys():
+        print(['DEBUG', hfunct.time_string(), 'Initializing Camera_RPi_file_manager for ID: ' + cameraID])
         address = CameraSettings['CameraSpecific'][cameraID]['address']
         username = CameraSettings['General']['username']
         file_managers[cameraID] = rpiI.Camera_RPi_file_manager(address, username)
+        print(['DEBUG', hfunct.time_string(), 'Initializing Camera_RPi_file_manager for ID: ' + cameraID + ' complete.'])
     # Retrieve data concurrently from all cameras
     T_list = []
     for cameraID in CameraSettings['CameraSpecific'].keys():
@@ -120,8 +122,16 @@ def store_camera_data_to_recording_file(CameraSettings, rec_file_path):
     # Combine data from cameras and store to recording file
     CameraData = {}
     for cameraID in CameraSettings['CameraSpecific'].keys():
+        print(['DEBUG', hfunct.time_string(), 'Retrieving CameraData for ID: ' + cameraID])
         CameraData[cameraID] = file_managers[cameraID].get_timestamps_and_OnlineTrackerData(cameraID)
+        print(['DEBUG', hfunct.time_string(), 'Retrieving CameraData for ID: ' + cameraID + ' complete.'])
+    #### Temporary backup
+    with open('/home/room418/WorkInProgress/tmp_cameradata.p', 'w') as pfile:
+        pickle.dump(CameraData, pfile)
+    #### Temporary backup
+    print(['DEBUG', hfunct.time_string(), 'Saving CameraData to recording file'])
     NWBio.save_tracking_data(rec_file_path, CameraData)
+    print(['DEBUG', hfunct.time_string(), 'Saving CameraData to recording file complete.'])
     # Copy video data directly to recording folder 
     T_list = []
     for cameraID in CameraSettings['CameraSpecific'].keys():
