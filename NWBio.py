@@ -131,9 +131,10 @@ def save_downsampled_data_to_disk(filename, tetrode_data, timestamps, aux_data, 
 def delete_raw_data(filename, only_if_downsampled_data_available=True):
     if only_if_downsampled_data_available:
         if not check_if_downsampled_data_available(filename):
-            raise Exception('Downsampled data not available in NWB file. Raw data deletion aborted.')
+            print('Warning', 'Downsampled data not available in NWB file. Raw data deletion aborted.')
+            return None
     if not check_if_raw_data_available(filename):
-        raise Warning('Raw data not available to be deleted in: ' + filename)
+        print('Warning', 'Raw data not available to be deleted in: ' + filename)
     else:
         raw_data_paths = get_raw_data_paths(filename)
         with h5py.File(filename,'r+') as h5file:

@@ -740,10 +740,17 @@ def process_data_tree(root_path, downsample=False, delete_raw=False, max_cluster
                              noise_cut_off=1000, threshold=50, make_AxonaData=True,
                              axonaDataArgs=(None, False), max_clusters=max_clusters)
                     if downsample:
-                        print(hfunct.time_string() + ' Downsample and repack ' + fpath)
-                        create_downsampled_data(fpath, n_tetrodes=32, downsample_factor=20)
-                        if delete_raw:
+                        if not NWBio.check_if_downsampled_data_available(fpath):
+                            print(hfunct.time_string() + ' Downsample ' + fpath)
+                            create_downsampled_data(fpath, n_tetrodes=32, downsample_factor=20)
+                        else:
+                            print('Warning', 'Downsampled data already available, skipping ' + fpath)
+                    if delete_raw:
+                        if NWBio.check_if_raw_data_available(fpath):
+                            print(hfunct.time_string() + ' Repack ' + fpath)
                             delete_raw_data(fpath, only_if_downsampled_data_available=True)
+                        else:
+                            print('Warning', 'No raw data to be deleted in ' + fpath)
 
 
 if __name__ == '__main__':
