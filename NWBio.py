@@ -62,6 +62,10 @@ def check_if_downsampled_data_available(filename):
     """
     paths = get_downsampled_data_paths(filename)
     with h5py.File(filename, 'r') as h5file:
+        # START Workaround for older downsampled datasets
+        if '/acquisition/timeseries/recording1/continuous/processor102_100/tetrode_lowpass':
+            return True
+        # END Workaround for older downsampled datasets
         for path in [paths[key] for key in paths]:
             if not (path in h5file):
                 return False
