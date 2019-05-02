@@ -423,6 +423,31 @@ def construct_paths_to_tetrode_spike_data(filename, tetrode_nrs, spike_name='spi
     return [(spikes_path + 'electrode' + str(tetrode_nr + 1) + '/') for tetrode_nr in tetrode_nrs]
 
 
+def count_spikes(filename, tetrode_nrs, spike_name='spikes', use_idx_keep=False):
+    """
+    :param filename: full path to NWB file
+    :type filename: str
+    :param tetrode_nrs: tetrode numbers to count spikes for
+    :type tetrode_nrs: list
+    :param spike_name: type of spikes to look for (field in NWB file)
+    :type spike_name: str
+    :param use_idx_keep: If False (default) all spikes are counted, otherwise only filtered spikes are counted
+    :type use_idx_keep: bool
+    :return: total number of spikes on each tetrode
+    :rtype: list
+    """
+    tetrode_paths = construct_paths_to_tetrode_spike_data(filename, tetrode_nrs, spike_name=spike_name)
+    count = []
+    with h5py.File(filename, 'r') as h5file:
+        for tetrode_path in tetrode_paths:
+            if use_idx_keep:
+                count.append(sum(np.array(h5file[tetrode_path + 'idx_keep'][()]).squeeze()))
+            else:
+                count.append(h5file[tetrode_path + 'timestamps/'].shape[0])
+
+    return count
+
+
 def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=False,
                 use_badChan=False, no_waveforms=False):
     """
