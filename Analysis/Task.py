@@ -287,6 +287,40 @@ def append_trial_first_visited_feeder_id(task_data, posdata, task_settings,
     task_data[column_name] = first_feeder_id
 
 
+def append_trial_if_light_on(task_data, light_signal_epochs,
+                             column_name='light_on', max_misalignment=0.5):
+    """
+    Appends a column to DataFrame with booleans specifying if light was on in the trial.
+
+    :param task_data: output from :py:func:`Task.load_milk_task_data`
+    :type task_data: pandas.DataFrame
+    :param light_signal_epochs: list of epoch timestamps [start, end]
+    :type light_signal_epochs: list
+    :param column_name: name of the appended column ('first_feeder_id' by default)
+    :type column_name: str
+    :param max_misalignment: maximum seconds light may precede trial start time (default is 0.5)
+    :type max_misalignment: float
+    """
+    # Get light signal start times
+    light_signal_start_times = np.array([x[0] for x in light_signal_epochs])
+    # Check which trials epoch times contain light signal start time
+    light_on = []
+    for i, trial_epoch in enumerate(zip(task_data['start_timestamp'], task_data['end_timestamp'])):
+        trial_start, trial_end = trial_epoch
+        trial_start -= max_misalignment
+        # Identify closest light epoch after trial start
+        closest_light_epoch = np.argmin(abs(light_signal_start_times - trial_start))
+        if light_signal_start_times[closest_light_epoch] < trial_start:
+            closest_light_epoch += 1
+        if closest_light_epoch < len(light_signal_start_times) and \
+                light_signal_start_times[closest_light_epoch] < trial_end:
+            light_on.append(True)
+        else:
+            light_on.append(False)
+    # Append light signal boolean array to DataFrame
+    task_data[column_name] = np.array(light_on, dtype=np.bool)
+
+
 def load_milk_task_data(filename, full_data=True):
     """
     Returns data frame for milk task related data from NWB recording file.
@@ -310,11 +344,27 @@ def load_milk_task_data(filename, full_data=True):
         task_settings = NWBio.load_settings(filename, '/TaskSettings/')
         append_trial_end_closest_feeder_id(df, posdata, task_settings)
         append_trial_first_visited_feeder_id(df, posdata, task_settings)
+        append_trial_if_light_on(df, log_parser.data['Signal']['LightSignal']['epochs'])
 
     return df
 
 
 if __name__ == '__main__':
-    milk_task_performance_data = compute_milk_task_performance_by_feeder(load_milk_task_data(sys.argv[1]))
-    fig, ax = plot_milk_task_performance_by_feeder(milk_task_performance_data)
-    plt.show(block=True)
+    filename = sys.argv[1]
+    recording_info = NWBio.extract_recording_info(
+        filename, {'Time': None, 'General': {'animal': None, 'experiment_id': None}})
+    figure_title = \
+        recording_info['General']['animal'] + ' ' \
+        + recording_info['Time'] + ' ' \
+        + recording_info['General']['experiment_id']
+    df = load_milk_task_data(filename)
+    if sum(df['light_on']) > 0:
+        milk_task_performance_data = compute_milk_task_performance_by_feeder(df.loc[df['light_on']])
+        fig, ax = plot_milk_task_performance_by_feeder(milk_task_performance_data)
+        fig.suptitle(figure_title + ' ' + 'Light On', fontsize=16)
+        plt.show(block=True)
+    if sum(~df['light_on']) > 0:
+        milk_task_performance_data = compute_milk_task_performance_by_feeder(df.loc[~df['light_on']])
+        fig, ax = plot_milk_task_performance_by_feeder(milk_task_performance_data)
+        fig.suptitle(figure_title + ' ' + 'Light Off', fontsize=16)
+        plt.show(block=True)

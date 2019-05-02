@@ -3,6 +3,7 @@
 import h5py
 import numpy as np
 import os
+import sys
 from HelperFunctions import tetrode_channels, time_string, tetrode_channels
 from pprint import pprint
 from copy import copy
@@ -33,6 +34,19 @@ def get_processorKey(filename):
 def get_processor_path(filename):
     return '/acquisition/timeseries/' + get_recordingKey(filename) \
            + '/continuous/' + get_processorKey(filename)
+
+
+def check_if_open_ephys_nwb_file(filename):
+    """
+    Returns True if processor path can be identified
+    in the file and False otherwise.
+    """
+    try:
+        processor_path = get_processor_path(filename)
+        with h5py.File(filename, 'r') as h5file:
+            return processor_path in h5file
+    except:
+        return False
 
 
 def get_downsampled_data_paths(filename):
@@ -374,6 +388,36 @@ def empty_spike_data():
 
     return {'waveforms': waveforms, 'timestamps': timestamps}
 
+
+def get_tetrode_nrs_if_spikes_available(filename, spike_name='spikes'):
+    """
+    Returns a list of tetrode numbers if spikes available in NWB file.
+    """
+    spikes_path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/'
+    # Get tetrode keys if available
+    with h5py.File(filename, 'r') as h5file:
+        if not spikes_path in h5file:
+            # Return None if spikes data not available
+            return None
+        tetrode_keys = list(h5file[spikes_path].keys())
+    # Return None if spikes not available on any tetrode
+    if len(tetrode_keys) == 0:
+        return None
+    # Extract tetrode numbers
+    tetrode_nrs = []
+    for tetrode_key in tetrode_keys:
+        tetrode_nrs.append(int(tetrode_key[9:]) - 1)
+    # Sort tetrode numbers in ascending order
+    tetrode_nrs.sort()
+
+    return tetrode_nrs
+
+
+def construct_paths_to_tetrode_spike_data(filename, spike_name, tetrode_nrs):
+    spikes_path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/'
+    return [spikes_path + 'electrode' + str(tetrode_nr) for tetrode_nr in tetrode_nrs]
+
+
 def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=False, use_badChan=False):
     '''
     Inputs:
@@ -575,6 +619,25 @@ def recursively_save_dict_contents_to_group(h5file, path, dic):
         else:
             raise ValueError('Cannot save %s type'%type(item) + ' from ' + path + key)
 
+
+def convert_bytes_to_string(b):
+    """
+    If input is bytes, returns str decoded with utf-8
+
+    :param b:
+    :type b: bytes
+    :return: string decoded with utf-8 if input is bytes object, otherwise returns unchanged input
+    :rtype: str
+    """
+    if isinstance(b, bytes):
+        if sys.version_info >= (3, 0):
+            return str(b, 'utf-8')
+        else:
+            return b.decode('utf-8')
+    else:
+        return b
+
+
 def recursively_load_dict_contents_from_group(h5file, path):
     """
     Returns value at path if it has no further items
@@ -585,17 +648,15 @@ def recursively_load_dict_contents_from_group(h5file, path):
             if isinstance(item, h5py._hl.dataset.Dataset):
                 if 'S100' == item.dtype:
                     tmp = list(item[()])
-                    ans[str(key)] = [str(i) for i in tmp]
+                    ans[str(key)] = [convert_bytes_to_string(i) for i in tmp]
                 elif item.dtype == 'bool':
                     ans[str(key)] = np.array(bool(item[()]))
                 else:
-                    ans[str(key)] = item[()]
+                    ans[str(key)] = convert_bytes_to_string(item[()])
             elif isinstance(item, h5py._hl.group.Group):
                 ans[str(key)] = recursively_load_dict_contents_from_group(h5file, path + key + '/')
     else:
-        ans = h5file[path][()]
-        if isinstance(ans, bytes):
-            ans = ans.decode('utf-8')
+        ans = convert_bytes_to_string(h5file[path][()])
 
     return ans
 
@@ -784,8 +845,6 @@ def fill_empty_dictionary_from_source(selection, src_dict):
     '''
     dst_dict = copy(selection)
     for key, item in dst_dict.items():
-        print(['key', key])
-        print(['item', item])
         if isinstance(item, dict):
             dst_dict[key] = fill_empty_dictionary_from_source(item, src_dict[key])
         elif item is None:

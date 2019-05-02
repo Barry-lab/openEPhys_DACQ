@@ -253,19 +253,19 @@ class SignalDetector(object):
         signal_candidates = ('AudioSignal', 'LightSignal')
         for signal_type in signal_candidates:
             if signal_type in data:
-                timestamps = []
+                epochs = []
                 signal_on = False
                 for timestamp, event_data in zip(data[signal_type]['timestamps'],
                                                  data[signal_type]['data']):
                     if not signal_on and event_data == 'Start':
-                        timestamps.append([timestamp])
+                        epochs.append([timestamp])
                         signal_on = True
                     elif signal_on and event_data == 'Stop':
-                        timestamps[-1].append(timestamp)
+                        epochs[-1].append(timestamp)
                         signal_on = False
-                    # else:
-                    #     raise ValueError('Unexpected sequence of Start Stop for a signal')
-                data[signal_type]['timestamps'] = timestamps
+                    else:
+                        raise ValueError('Unexpected sequence of Start Stop for a signal')
+                data[signal_type]['epochs'] = epochs
 
         return data
 
