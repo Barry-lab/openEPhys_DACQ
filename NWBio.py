@@ -423,7 +423,8 @@ def construct_paths_to_tetrode_spike_data(filename, tetrode_nrs, spike_name='spi
     return [(spikes_path + 'electrode' + str(tetrode_nr + 1) + '/') for tetrode_nr in tetrode_nrs]
 
 
-def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=False, use_badChan=False):
+def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=False,
+                use_badChan=False, no_waveforms=False):
     """
     Inputs:
         filename - pointer to NWB file to load
@@ -450,7 +451,10 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
         for nr_tetrode, tetrode_path in zip(tetrode_nrs, tetrode_paths):
             print([time_string(), 'DEBUG: loading tetrode ', nr_tetrode])
             # Load waveforms and timestamps
-            waveforms = h5file[tetrode_path + 'data/'][()]
+            if no_waveforms:
+                waveforms = empty_spike_data()['waveforms']
+            else:
+                waveforms = h5file[tetrode_path + 'data/'][()]
             timestamps = h5file[tetrode_path + 'timestamps/'][()].squeeze()
             if waveforms.shape[0] == 0:
                 # If no waveforms are available, enter one waveform of zeros at timepoint zero
@@ -470,14 +474,15 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
                         tet_data['waveforms'] = empty_spike_data()['waveforms']
                         tet_data['timestamps'] = empty_spike_data()['timestamps']
                     else:
-                        tet_data['waveforms'] = tet_data['waveforms'][tet_data['idx_keep'], :, :]
+                        if not no_waveforms:
+                            tet_data['waveforms'] = tet_data['waveforms'][tet_data['idx_keep'], :, :]
                         tet_data['timestamps'] = tet_data['timestamps'][tet_data['idx_keep']]
             # Include clusterIDs if available
             clusterIDs_path = tetrode_path + 'clusterIDs'
             if clusterIDs_path in h5file:
                 tet_data['clusterIDs'] = np.int16(h5file[clusterIDs_path][()]).squeeze()
             # Set spikes to zeros for channels in badChan list if requested
-            if use_badChan:
+            if use_badChan and not no_waveforms:
                 badChan = listBadChannels(filename)
                 if len(badChan) > 0:
                     for nchan in tetrode_channels(nr_tetrode):
