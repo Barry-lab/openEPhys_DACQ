@@ -175,7 +175,8 @@ class multiprocess(object):
 
         return args_list, kwargs_list
 
-    def map(self, f, n, args_list=None, kwargs_list=None, single_cpu_affinity=False):
+    def map(self, f, n, args_list=None, kwargs_list=None, 
+            single_cpu_affinity=False, max_memory_usage=1):
         """
         This function evaluates function f for number of times specified by argument n, 
         with each set of arguments in args_list and kwargs_list.
@@ -194,9 +195,13 @@ class multiprocess(object):
                                   is added to kwargs or owerwritten. 
                                   The value of 'cpu_core_nr'
                                   circles through the list of available CPUs.
+            max_memory_usage    - float - (0.0 - 1.0) percentage of memeory that must
+                                  be available for function to process next element in list.
         """
         args_list, kwargs_list = multiprocess.args_kwargs_list_check(n, args_list, kwargs_list)
         for args, kwargs in zip(args_list, kwargs_list):
+            if max_memory_usage < 1:
+                proceed_when_enough_memory_available(percent=max_memory_usage)
             self.run(f, args, kwargs, single_cpu_affinity)
 
         return self.results()

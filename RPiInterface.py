@@ -17,6 +17,7 @@ from tempfile import mkdtemp
 from shutil import rmtree
 import os
 from HelperFunctions import test_pinging_address
+import HelperFunctions as hfunct
 
 
 def write_files_to_RPi(files, address, username='pi', verbose=False):
@@ -79,6 +80,7 @@ class Camera_RPi_file_manager(object):
         write_files_to_RPi(Camera_RPi_file_manager.Camera_RPi_files(), self.address, self.username, self.verbose)
 
     def retrieve_timestamps(self):
+        print(['DEBUG', hfunct.time_string(), 'Retrieving timestamps from ' + self.address])
         temp_folder = mkdtemp('RPiTempFolder')
         files = ('RawVideoEncoderTimestamps.csv', 
                  'VideoEncoderTimestamps.csv', 
@@ -91,6 +93,7 @@ class Camera_RPi_file_manager(object):
         filename = os.path.join(temp_folder, files[2])
         self.GlobalClock_timestamps = np.genfromtxt(filename, dtype=int)
         rmtree(temp_folder)
+        print(['DEBUG', hfunct.time_string(), 'Retrieving timestamps from ' + self.address + ' complete.'])
 
     def retrieve_OnlineTrackerData(self):
         '''
@@ -99,11 +102,13 @@ class Camera_RPi_file_manager(object):
 
         Note! OnlineTrackerData_timestamps must be obtained first using retrieve_timestamps() method. 
         '''
+        print(['DEBUG', hfunct.time_string(), 'Retrieving tracking data from ' + self.address])
         if hasattr(self, 'OnlineTrackerData_timestamps'):
             temp_folder = mkdtemp('RPiTempFolder')
             self.OnlineTrackerData = np.zeros((0, 0))
             while self.OnlineTrackerData.shape[0] != self.OnlineTrackerData_timestamps.size:
                 try:
+                    print(['DEBUG', hfunct.time_string(), 'Retrieving tracking data from ' + self.address + ' attempt'])
                     read_files_from_RPi(('OnlineTrackerData.csv',), temp_folder, self.address, self.username, self.verbose)
                     filename = os.path.join(temp_folder, 'OnlineTrackerData.csv')
                     self.OnlineTrackerData = np.genfromtxt(filename, delimiter=',', dtype=float)
@@ -112,6 +117,7 @@ class Camera_RPi_file_manager(object):
             rmtree(temp_folder)
         else:
             raise Exception('OnlineTrackerData_timestamps must be obtained first.')
+        print(['DEBUG', hfunct.time_string(), 'Retrieving tracking data from ' + self.address + ' complete.'])
 
     def retrieve_timestamps_and_OnlineTrackerData(self):
         '''
@@ -135,9 +141,11 @@ class Camera_RPi_file_manager(object):
         '''
         Copies over video data to folder_path with cameraID included in the filename.
         '''
+        print(['DEBUG', hfunct.time_string(), 'Retrieving video data from ' + self.address])
         read_file_from_RPi(Camera_RPi_file_manager.video_file_name_on_RPi(), 
                            os.path.join(folder_path, Camera_RPi_file_manager.video_file_name_on_RecordingPC(cameraID)), 
                            self.address, self.username, self.verbose)
+        print(['DEBUG', hfunct.time_string(), 'Retrieving video data from ' + self.address + ' complete.'])
 
 
 class CameraControl(object):
@@ -529,6 +537,8 @@ class RewardControl(object):
         self.lightSignalIntensity = lightSignalIntensity
         self.negativeAudioSignal = negativeAudioSignal
         self.lightSignalPins = lightSignalPins
+        # Ensure files on the FEEDER RPi are up to date
+        RewardControl.update_files_on_RPi(FEEDER_type, RPiIP, RPiUsername, verbose=False)
         # Set up SSH connection
         self.ssh_connection = ssh(RPiIP, RPiUsername, RPiPassword)
         self.ssh_connection.sendCommand('sudo pkill python') # Ensure any past processes have closed
@@ -541,6 +551,16 @@ class RewardControl(object):
         # If initialization was unsuccessful, crash this script
         if not init_successful:
             raise Exception('Initialization was unsuccessful at: ' + RPiIP)
+
+    @staticmethod
+    def update_files_on_RPi(FEEDER_type, address, username, verbose=False):
+        if FEEDER_type == 'milk':
+            files = ('milkFeederController.py',)
+        elif FEEDER_type == 'pellet':
+            files = ('pelletFeederController.py',)
+        else:
+            raise ValueError('Unexpected FEEDER_type argument.')
+        write_files_to_RPi(files, address, username=username, verbose=verbose)
 
     def Controller_message_parser(self, message):
         if message == 'init_successful':
