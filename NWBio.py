@@ -855,8 +855,8 @@ def extract_recording_info(filename, selection='default'):
                will be returned with None values populated by values
                from recording settings.
     """
+    recording_info = {}
     if isinstance(selection, str) and selection == 'default':
-        recording_info = {}
         recording_info.update(load_settings(filename, '/General/'))
         del recording_info['experimenter']
         del recording_info['rec_file_path']
@@ -866,7 +866,9 @@ def extract_recording_info(filename, selection='default'):
         for key in list(recording_info['channel_map'].keys()):
             del recording_info['channel_map'][key]['list']
         pos_edges = get_processed_tracking_data_timestamp_edges(filename)
+        recording_info['duration'] = pos_edges[1] - pos_edges[0]
         recording_info['duration (min)'] = int(round((pos_edges[1] - pos_edges[0]) / 60))
+        recording_info['time'] = load_settings(filename, '/Time')
     elif isinstance(selection, str) and selection == 'all':
         recording_info = load_settings(filename)
     elif isinstance(selection, dict):
