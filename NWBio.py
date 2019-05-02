@@ -77,7 +77,7 @@ def check_if_downsampled_data_available(filename):
     paths = get_downsampled_data_paths(filename)
     with h5py.File(filename, 'r') as h5file:
         # START Workaround for older downsampled datasets
-        if '/acquisition/timeseries/recording1/continuous/processor102_100/tetrode_lowpass':
+        if '/acquisition/timeseries/recording1/continuous/processor102_100/tetrode_lowpass' in h5file:
             return True
         # END Workaround for older downsampled datasets
         for path in [paths[key] for key in paths]:
@@ -207,9 +207,9 @@ def load_raw_data_timestamps_as_array(filename):
 
 
 def load_data_columns_as_array(filename, data_path, first_column, last_column):
-    '''
+    """
     Loads a contiguous columns of dataset efficiently from HDF5 dataset.
-    '''
+    """
     with h5py.File(filename, 'r') as h5file:
         data = h5file[data_path]
         data = h5file[data_path][:, first_column:last_column]
@@ -385,9 +385,9 @@ def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs):
 
 
 def empty_spike_data():
-    '''
+    """
     Creates a fake waveforms of 0 values and at timepoint 0
-    '''
+    """
     waveforms = np.zeros((1,4,40), dtype=np.int16)
     timestamps = np.array([0], dtype=np.float64)
 
@@ -418,13 +418,13 @@ def get_tetrode_nrs_if_spikes_available(filename, spike_name='spikes'):
     return tetrode_nrs
 
 
-def construct_paths_to_tetrode_spike_data(filename, spike_name, tetrode_nrs):
-    spikes_path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/'
-    return [spikes_path + 'electrode' + str(tetrode_nr) for tetrode_nr in tetrode_nrs]
+def construct_paths_to_tetrode_spike_data(filename, tetrode_nrs, spike_name='spikes'):
+    spikes_path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/'
+    return [spikes_path + 'electrode' + str(tetrode_nr + 1) for tetrode_nr in tetrode_nrs]
 
 
 def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=False, use_badChan=False):
-    '''
+    """
     Inputs:
         filename - pointer to NWB file to load
         tetrode_nrs [list] - can be a list of tetrodes to load (from 0)
@@ -439,7 +439,7 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
         'idx_keep' is boolan index for 'waveforms' and 'timestamps' indicating the spikes
             that are to be used for further processing (based on filtering for artifacts etc)
         'clusterIDs' is the cluster identities of spikes in 'waveforms'['idx_keep',:,:]
-    '''
+    """
 
     recordingKey = get_recordingKey(filename)
     with h5py.File(filename, 'r') as h5file:
@@ -510,10 +510,10 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
         return data
 
 def save_spikes(filename, tetrode_nr, data, timestamps, spike_name='spikes', overwrite=False):
-    '''
+    """
     Stores spike data in NWB file in the same format as with OpenEphysGUI.
     tetrode_nr=0 for first tetrode.
-    '''
+    """
     if data.dtype != np.int16:
         raise ValueError('Waveforms are not int16.')
     if timestamps.dtype != np.float64:
@@ -535,9 +535,9 @@ def save_spikes(filename, tetrode_nr, data, timestamps, spike_name='spikes', ove
         h5file[path + 'timestamps'] = np.float64(timestamps).squeeze()
 
 def processing_method_and_spike_name_combinations():
-    '''
+    """
     Outputs a list of potential processing_method and spike_name combinations
-    '''
+    """
     processing_methods = ['klustakwik', 'klustakwik_raw', 'kilosort']
     spike_names = ['spikes', 'spikes_raw', 'spikes_kilosort']
 
@@ -565,15 +565,15 @@ def load_events(filename):
     return data
 
 def load_GlobalClock_timestamps(filename, GlobalClock_TTL_channel=1):
-    '''
+    """
     Returns timestamps of GlobalClock TTL pulses.
-    '''
+    """
     data = load_events(filename)
     return data['timestamps'][data['eventID'] == GlobalClock_TTL_channel]
 
 
 def load_network_events(filename):
-    '''returns network_events_data
+    """returns network_events_data
 
     Extracts the list of network messages from NWB file 
     and returns it along with corresponding timestamps
@@ -587,7 +587,7 @@ def load_network_events(filename):
     :type filename: str
     :return: network_events_data
     :rtype: dict
-    '''
+    """
     # Load data file
     recordingKey = get_recordingKey(filename)
     with h5py.File(filename, 'r') as h5file:
@@ -666,13 +666,13 @@ def recursively_load_dict_contents_from_group(h5file, path):
     return ans
 
 def save_settings(filename, Settings, path='/'):
-    '''
+    """
     Writes into an existing file if path is not yet used.
     Creates a new file if filename does not exist.
     Only works with: numpy arrays, numpy int64 or float64, strings, bytes, lists of strings and dictionaries these are contained in.
     To save specific subsetting, e.g. TaskSettings, use:
         Settings=TaskSetttings, path='/TaskSettings/'
-    '''
+    """
     full_path = '/general/data_collection/Settings' + path
     if os.path.isfile(filename):
         write_method = 'r+'
@@ -682,12 +682,12 @@ def save_settings(filename, Settings, path='/'):
         recursively_save_dict_contents_to_group(h5file, full_path, Settings)
 
 def load_settings(filename, path='/'):
-    '''
+    """
     By default loads all settings from path
         '/general/data_collection/Settings/'
     or for example to load animal ID, use:
         path='/General/animal/'
-    '''
+    """
     full_path = '/general/data_collection/Settings' + path
     with h5py.File(filename, 'r') as h5file:
         data = recursively_load_dict_contents_from_group(h5file, full_path)
@@ -695,10 +695,10 @@ def load_settings(filename, path='/'):
     return data
 
 def check_if_settings_available(filename, path='/'):
-    '''
+    """
     Returns whether settings information exists in NWB file
     Specify path='/General/badChan/' to check for specific settings
-    '''
+    """
     full_path = '/general/data_collection/Settings' + path
     with h5py.File(filename,'r') as h5file:
         return full_path in h5file
@@ -729,12 +729,12 @@ def listBadChannels(filename):
     return badChan
 
 def save_tracking_data(filename, TrackingData, ProcessedPos=False, overwrite=False):
-    '''
+    """
     TrackingData is expected as dictionary with keys for each source ID
     If saving processed data, TrackingData is expected to be numpy array
         Use ProcessedPos=True to store processed data
         Use overwrite=True to force overwriting existing processed data
-    '''
+    """
     if os.path.isfile(filename):
         write_method = 'r+'
     else:
@@ -798,10 +798,10 @@ def check_if_binary_pos(filename):
     return check_if_path_exists(filename, path)
 
 def use_binary_pos(filename, postprocess=False, maxjump=25):
-    '''
+    """
     Copies binary position data into tracking data
     Apply postprocessing with postprocess=True
-    '''
+    """
     recordingKey = get_recordingKey(filename)
     # Load timestamps and position data
     with h5py.File(filename, 'r+') as h5file:
@@ -844,10 +844,10 @@ def save_tetrode_clusterIDs(filename, ntet, clusterIDs, spike_name='spikes', ove
         h5file[path] = np.int16(clusterIDs).squeeze()
 
 def fill_empty_dictionary_from_source(selection, src_dict):
-    '''
+    """
     Populates a dictionary with None values with values from a source
     dictionary with identical structure.
-    '''
+    """
     dst_dict = copy(selection)
     for key, item in dst_dict.items():
         if isinstance(item, dict):
@@ -860,7 +860,7 @@ def fill_empty_dictionary_from_source(selection, src_dict):
     return dst_dict
 
 def extract_recording_info(filename, selection='default'):
-    '''
+    """
     Returns recording info for the recording file.
 
     selection - allows specifying which data return
@@ -871,7 +871,7 @@ def extract_recording_info(filename, selection='default'):
                and missing keys for unwanted elements. The dictionary
                will be returned with None values populated by values
                from recording settings.
-    '''
+    """
     if isinstance(selection, str) and selection == 'default':
         recording_info = {}
         recording_info.update(load_settings(filename, '/General/'))
@@ -915,9 +915,9 @@ def process_tracking_data(filename, save_to_file=False):
 
 
 def display_recording_data(root_path, selection='default'):
-    '''
+    """
     Prints recording info for the whole directory tree.
-    '''
+    """
     for dirName, subdirList, fileList in os.walk(root_path):
         for fname in fileList:
             if fname == 'experiment_1.nwb':
