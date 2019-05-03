@@ -339,14 +339,16 @@ def get_downsampling_info(filename):
         return recursively_load_dict_contents_from_group(h5file, data_path)
 
 
-def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs):
+def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs, crop_to_position_data_edges=True):
     """
     Returns a dict with downsampled continuous data for requested tetrodes
     
-    filename    - str - full path to file
-    tetrode_nrs - list - tetrode numbers to include (starting from 0).
-                  Single tetrode can be given as a single list element or int.
-                  Tetrode numbers in the list must be in sorted (ascending) order.
+    filename                    - str - full path to file
+    tetrode_nrs                 - list - tetrode numbers to include (starting from 0).
+                                Single tetrode can be given as a single list element or int.
+                                Tetrode numbers in the list must be in sorted (ascending) order.
+    crop_to_position_data_edges - bool - if True (default), returned data will be cropped to
+                                timepoints after the first and before the last position data sample.
     """
     # Generate path to raw continuous data
     root_path = '/acquisition/timeseries/' + get_recordingKey(filename) \
@@ -380,6 +382,12 @@ def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs):
         timestamps = np.array(h5file[timestamps_path])
     # Arrange output into a dictionary
     data = {'continuous': continuous, 'timestamps': timestamps}
+    # Crop to position data edges if requested
+    if crop_to_position_data_edges:
+        pos_edges = get_processed_tracking_data_timestamp_edges(filename)
+        idx = np.logical_and(data['timestamps'] > pos_edges[0], data['timestamps'] < pos_edges[1])
+        data['continuous'] = data['continuous'][idx, ...]
+        data['timestamps'] = data['timestamps'][idx, ...]
 
     return data
 
