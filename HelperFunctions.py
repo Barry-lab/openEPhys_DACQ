@@ -316,6 +316,8 @@ def butter_lowpass(cutoff, fs, order=5):
 
 
 def butter_lowpass_filter(signal_in, lowpass_frequency=125.0, sampling_rate=30000.0, filt_order=4):
+    if len(signal_in.shape) > 1:
+        raise Exception('signal_in must have shape (N,), but has shape ' + str(signal_in.shape))
     b, a = butter_lowpass(lowpass_frequency, sampling_rate, order=filt_order)
     signal_out = lfilter(b, a, signal_in)
     return signal_out

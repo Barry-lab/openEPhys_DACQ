@@ -382,12 +382,6 @@ def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs, crop_to_positi
         timestamps = np.array(h5file[timestamps_path])
     # Arrange output into a dictionary
     data = {'continuous': continuous, 'timestamps': timestamps}
-    # Crop to position data edges if requested
-    if crop_to_position_data_edges:
-        pos_edges = get_processed_tracking_data_timestamp_edges(filename)
-        idx = np.logical_and(data['timestamps'] > pos_edges[0], data['timestamps'] < pos_edges[1])
-        data['continuous'] = data['continuous'][idx, ...]
-        data['timestamps'] = data['timestamps'][idx, ...]
 
     return data
 
