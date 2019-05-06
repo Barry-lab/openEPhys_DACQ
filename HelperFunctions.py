@@ -201,7 +201,7 @@ class multiprocess(object):
         args_list, kwargs_list = multiprocess.args_kwargs_list_check(n, args_list, kwargs_list)
         for args, kwargs in zip(args_list, kwargs_list):
             if max_memory_usage < 1:
-                proceed_when_enough_memory_available(percent=max_memory_usage)
+                proceed_when_enough_memory_available(percent=(1.0-max_memory_usage))
             self.run(f, args, kwargs, single_cpu_affinity)
 
         return self.results()

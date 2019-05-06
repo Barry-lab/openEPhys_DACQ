@@ -724,6 +724,7 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None,
                                                                    noise_cut_off=noise_cut_off, threshold=5, 
                                                                    num_clusters=max_clusters))
     # Save data in Axona Format
+    del area_spike_datas
     if make_AxonaData:
         spike_name = NWBio.get_spike_name_for_processing_method(processing_method)
         for OpenEphysDataPath in OpenEphysDataPaths:

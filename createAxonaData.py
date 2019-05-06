@@ -135,7 +135,7 @@ def create_DACQ_waveform_data(spike_data, data_time_edges,
     multiprocessor = hfunct.multiprocess()
     waveform_data_dacq = multiprocessor.map(create_DACQ_waveform_data_for_single_tetrode, 
                                             len(input_args), args_list=input_args, 
-                                            max_memory_usage=0.60)
+                                            max_memory_usage=0.66)
 
     return waveform_data_dacq
 
