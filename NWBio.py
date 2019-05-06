@@ -16,6 +16,10 @@ def OpenEphys_SamplingRate():
     return 30000
 
 
+def bitVolts():
+    return 0.195
+
+
 def get_filename(folder_path):
     if not os.path.isfile(folder_path):
         return os.path.join(folder_path, 'experiment_1.nwb')
@@ -449,13 +453,16 @@ def count_spikes(filename, tetrode_nrs, spike_name='spikes', use_idx_keep=False)
 
 
 def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=False,
-                use_badChan=False, no_waveforms=False):
+                use_badChan=False, no_waveforms=False, clustering_name=None):
     """
     Inputs:
         filename - pointer to NWB file to load
-        tetrode_nrs [list] - can be a list of tetrodes to load (from 0)
-        use_idx_keep [bool] - if True, only outputs spikes according to idx_keep of tetrode, if available
-        use_badChan [bool] - if True, sets all spikes on badChannels to 0
+        tetrode_nrs [list]    - can be a list of tetrodes to load (from 0)
+        use_idx_keep [bool]   - if True, only outputs spikes according to idx_keep of tetrode, if available
+        use_badChan [bool]    - if True, sets all spikes on badChannels to 0
+        no_waveforms [bool]   - if True, waveforms are not loaded
+        clustering_name [str] - if specified, clusterID will be loaded from:
+                              electrode[nr]/clustering/clustering_name
     Output:
         List of dictionaries for each tetrode in correct order where:
         List is empty, if no spike data detected
@@ -503,7 +510,10 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
                             tet_data['waveforms'] = tet_data['waveforms'][tet_data['idx_keep'], :, :]
                         tet_data['timestamps'] = tet_data['timestamps'][tet_data['idx_keep']]
             # Include clusterIDs if available
-            clusterIDs_path = tetrode_path + 'clusterIDs'
+            if clustering_name is None:
+                clusterIDs_path = tetrode_path + 'clusterIDs'
+            else:
+                clusterIDs_path = tetrode_path + '/clustering/' + clustering_name
             if clusterIDs_path in h5file:
                 tet_data['clusterIDs'] = np.int16(h5file[clusterIDs_path][()]).squeeze()
             # Set spikes to zeros for channels in badChan list if requested
