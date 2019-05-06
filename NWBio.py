@@ -648,7 +648,7 @@ def convert_bytes_to_string(b):
         if sys.version_info >= (3, 0):
             return str(b, 'utf-8')
         else:
-            return b.decode('utf-8')
+            return str(b.decode('utf-8'))
     else:
         return b
 
