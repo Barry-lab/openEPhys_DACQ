@@ -367,11 +367,13 @@ def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs):
     downsampled_channels = list(get_downsampling_info(filename)['downsampled_channels'])
     # Map tetrode_nrs elements to columns in downsampled_tetrode_data
     columns = []
+    channels_used = []
     tetrode_nrs_remaining = copy(tetrode_nrs)
     for tetrode_nr in tetrode_nrs:
         for chan in tetrode_channels(tetrode_nr):
             if chan in downsampled_channels:
                 columns.append(downsampled_channels.index(chan))
+                channels_used.append(chan)
                 tetrode_nrs_remaining.pop(tetrode_nrs_remaining.index(tetrode_nr))
                 break
     # Check that all tetrode numbers were mapped
@@ -384,7 +386,8 @@ def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs):
     with h5py.File(filename, 'r') as h5file:
         timestamps = np.array(h5file[timestamps_path])
     # Arrange output into a dictionary
-    data = {'continuous': continuous, 'timestamps': timestamps}
+    data = {'continuous': continuous, 'timestamps': timestamps,
+            'tetrode_nrs': tetrode_nrs, 'channels': channels_used}
 
     return data
 
