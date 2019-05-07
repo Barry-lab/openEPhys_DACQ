@@ -4,7 +4,7 @@ import h5py
 import numpy as np
 import os
 import sys
-from HelperFunctions import tetrode_channels, time_string, tetrode_channels
+from HelperFunctions import tetrode_channels, channels_tetrode, time_string
 from pprint import pprint
 from copy import copy
 import argparse
@@ -351,6 +351,7 @@ def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs):
     tetrode_nrs                 - list - tetrode numbers to include (starting from 0).
                                 Single tetrode can be given as a single list element or int.
                                 Tetrode numbers in the list must be in sorted (ascending) order.
+                                If data is not available for a given tetrode number, error is raised.
     """
     # Generate path to raw continuous data
     root_path = '/acquisition/timeseries/' + get_recordingKey(filename) \
@@ -876,6 +877,21 @@ def fill_empty_dictionary_from_source(selection, src_dict):
             raise ValueError('Destination dictionary has incorrect.')
 
     return dst_dict
+
+
+def get_channel_map(filename):
+    return load_settings(filename, '/General/channel_map/')
+
+
+def get_tetrode_nrs(filename):
+    channel_map = get_channel_map(filename)
+    channels = []
+    for area in channel_map:
+        channels += list(channel_map[area]['list'])
+    tetrode_nrs = list(set([channels_tetrode(nchan) for nchan in channels]))
+
+    return tetrode_nrs
+
 
 def extract_recording_info(filename, selection='default'):
     """
