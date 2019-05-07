@@ -883,14 +883,16 @@ def get_channel_map(filename):
     return load_settings(filename, '/General/channel_map/')
 
 
-def get_tetrode_nrs(filename):
-    channel_map = get_channel_map(filename)
-    channels = []
-    for area in channel_map:
-        channels += list(channel_map[area]['list'])
-    tetrode_nrs = list(set([channels_tetrode(nchan) for nchan in channels]))
+def list_tetrode_nrs_for_area_channel_map(area_channel_map):
+    return list(set([channels_tetrode(chan) for chan in list(area_channel_map['list'])]))
 
-    return tetrode_nrs
+
+def get_channel_map_with_tetrode_nrs(filename):
+    channel_map = get_channel_map(filename)
+    for area in channel_map:
+        channel_map[area]['tetrode_nrs'] = list_tetrode_nrs_for_area_channel_map(channel_map[area])
+
+    return channel_map
 
 
 def extract_recording_info(filename, selection='default'):
