@@ -882,6 +882,23 @@ def fill_empty_dictionary_from_source(selection, src_dict):
     return dst_dict
 
 
+def get_recording_start_timestamp_offset(filename):
+    """Returns the first timestamp of raw or downsampled continuous data.
+
+    :param str filename: path to NWB file
+    :return: first timestamp of continuous data
+    :rtype: float
+    """
+    if check_if_raw_data_available(filename):
+        with h5py.File(filename, 'r') as h5file:
+            return float(h5file[get_raw_data_paths(filename)['timestamps']][0:1])
+    elif check_if_downsampled_data_available(filename):
+        with h5py.File(filename, 'r') as h5file:
+            return float(h5file[get_downsampled_data_paths(filename)['timestamps']][0:1])
+    else:
+        raise Exception('NWB file does not contain raw or downsampled data ' + filename)
+
+
 def get_channel_map(filename):
     return load_settings(filename, '/General/channel_map/')
 
