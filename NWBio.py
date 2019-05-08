@@ -20,6 +20,15 @@ def bitVolts():
     return 0.195
 
 
+def spike_waveform_leftwards_shift():
+    """Returns the leftwards shift of waveforms from detection point in seconds.
+
+    :return:
+    :rtype: float
+    """
+    return 6 * (1.0 / OpenEphys_SamplingRate())
+
+
 def get_filename(folder_path):
     if not os.path.isfile(folder_path):
         return os.path.join(folder_path, 'experiment_1.nwb')
