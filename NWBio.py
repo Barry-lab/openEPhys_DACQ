@@ -890,13 +890,31 @@ def get_recording_start_timestamp_offset(filename):
     :rtype: float
     """
     if check_if_raw_data_available(filename):
-        with h5py.File(filename, 'r') as h5file:
-            return float(h5file[get_raw_data_paths(filename)['timestamps']][0:1])
+        path = get_raw_data_paths(filename)['timestamps']
     elif check_if_downsampled_data_available(filename):
-        with h5py.File(filename, 'r') as h5file:
-            return float(h5file[get_downsampled_data_paths(filename)['timestamps']][0:1])
+        path = get_downsampled_data_paths(filename)['timestamps']
     else:
         raise Exception('NWB file does not contain raw or downsampled data ' + filename)
+    with h5py.File(filename, 'r') as h5file:
+        return float(h5file[path][0:1])
+
+
+def get_recording_full_duration(filename):
+    """Returns the total duration from first to last timestamp of
+    raw or downsampled continuous data.
+
+    :param str filename: path to NWB file
+    :return: total duration from first to last timestamp of continuous data
+    :rtype: float
+    """
+    if check_if_raw_data_available(filename):
+        path = get_raw_data_paths(filename)['timestamps']
+    elif check_if_downsampled_data_available(filename):
+        path = get_downsampled_data_paths(filename)['timestamps']
+    else:
+        raise Exception('NWB file does not contain raw or downsampled data ' + filename)
+    with h5py.File(filename, 'r') as h5file:
+        return float(h5file[path][-1]) - float(h5file[path][0:1])
 
 
 def get_channel_map(filename):
