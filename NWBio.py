@@ -10,6 +10,7 @@ from copy import copy
 import argparse
 from TrackingDataProcessing import remove_tracking_data_jumps
 from TrackingDataProcessing import iteratively_combine_multicamera_data_for_recording
+import importlib
 
 
 def OpenEphys_SamplingRate():
@@ -924,6 +925,44 @@ def get_recording_full_duration(filename):
         raise Exception('NWB file does not contain raw or downsampled data ' + filename)
     with h5py.File(filename, 'r') as h5file:
         return float(h5file[path][-1]) - float(h5file[path][0:1])
+
+
+def import_task_specific_log_parser(task_name):
+    """
+    Returns LogParser module for the specific task.
+
+    :param task_name: name of the task
+    :type task_name: str
+    :return: TaskLogParser
+    :rtype: module
+    """
+    if task_name == 'Pellets_and_Rep_Milk_Task': # Temporary workaround to function with older files
+        task_name = 'Pellets_and_Rep_Milk'
+    return importlib.import_module('Tasks.' + task_name + '.LogParser')
+
+
+def load_task_name(filename):
+    """
+    Returns the name of the task active in the recording.
+
+    :param filename: absolute path to NWB recording file
+    :type filename: str
+    :return: task_name
+    :rtype: str
+    """
+    return load_settings(filename, path='/TaskSettings/name')
+
+
+def get_recording_log_parser(filename):
+    """Finds task specific LogParser class and returns it initialized
+    with network events from that recording.
+
+    :param str filename:
+    :return: Task specific log parser initialized with network events
+    :rtype: LogParser class
+    """
+    task_log_parser = import_task_specific_log_parser(load_task_name(filename))
+    return task_log_parser.LogParser(**load_network_events(filename))
 
 
 def get_channel_map(filename):

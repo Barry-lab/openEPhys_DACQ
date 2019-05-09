@@ -1,5 +1,4 @@
 # Import generic modules
-import importlib
 import sys
 import os
 from copy import copy
@@ -13,32 +12,6 @@ from os.path import dirname as up
 sys.path.insert(0, up(up(os.path.abspath(__file__))))
 # Import repository specific modules
 import NWBio
-
-
-def load_task_name(filename):
-    """
-    Returns the name of the task active in the recording.
-
-    :param filename: absolute path to NWB recording file
-    :type filename: str
-    :return: task_name
-    :rtype: str
-    """
-    return NWBio.load_settings(filename, path='/TaskSettings/name')
-
-
-def import_task_specific_log_parser(task_name):
-    """
-    Returns LogParser module for the specific task.
-
-    :param task_name: name of the task
-    :type task_name: str
-    :return: TaskLogParser
-    :rtype: module
-    """
-    if task_name == 'Pellets_and_Rep_Milk_Task': # Temporary workaround to function with older files
-        task_name = 'Pellets_and_Rep_Milk'
-    return importlib.import_module('Tasks.' + task_name + '.LogParser')
 
 
 def compute_milk_task_performance_by_feeder(milk_task_data_frame):
@@ -333,10 +306,8 @@ def load_milk_task_data(filename, full_data=True):
     :rtype: pandas.DataFrame
     """
     # Load milk task data with task specific LogParser
-    data = NWBio.load_network_events(filename)
-    TaskLogParser = import_task_specific_log_parser(load_task_name(filename))
-    log_parser = TaskLogParser.LogParser(**data)
-    df = pd.DataFrame(TaskLogParser.extract_milk_task_performance(log_parser.data['GameState']))
+    log_parser = NWBio.get_recording_log_parser(filename)
+    df = pd.DataFrame(log_parser.extract_milk_task_performance(log_parser.data['GameState']))
     df = df.set_index('nr')
     # If full_data requested, append all additional columns
     if full_data:

@@ -329,49 +329,49 @@ class LogParser(object):
             data[detector.name] = detector.data
         return data
 
+    @staticmethod
+    def extract_milk_task_performance(game_state_data):
+        """
+        Extracts task performance from game state data.
 
-def extract_milk_task_performance(game_state_data):
-    """
-    Extracts task performance from game state data.
+        :param game_state_data: LogParser.data for 'GameState'
+        :type game_state_data: dict
+        :return: task_data
+        :rtype: dict
+        """
+        # Separate milk trial game state from others
+        other_states = copy(game_state_data)
+        milk_state = other_states.pop('MilkTrial')
+        # Create dictionary for accumulating trial information
+        task_data = {'nr': [],
+                     'type': [],
+                     'start_timestamp': [],
+                     'end_timestamp': [],
+                     'outcome': [],
+                     'feeder_id': []}
+        # Loop through all milk trials
+        trial_counter = 0
+        for timestamps, data in zip(milk_state['timestamps'], milk_state['data']):
+            trial_counter += 1
+            task_data['nr'].append(trial_counter)
+            task_data['start_timestamp'].append(timestamps[0])
+            task_data['end_timestamp'].append(timestamps[1])
+            # Identify feeder id
+            task_data['feeder_id'].append(data[1])
+            # Identify whether presentation or repeat trial
+            if len(data) > 2 and (data[2] == 'presentation_trial' or data[2] == 'first_repetition'):
+                task_data['type'].append('present')
+            else:
+                task_data['type'].append('repeat')
+            # Identify trial outcome
+            for other_state, value in other_states.items():
+                other_state_start_timestamps = [state_times[0] for state_times in value['timestamps']]
+                if timestamps[1] in other_state_start_timestamps:
+                    if other_state == 'MilkReward':
+                        task_data['outcome'].append('successful')
+                    else:
+                        other_state_data = value['data'][other_state_start_timestamps.index(timestamps[1])]
+                        task_data['outcome'].append(other_state_data[0])
+                    break
 
-    :param game_state_data: LogParser.data for 'GameState'
-    :type game_state_data: dict
-    :return: task_data
-    :rtype: dict
-    """
-    # Separate milk trial game state from others
-    other_states = copy(game_state_data)
-    milk_state = other_states.pop('MilkTrial')
-    # Create dictionary for accumulating trial information
-    task_data = {'nr': [],
-                 'type': [],
-                 'start_timestamp': [],
-                 'end_timestamp': [],
-                 'outcome': [],
-                 'feeder_id': []}
-    # Loop through all milk trials
-    trial_counter = 0
-    for timestamps, data in zip(milk_state['timestamps'], milk_state['data']):
-        trial_counter += 1
-        task_data['nr'].append(trial_counter)
-        task_data['start_timestamp'].append(timestamps[0])
-        task_data['end_timestamp'].append(timestamps[1])
-        # Identify feeder id
-        task_data['feeder_id'].append(data[1])
-        # Identify whether presentation or repeat trial
-        if len(data) > 2 and (data[2] == 'presentation_trial' or data[2] == 'first_repetition'):
-            task_data['type'].append('present')
-        else:
-            task_data['type'].append('repeat')
-        # Identify trial outcome
-        for other_state, value in other_states.items():
-            other_state_start_timestamps = [state_times[0] for state_times in value['timestamps']]
-            if timestamps[1] in other_state_start_timestamps:
-                if other_state == 'MilkReward':
-                    task_data['outcome'].append('successful')
-                else:
-                    other_state_data = value['data'][other_state_start_timestamps.index(timestamps[1])]
-                    task_data['outcome'].append(other_state_data[0])
-                break
-
-    return task_data
+        return task_data
