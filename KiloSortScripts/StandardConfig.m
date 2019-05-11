@@ -18,7 +18,7 @@ ops.nNeigh              = nchannels; % visualization only (Phy): number of neigh
 % options for channel whitening		
 ops.whitening           = 'full'; % type of whitening (default 'full', for 'noSpikes' set options for spike detection below)		
 ops.nSkipCov            = 1; % compute whitening matrix from every N-th batch (1)		
-ops.whiteningRange      = nchannels; % how many channels to whiten together (Inf for whole probe whitening, should be fine if Nchan<=32)		
+ops.whiteningRange      = Inf; % how many channels to whiten together (Inf for whole probe whitening, should be fine if Nchan<=32)		
 		
 % define the channel map as a filename (string) or simply an array	
 filename = createChannelMap(nchannels);
@@ -32,9 +32,9 @@ ops.nfullpasses         = 6;    % number of complete passes through data during 
 ops.maxFR               = 20000;  % maximum number of spikes to extract per batch (20000)		
 ops.fshigh              = 300;   % frequency for high pass filtering		
 ops.fslow               = 5000;   % frequency for low pass filtering (optional)
-ops.ntbuff              = nchannels;    % samples of symmetrical buffer for whitening and spike detection		
+ops.ntbuff              = 64;    % samples of symmetrical buffer for whitening and spike detection		
 ops.scaleproc           = 200;   % int16 scaling of whitened data		
-ops.NT                  = 32*1024+ ops.ntbuff;% this is the batch size (try decreasing if out of memory) 		
+ops.NT                  = 32*32*1024+ ops.ntbuff;% this is the batch size (try decreasing if out of memory) 		
 % for GPU should be multiple of 32 + ntbuff		
 		
 % the following options can improve/deteriorate results. 		

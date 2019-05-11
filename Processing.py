@@ -15,7 +15,7 @@ import NWBio
 from createAxonaData import createAxonaData_for_NWBfile
 import HelperFunctions as hfunct
 from KlustaKwikWrapper import applyKlustaKwik_on_spike_data_tet
-from time import sleep
+from time import sleep, time
 
 
 def lowpass_and_downsample_channel(
@@ -119,10 +119,9 @@ class ContinuousDataPreloader(object):
         self.chan_nrs = list(channels)
         # Load data
         print('Loading continuous data from NWB file.')
-        data = NWBio.load_continuous(OpenEphysDataPath)
-        self.timestamps = np.array(data['timestamps'])
-        self.continuous = np.array(data['continuous'][:, channels])
-        data['file_handle'].close()
+        data = NWBio.load_continuous_as_array(OpenEphysDataPath, self.chan_nrs)
+        self.timestamps = data['timestamps']
+        self.continuous = data['continuous']
         self.continuous = np.transpose(self.continuous)
         # Set bad channels to 0
         self.badChan = NWBio.listBadChannels(OpenEphysDataPath)
@@ -522,7 +521,6 @@ def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels,
         for n_tet, spike_data_tet in enumerate(spike_data): 
             spike_datas[n_dataset][n_tet] = spike_data_tet
     # Cluster each tetrode using KlustaKwik. This creates 'clusterIDs' field in spike_data dictionaries.
-    print('Loading data for processing: ' + OpenEphysDataPath)
     if len(spike_datas) == 1:
         hfunct.print_progress(0, len(tetrode_nrs), prefix='Applying KlustaKwik:', suffix=' T: 0/' + str(len(tetrode_nrs)), initiation=True)
         mp_KlustaKwik = Multiprocess_KlustaKwik()
@@ -617,9 +615,9 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
     # Start matlab engine
     eng = matlab.engine.start_matlab()
     eng.cd('KiloSortScripts')
-    # Worth through each tetrode
-    hfunct.print_progress(0, len(tetrode_nrs), prefix='Applying KiloSort:', suffix=' T: 0/' + str(len(tetrode_nrs)), initiation=True)
+    # Work through each tetrode
     for n_tet, tetrode_nr in enumerate(tetrode_nrs):
+        print('Applying KiloSort to tetrode ' + str(n_tet + 1) + '/' + str(len(tetrode_nrs)))
         KiloSortProcessingFolder = tempfile.mkdtemp('KiloSortProcessing')
         # Load this tetrode for all datasets
         datas_tet_shape = []
@@ -669,7 +667,6 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
             spike_data_tet['clusterIDs'] = spike_data_tet['clusterIDs'][spike_data_tet['idx_keep']]
             # Position spike_data_tet to the list of spike_data for each dataset
             spike_datas[n_dataset][n_tet] = spike_data_tet
-        hfunct.print_progress(n_tet + 1, len(tetrode_nrs), prefix='Applying KiloSort:', suffix=' T: ' + str(n_tet + 1) + '/' + str(len(tetrode_nrs)))
     # Close pre-loaded datasets
     for preloaded_data in preloaded_datas:
         preloaded_data.close()
@@ -705,6 +702,8 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None,
         channel_map = get_channel_map(OpenEphysDataPaths)
     # Process spikes using specified method
     area_spike_datas = []
+    print(hfunct.time_string(), 'DEBUG: Starting Processing', processing_method)
+    DEBUG_Time = time()
     for area in channel_map.keys():
         channels = channel_map[area]['list']
         if processing_method == 'klustakwik':
@@ -723,6 +722,7 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None,
             area_spike_datas.append(process_raw_data_with_kilosort(OpenEphysDataPaths, channels, 
                                                                    noise_cut_off=noise_cut_off, threshold=5, 
                                                                    num_clusters=max_clusters))
+    print(hfunct.time_string(), 'DEBUG: Finished Processing in ', time() - DEBUG_Time)
     # Save data in Axona Format
     del area_spike_datas
     if make_AxonaData:
