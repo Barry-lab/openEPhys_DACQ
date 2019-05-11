@@ -30,9 +30,11 @@ def spike_waveform_leftwards_shift():
     return 6 * (1.0 / OpenEphys_SamplingRate())
 
 
-def get_filename(folder_path):
-    if not os.path.isfile(folder_path):
-        return os.path.join(folder_path, 'experiment_1.nwb')
+def get_filename(path):
+    if not os.path.isfile(path):
+        return os.path.join(path, 'experiment_1.nwb')
+    else:
+        return path
 
 
 def get_recordingKey(filename):
@@ -979,6 +981,28 @@ def get_channel_map_with_tetrode_nrs(filename):
         channel_map[area]['tetrode_nrs'] = list_tetrode_nrs_for_area_channel_map(channel_map[area])
 
     return channel_map
+
+
+def check_if_channel_maps_are_same(channel_map_1, channel_map_2):
+    """
+    Determines if two channel maps are identical
+    """
+    # Check that there are same number of areas in the dictionary
+    if len(channel_map_1) != len(channel_map_2):
+        return False
+    # Sort the area names because dictionary is not ordered
+    channel_map_1_keys = sorted(list(channel_map_1.keys()))
+    channel_map_2_keys = sorted(list(channel_map_2.keys()))
+    # Check that the areas have the same name
+    for n_area in range(len(channel_map_1_keys)):
+        if channel_map_1_keys[n_area] != channel_map_2_keys[n_area]:
+            return False
+    # Check that the channel lists are the same
+    for area in channel_map_1_keys:
+        if not all(channel_map_1[area]['list'] == channel_map_2[area]['list']):
+            return False
+
+    return True
 
 
 def extract_recording_info(filename, selection='default'):

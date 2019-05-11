@@ -1034,7 +1034,7 @@ class RewardDevices(object):
         # Create a list of active feeder IDs
         self.IDs_active = []
         for ID in self.FEEDERs.keys():
-            if self.FEEDERs[ID]['init_successful']:
+            if self.FEEDERs[ID]['Active'] and self.FEEDERs[ID]['init_successful']:
                 self.IDs_active.append(ID)
         self.IDs_active = sorted(self.IDs_active, key=int)
 
