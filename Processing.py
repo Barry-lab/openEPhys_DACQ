@@ -349,7 +349,7 @@ def get_channel_map(OpenEphysDataPaths):
         else:
             raise Exception('No channel map for: ' + OpenEphysDataPath)
     # Ensure that channel map is the same in all datasets
-    if not all([check_if_channel_maps_are_same(channel_maps[0], x) for x in channel_maps]):
+    if not all([NWBio.check_if_channel_maps_are_same(channel_maps[0], x) for x in channel_maps]):
         raise Exception('Not all channel maps are the same in: ' + str(OpenEphysDataPaths))
     channel_map = channel_maps[0]
     # Check if the channel list fully coveres a set of tetrodes
