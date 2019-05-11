@@ -339,28 +339,6 @@ def clarify_OpenEphysDataPaths(OpenEphysDataPaths):
 
     return OpenEphysDataPaths
 
-def check_if_channel_maps_are_same(channel_map_1, channel_map_2):
-    """
-    Determines if two channel maps are identical
-    """
-    # Check that there are same number of areas in the dictionary
-    if len(channel_map_1) != len(channel_map_2):
-        return False
-    # Sort the area names because dictionary is not ordered
-    channel_map_1_keys = channel_map_1.keys()
-    channel_map_1_keys.sort()
-    channel_map_2_keys = channel_map_2.keys()
-    channel_map_2_keys.sort()
-    # Check that the areas have the same name
-    for n_area in range(len(channel_map_1_keys)):
-        if channel_map_1_keys[n_area] != channel_map_2_keys[n_area]:
-            return False
-    # Check that the channel lists are the same
-    for area in channel_map_1_keys:
-        if not all(channel_map_1[area]['list'] == channel_map_2[area]['list']):
-            return False
-
-    return True
 
 def get_channel_map(OpenEphysDataPaths):
     # Get channel maps for all datasets
@@ -371,7 +349,7 @@ def get_channel_map(OpenEphysDataPaths):
         else:
             raise Exception('No channel map for: ' + OpenEphysDataPath)
     # Ensure that channel map is the same in all datasets
-    if not all([check_if_channel_maps_are_same(channel_maps[0], x) for x in channel_maps]):
+    if not all([NWBio.check_if_channel_maps_are_same(channel_maps[0], x) for x in channel_maps]):
         raise Exception('Not all channel maps are the same in: ' + str(OpenEphysDataPaths))
     channel_map = channel_maps[0]
     # Check if the channel list fully coveres a set of tetrodes
