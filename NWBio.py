@@ -375,8 +375,10 @@ def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs):
         return None
     if not check_if_path_exists(filename, timestamps_path):
         return None
-    # Get list of channels in downsampled data
-    downsampled_channels = list(get_downsampling_info(filename)['downsampled_channels'])
+    # Get info on downsampled data
+    info = get_downsampling_info(filename)
+    sampling_rate = int(info['downsampled_sampling_rate'])
+    downsampled_channels = list(info['downsampled_channels'])
     # Map tetrode_nrs elements to columns in downsampled_tetrode_data
     columns = []
     channels_used = []
@@ -399,7 +401,8 @@ def load_downsampled_tetrode_data_as_array(filename, tetrode_nrs):
         timestamps = np.array(h5file[timestamps_path])
     # Arrange output into a dictionary
     data = {'continuous': continuous, 'timestamps': timestamps,
-            'tetrode_nrs': tetrode_nrs, 'channels': channels_used}
+            'tetrode_nrs': tetrode_nrs, 'channels': channels_used,
+            'sampling_rate': sampling_rate}
 
     return data
 

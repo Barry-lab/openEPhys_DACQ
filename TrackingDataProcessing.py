@@ -211,7 +211,7 @@ def iteratively_combine_multicamera_data_for_recording(
             posdatas[i] = posdata
     if len(posdatas) > 1:
         # If data from multiple cameras available, combine it
-        PosDataFramesPerSecond = 20.0
+        PosDataFramesPerSecond = 30.0
         # Find first and last timepoint for position data
         first_timepoints = []
         last_timepoints = []
