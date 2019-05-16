@@ -1060,7 +1060,7 @@ def process_tracking_data(filename, save_to_file=False):
         CameraSettings, arena_size, posdatas, OE_GC_times)
     if save_to_file:
         # Save corrected data to file
-        save_tracking_data(filename, ProcessedPos, ProcessedPos=True, ReProcess=False)
+        save_tracking_data(filename, ProcessedPos, ProcessedPos=True, overwrite=True)
 
     return ProcessedPos
 

@@ -1,4 +1,4 @@
-from copy import copy
+from copy import copy, deepcopy
 
 
 class GameStateDetector(object):
@@ -249,7 +249,7 @@ class SignalDetector(object):
         :return: data
         :rtype: dict
         """
-        data = copy(self._data)
+        data = deepcopy(self._data)
         signal_candidates = ('AudioSignal', 'LightSignal')
         for signal_type in signal_candidates:
             if signal_type in data:
@@ -258,14 +258,15 @@ class SignalDetector(object):
                 for timestamp, event_data in zip(data[signal_type]['timestamps'],
                                                  data[signal_type]['data']):
                     if not signal_on and event_data == 'Start':
-                        epochs.append([timestamp])
+                        epochs.append([deepcopy(timestamp)])
                         signal_on = True
                     elif signal_on and event_data == 'Stop':
-                        epochs[-1].append(timestamp)
+                        epochs[-1].append(deepcopy(timestamp))
                         signal_on = False
                     else:
                         raise ValueError('Unexpected sequence of Start Stop for a signal')
-                data[signal_type]['epochs'] = epochs
+                # Overwrite timestamps key with epochs
+                data[signal_type]['timestamps'] = epochs
 
         return data
 

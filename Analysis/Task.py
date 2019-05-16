@@ -315,7 +315,7 @@ def load_milk_task_data(filename, full_data=True):
         task_settings = NWBio.load_settings(filename, '/TaskSettings/')
         append_trial_end_closest_feeder_id(df, posdata, task_settings)
         append_trial_first_visited_feeder_id(df, posdata, task_settings)
-        append_trial_if_light_on(df, log_parser.data['Signal']['LightSignal']['epochs'])
+        append_trial_if_light_on(df, log_parser.data['Signal']['LightSignal']['timestamps'])
 
     return df
 
