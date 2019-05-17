@@ -1180,10 +1180,13 @@ class Abstract_Variables(object):
 
     def get(self, name, key, set_relevant=False):
         self._wait_until_pending_update_complete()
-        if set_relevant:
-            self._set_relevant(name)
-        with self._variable_states_Lock:
-            return copy(self._variable_states[self._variable_state_names.index(name)][key])
+        if name in self._variable_state_names:
+            if set_relevant:
+                self._set_relevant(name)
+            with self._variable_states_Lock:
+                return copy(self._variable_states[self._variable_state_names.index(name)][key])
+        else:
+            return None
 
     def get_all(self):
         self._wait_until_pending_update_complete()
@@ -1475,13 +1478,14 @@ class MilkGame_Variables(Abstract_Variables):
                                 'complete': goal_distance <= self._min_goal_distance, 
                                 'percentage': 1 - (goal_distance - self._min_goal_distance) / float(self._max_distance_in_arena)})
         # Check if animal is too close to goal incorrect location
-        variable_state_names.append('distance_from_other_feeders')
-        other_distances = min([self._feeder_distances[i] for i in range(len(self._MilkRewardDevices.IDs_active)) if self._MilkRewardDevices.IDs_active[i] != self._MilkGoal.copy_ID()])
-        variable_states.append({'name': 'Other Distance', 
-                                'target': self._min_goal_distance, 
-                                'status': int(round(other_distances)), 
-                                'complete': other_distances <= self._min_goal_distance, 
-                                'percentage': 1 - (other_distances - self._min_goal_distance) / float(self._max_distance_in_arena)})
+        if len(self._MilkRewardDevices.IDs_active) > 1:
+            variable_state_names.append('distance_from_other_feeders')
+            other_distances = min([self._feeder_distances[i] for i in range(len(self._MilkRewardDevices.IDs_active)) if self._MilkRewardDevices.IDs_active[i] != self._MilkGoal.copy_ID()])
+            variable_states.append({'name': 'Other Distance', 
+                                    'target': self._min_goal_distance, 
+                                    'status': int(round(other_distances)), 
+                                    'complete': other_distances <= self._min_goal_distance, 
+                                    'percentage': 1 - (other_distances - self._min_goal_distance) / float(self._max_distance_in_arena)})
         # Check if trial has been running for too long
         variable_state_names.append('milk_trial_duration')
         trial_run_time = time() - self._last_trial
@@ -2023,7 +2027,7 @@ class GameState_MilkTrial(GameState):
             self.MilkTrialSignals.stop(self.MilkGoal.copy_ID())
             self.MilkGoal.next(game_counters=self.game_counters)
             return 'GameState_MilkTrial_Fail', {'reason': 'timeout'}
-        elif conditions['distance_from_other_feeders']:
+        elif not (conditions['distance_from_other_feeders'] is None) and conditions['distance_from_other_feeders']:
             # If subject went to incorrect location, stop milk trial with negative feedback
             self.MilkTrialSignals.stop(self.MilkGoal.copy_ID())
             self.MilkTrialSignals.fail(self.MilkGame_Variables.closest_feeder_ID())
