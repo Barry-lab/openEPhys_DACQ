@@ -789,6 +789,14 @@ def save_tracking_data(filename, TrackingData, ProcessedPos=False, overwrite=Fal
                     del h5file[processed_pos_path]
             h5file[processed_pos_path] = TrackingData
 
+
+def get_recording_cameraIDs(filename):
+    path = '/general/data_collection/Settings/CameraSettings/CameraSpecific'
+    with h5py.File(filename, 'r') as h5file:
+        if path in h5file:
+            return list(h5file[path].keys())
+
+
 def load_raw_tracking_data(filename, cameraID, specific_path=None):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/' + cameraID
     if not (specific_path is None):
