@@ -14,6 +14,9 @@ def convert(fpath):
 
 	os.system(command)
 
+# Running the following command on the output .avi file yields good luminance quality
+# ffmpeg -i original.avi -vf eq=gamma=1.5:saturation=1.5 -c:a copy  outfile.avi
+
 
 if __name__ == '__main__':
     # Input argument handling and help info

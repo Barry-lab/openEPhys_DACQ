@@ -798,6 +798,35 @@ def check_if_settings_available(filename, path='/'):
     with h5py.File(filename,'r') as h5file:
         return full_path in h5file
 
+
+def save_analysis(filename, data, overwrite=False, complete_overwrite=False):
+    """Stores analysis results from nested dictionary to /analysis path in NWB file.
+
+    See :py:func:`NWBio.recursively_save_dict_contents_to_group` for details on supported data structures.
+
+    :param str filename: path to NWB file
+    :param dict data: analysis data to be stored in NWB file
+    :param bool overwrite: if True, any existing data at same dictionary keys
+                           as in previously saved data is overwritten.
+                           Default is False.
+    :param bool complete_overwrite: if True, all previous analysis data is discarded before writing.
+                                    Default is False.
+    """
+    with h5py.File(filename, 'r+') as h5file:
+        if complete_overwrite:
+            del h5file['/analysis']
+        recursively_save_dict_contents_to_group(h5file, '/analysis/', data, overwrite=overwrite)
+
+
+def load_analysis(filename):
+    """Loads analysis results from /analysis path in NWB file into a dictionary.
+
+    :param str filename: path to NWB file
+    """
+    with h5py.File(filename, 'r') as h5file:
+        return recursively_load_dict_contents_from_group(h5file, '/analysis/')
+
+
 def listBadChannels(filename):
     if check_if_settings_available(filename,'/General/badChan/'):
         badChanString = load_settings(filename,'/General/badChan/')
