@@ -1018,6 +1018,12 @@ class RewardDevices(object):
         self.FEEDERs_Locks = {}
         for ID in self.FEEDERs.keys():
             self.FEEDERs_Locks[ID] = Lock()
+        # Create a list of feeders present
+        self.IDs_present = []
+        for ID in self.FEEDERs.keys():
+            if self.FEEDERs[ID]['Present']:
+                self.IDs_present.append(ID)
+        self.IDs_present = sorted(self.IDs_present, key=int)
         # Create dictionary of feeder positions
         self.positions = {}
         for ID in self.FEEDERs.keys():
@@ -1397,12 +1403,12 @@ class MilkGame_Variables(Abstract_Variables):
     def _update_feeder_distances(self, posHistory_one_second_steps):
         mean_posHistory = compute_mean_posHistory(posHistory_one_second_steps)
         distances = []
-        for ID in self._MilkRewardDevices.IDs_active:
+        for ID in self._MilkRewardDevices.IDs_present:
             distances.append(euclidean(mean_posHistory, self._MilkRewardDevices.positions[ID]))
         self._feeder_distances = distances
 
     def closest_feeder_ID(self):
-        return self._MilkRewardDevices.IDs_active[np.argmin(self._feeder_distances)]
+        return self._MilkRewardDevices.IDs_present[np.argmin(self._feeder_distances)]
 
     def update_min_trial_separation(self):
         mean_val = self._min_trial_separation_mean
@@ -1469,7 +1475,7 @@ class MilkGame_Variables(Abstract_Variables):
         variable_state_names.append('distance_from_goal_feeder')
         if self._MilkGoal.copy_ID() in self._MilkRewardDevices.IDs_active:
             # This may not be the case if the goal milk feeder has just been deactivated
-            goal_distance = self._feeder_distances[self._MilkRewardDevices.IDs_active.index(self._MilkGoal.copy_ID())]
+            goal_distance = self._feeder_distances[self._MilkRewardDevices.IDs_present.index(self._MilkGoal.copy_ID())]
         else:
             goal_distance = self._max_distance_in_arena
         variable_states.append({'name': 'Goal Distance', 
@@ -1478,9 +1484,9 @@ class MilkGame_Variables(Abstract_Variables):
                                 'complete': goal_distance <= self._min_goal_distance, 
                                 'percentage': 1 - (goal_distance - self._min_goal_distance) / float(self._max_distance_in_arena)})
         # Check if animal is too close to goal incorrect location
-        if len(self._MilkRewardDevices.IDs_active) > 1:
+        if len(self._MilkRewardDevices.IDs_present) > 1:
             variable_state_names.append('distance_from_other_feeders')
-            other_distances = min([self._feeder_distances[i] for i in range(len(self._MilkRewardDevices.IDs_active)) if self._MilkRewardDevices.IDs_active[i] != self._MilkGoal.copy_ID()])
+            other_distances = min([self._feeder_distances[i] for i in range(len(self._MilkRewardDevices.IDs_present)) if self._MilkRewardDevices.IDs_present[i] != self._MilkGoal.copy_ID()])
             variable_states.append({'name': 'Other Distance', 
                                     'target': self._min_goal_distance, 
                                     'status': int(round(other_distances)), 
