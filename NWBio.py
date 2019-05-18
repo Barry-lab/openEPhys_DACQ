@@ -643,21 +643,53 @@ def check_if_path_exists(filename, path):
     with h5py.File(filename, 'r') as h5file:
         return path in h5file
 
-def recursively_save_dict_contents_to_group(h5file, path, dic):
+
+def save_list_of_dicts_to_group(h5file, path, dlist, overwrite=False, list_suffix='_NWBLIST'):
+    # Check that all elements are dictionaries
+    for dic in dlist:
+        if not isinstance(dic, dict):
+            raise Exception('List elements must be dictionaries')
+    # Write elements to file
+    for i, dic in enumerate(dlist):
+        recursively_save_dict_contents_to_group(h5file, (path + str(i) + '/'), dic,
+                                                overwrite=overwrite, list_suffix=list_suffix)
+
+
+def recursively_save_dict_contents_to_group(h5file, path, dic, overwrite=False, list_suffix='_NWBLIST'):
     """
+    h5file - h5py.File
+    path   - str       - path to group in h5file. Must end with '/'
+    overwrite - bool   - any dictionary elements or lists that already exist are overwritten.
+                         Default is False, if elements already exist in NWB file, error is raised.
+    list_suffix - str  - suffix used to highlight paths created from lists of dictionaries.
+                         Must be consistent when saving and loading data.
+
     Only works with: numpy arrays, numpy int64 or float64, strings, bytes, lists of strings and dictionaries these are contained in.
+    Also works with lists dictionaries as part of the hierachy.
+    Long lists of dictionaries are discouraged, as individual groups are created for each element.
     """
     for key, item in dic.items():
         if isinstance(item, (np.ndarray, np.int64, np.float64, str, bytes)):
+            if overwrite:
+                if path + key in h5file:
+                    del h5file[path + key]
             h5file[path + key] = item
         elif isinstance(item, dict):
-            recursively_save_dict_contents_to_group(h5file, path + key + '/', item)
+            recursively_save_dict_contents_to_group(h5file, path + key + '/', item,
+                                                    overwrite=overwrite, list_suffix=list_suffix)
         elif isinstance(item, list):
             if all(isinstance(i, str) for i in item):
+                if overwrite:
+                    if path + key in h5file:
+                        del h5file[path + key]
                 asciiList = [n.encode("ascii", "ignore") for n in item]
                 h5file[path + key] = h5file.create_dataset(None, (len(asciiList),),'S100', asciiList)
             else:
-                raise ValueError('Cannot save %s type'%type(item) + ' from ' + path + key)
+                if overwrite:
+                    if path + key + list_suffix in h5file:
+                        del h5file[path + key + list_suffix]
+                save_list_of_dicts_to_group(h5file, path + key + list_suffix + '/', item, 
+                                            overwrite=overwrite, list_suffix=list_suffix)
         else:
             raise ValueError('Cannot save %s type'%type(item) + ' from ' + path + key)
 
@@ -680,14 +712,39 @@ def convert_bytes_to_string(b):
         return b
 
 
-def recursively_load_dict_contents_from_group(h5file, path):
+def load_list_of_dicts_from_group(h5file, path, list_suffix='_NWBLIST'):
+    # Load all elements on this path
+    items = []
+    for key in list(h5file[path].keys()):
+        items.append(
+            (int(key), recursively_load_dict_contents_from_group(h5file, path + key + '/', 
+                                                                 list_suffix=list_suffix))
+        )
+    # Create a list from items sorted by group keys
+    ans = [item for _, item in sorted(items)]
+
+    return ans
+
+
+def recursively_load_dict_contents_from_group(h5file, path, list_suffix='_NWBLIST'):
     """
     Returns value at path if it has no further items
+
+    h5file - h5py.File
+    path   - str       - path to group in h5file. Must end with '/'
+    list_suffix - str  - suffix used to highlight paths created from lists of dictionaries.
+                         Must be consistent when saving and loading data.
     """
-    if hasattr(h5file[path], 'items'):
+    if path[:-1].endswith(list_suffix):
+        ans = load_list_of_dicts_from_group(h5file, path, list_suffix=list_suffix)
+    elif hasattr(h5file[path], 'items'):
         ans = {}
         for key, item in h5file[path].items():
-            if isinstance(item, h5py._hl.dataset.Dataset):
+            if key.endswith(list_suffix):
+                ans[str(key)[:-len(list_suffix)]] = load_list_of_dicts_from_group(
+                    h5file, path + key + '/', list_suffix=list_suffix
+                )
+            elif isinstance(item, h5py._hl.dataset.Dataset):
                 if 'S100' == item.dtype:
                     tmp = list(item[()])
                     ans[str(key)] = [convert_bytes_to_string(i) for i in tmp]
@@ -701,6 +758,7 @@ def recursively_load_dict_contents_from_group(h5file, path):
         ans = convert_bytes_to_string(h5file[path][()])
 
     return ans
+
 
 def save_settings(filename, Settings, path='/'):
     """
