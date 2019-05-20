@@ -1031,7 +1031,9 @@ class RewardDevices(object):
         # Initialize all feeders concurrently
         T_initFEEDER = []
         for ID in self.FEEDERs.keys():
-            if self.FEEDERs[ID]['Active']:
+            if (self.FEEDERs[ID]['Active'] 
+                    or ('negativeAudioSignal' in feeder_kwargs[ID] 
+                        and feeder_kwargs[ID]['negativeAudioSignal'] > 0)):
                 T = Thread(target=self._initFEEDER, args=(ID,))
                 T.start()
                 T_initFEEDER.append(T)
