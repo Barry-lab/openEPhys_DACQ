@@ -1032,7 +1032,8 @@ class RewardDevices(object):
         T_initFEEDER = []
         for ID in self.FEEDERs.keys():
             if (self.FEEDERs[ID]['Active'] 
-                    or ('negativeAudioSignal' in feeder_kwargs[ID] 
+                    or (ID in feeder_kwargs 
+                        and 'negativeAudioSignal' in feeder_kwargs[ID] 
                         and feeder_kwargs[ID]['negativeAudioSignal'] > 0)):
                 T = Thread(target=self._initFEEDER, args=(ID,))
                 T.start()
