@@ -3,16 +3,21 @@ import argparse
 
 def convert(fpath):
 
-	assert fpath.endswith('h264'), 'Source file must have .h264 file name extension.'
+    assert fpath.endswith('h264'), 'Source file must have .h264 file name extension.'
 
-	target_fpath = fpath[:-5] + '.avi'
+    target_fpath = fpath[:-5] + '.avi'
 
-	command = 'ffmpeg -i ' + fpath + \
-	          ' -pix_fmt yuv420p ' + \
-	          '-vf scale=w=-1:h=-1:in_range=pc:out_range=tv ' + \
-	          '-c:v libx264 ' + target_fpath
+    # command = 'ffmpeg -i ' + fpath + \
+    #           ' -pix_fmt yuv420p ' + \
+    #           '-vf scale=w=-1:h=-1:in_range=pc:out_range=tv ' + \
+    #           '-c:v libx264 ' + target_fpath
 
-	os.system(command)
+    command = 'ffmpeg -i ' + fpath + \
+              ' -pix_fmt yuv420p ' + \
+              '-vf eq=gamma=1.5:saturation=1.5 ' + \
+              '-c:v libx264 ' + target_fpath
+
+    os.system(command)
 
 # Running the following command on the output .avi file yields good luminance quality
 # ffmpeg -i original.avi -vf eq=gamma=1.5:saturation=1.5 -c:a copy  outfile.avi
