@@ -86,6 +86,14 @@ class GameStateDetector(object):
                     self._data[self._current_state]['timestamps'][-1].append(timestamp)
                 self._current_state = state_name
 
+    def finalize_message_processing(self, final_timestamp):
+        """Ensures the final GameState epoch has end timestamp
+
+        :param float final_timestamp: the end timestamp used if not already in place
+        """
+        if len(self._data[self._current_state]['timestamps'][-1]) == 1:
+            self._data[self._current_state]['timestamps'][-1].append(final_timestamp)
+
 
 class RewardDetector(object):
     """
@@ -176,12 +184,17 @@ class SignalDetector(object):
         data (dict): game states and list of their active periods
         name (str): data identifier
     """
-    def __init__(self):
+    def __init__(self, negative_audio_signal_duration=None):
+        """
+        :param float negative_audio_signal_duration: required for completing NegativeAudioSignal epochs
+        """
+
         self._identifiers = ('AudioSignal',
                              'NegativeAudioSignal',
                              'LightSignal')
         self._data = {}
         self._name = 'Signal'
+        self._negative_audio_signal_duration = negative_audio_signal_duration
 
     @property
     def data(self):
@@ -190,6 +203,10 @@ class SignalDetector(object):
     @property
     def name(self):
         return self._name
+
+    @property
+    def negative_audio_signal_duration(self):
+        return self._negative_audio_signal_duration
 
     def check(self, message):
         """
@@ -268,6 +285,16 @@ class SignalDetector(object):
                 # Overwrite timestamps key with epochs
                 data[signal_type]['timestamps'] = epochs
 
+        # Append end timestamp to negative audio signal timestamps
+        if 'NegativeAudioSignal' in data:
+            if self.negative_audio_signal_duration is None:
+                raise Exception(
+                    'NegativeAudioSignal in messages, but negative_audio_signal_duration not provided.'
+                )
+            signal_type = 'NegativeAudioSignal'
+            for i, timestamp in enumerate(data[signal_type]['timestamps']):
+                data[signal_type]['timestamps'][i] = [timestamp, timestamp + self.negative_audio_signal_duration]
+
         return data
 
 
@@ -282,7 +309,7 @@ class LogParser(object):
         timestamps (list): timestamps of task related messages
     """
 
-    def __init__(self, messages, timestamps):
+    def __init__(self, messages, timestamps, task_settings=None, final_timestamp=None):
         """Constructor for LogParser class
 
         Initializes the LogParser class for a full log of a single session.
@@ -296,14 +323,29 @@ class LogParser(object):
         :type messages: list
         :param timestamps:
         :type timestamps: list
+        :param dict task_settings: output fron NWBio.load_settings()['TaskSettings']
+        :param float final_timestamp: used to close any open epochs at the end of recording
         """
+        # Parse input
+        if not (task_settings is None) and 'NegativeAudioSignal' in task_settings:
+            negative_audio_signal_duration = task_settings['NegativeAudioSignal']
+        else:
+            negative_audio_signal_duration = None
         # Initialize message detectors
-        self.detectors = (GameStateDetector(), RewardDetector(), SignalDetector())
+        self.detectors = (GameStateDetector(), 
+                          RewardDetector(), 
+                          SignalDetector(negative_audio_signal_duration=negative_audio_signal_duration))
         # Process messages
         self._messages = []
         self._timestamps = []
         for message, timestamp in zip(messages, timestamps):
             self._process_message(message, timestamp)
+
+        # Finalize message processing in each detector if method available
+        if not (final_timestamp is None):
+            for detector in self.detectors:
+                if hasattr(detector, 'finalize_message_processing'):
+                    detector.finalize_message_processing(final_timestamp)
 
     def _process_message(self, message, timestamp):
         for detector in self.detectors:
@@ -337,6 +379,7 @@ class LogParser(object):
 
         :param game_state_data: LogParser.data for 'GameState'
         :type game_state_data: dict
+        :param float final_timestamp: used to close any open epochs at the end of recording
         :return: task_data
         :rtype: dict
         """
