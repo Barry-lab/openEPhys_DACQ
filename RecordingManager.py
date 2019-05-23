@@ -608,12 +608,7 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             print('Stopping Task...')
             self.current_task.stop()
             print('Stopping Task Successful')
-        # Stop cumulative plot
         if self.Settings['General']['Tracking']:
-            if hasattr(self, 'PosPlot'):
-                print('Stopping Position Plot...')
-                self.PosPlot.close()
-                print('Stopping Position Plot Successful')
             # Stop updating online tracking data
             print('Closing Online Tracking Data...')
             self.RPIpos.close()
@@ -637,6 +632,12 @@ class RecordingManager(QtGui.QMainWindow, RecordingManagerDesign.Ui_MainWindow):
             time.sleep(0.1)
         print('Stopping Open Ephys GUI Recording Successful')
         self.compile_recording_data()
+        # Stop cumulative plot
+        if self.Settings['General']['Tracking']:
+            if hasattr(self, 'PosPlot'):
+                print('Stopping Position Plot...')
+                self.PosPlot.close()
+                print('Stopping Position Plot Successful')
 
     def pb_process_data_callback(self):
         self.pb_init_devices.setEnabled(False)

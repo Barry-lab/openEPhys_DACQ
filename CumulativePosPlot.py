@@ -111,6 +111,7 @@ class PosPlot(object):
         self.arrow = pg.ArrowItem(pos=(0,0), angle=0, headLen=0, tailLen=0,headWidth=0,tailWidth=0)
         self.plotBox.addItem(self.arrow)
         # Start constant update of the plot
+        self.keep_updating_plot = True
         plotUpdateInterval = 100 # This sets the plot update interval in milliseconds
         self.cumulativePlot_timer = QTimer()
         self.cumulativePlot_timer.timeout.connect(lambda:self.updatePlot())
@@ -204,54 +205,56 @@ class PosPlot(object):
             self.plotBox.removeItem(self.trackedPath)
 
     def updatePlot(self):
-        binSize = self.histogramParameters['binSize']
-        margins = self.histogramParameters['margins']
-        # Get latest position data
-        with self.RPIpos.combPosHistoryLock:
-            pastPos = self.RPIpos.combPosHistory[-2]
-            currPos = self.RPIpos.combPosHistory[-1]
-        with self.RPIpos.histogramLock:
-            positionHistogram = self.RPIpos.positionHistogram
-        # Smooth histogram
-        smoothGaussStd = self.smoothingValue / float(binSize)
-        image = ndimage.gaussian_filter(positionHistogram.T, sigma=(smoothGaussStd, smoothGaussStd), order=0)
-        # Set image data maximum value as requested
-        image = np.float32(image)
-        image[image > self.hist_max_range] = np.float32(self.hist_max_range)
-        # Display image of histogram
-        image = np.uint8(image / np.float32(self.hist_max_range) * 255)
-        self.imageItem.setImage(image, autoLevels=False, lut=self.CMapLut)
-        # Draw arrow for position if position data available
-        self.plotBox.removeItem(self.arrow) # Remove previous arrow
-        if not (currPos is None) and not (pastPos is None):
-            arrowPos = ((currPos[0] + margins) / binSize, (currPos[1] + margins) / binSize)
-            if not (self.LED_angle is None) and not np.any(np.isnan(currPos[2:])):
-                # Compute arrow angle with to align the line connecting the points
-                head_angle = angle_clockwise(currPos[:2], currPos[2:]) + 90 + self.LED_angle
-                # Draw the arro with the head/tip at the location of primary LED
-                self.arrow = pg.ArrowItem(pos=arrowPos, 
-                                          angle=head_angle, headLen=40, tailLen=20, 
-                                          headWidth=40, tailWidth=7, 
-                                          brush=pg.mkBrush('b'), pen=pg.mkPen('c', width=3))
-                self.plotBox.addItem(self.arrow)
+        if self.keep_updating_plot:
+            binSize = self.histogramParameters['binSize']
+            margins = self.histogramParameters['margins']
+            # Get latest position data
+            with self.RPIpos.combPosHistoryLock:
+                pastPos = self.RPIpos.combPosHistory[-2]
+                currPos = self.RPIpos.combPosHistory[-1]
+            with self.RPIpos.histogramLock:
+                positionHistogram = self.RPIpos.positionHistogram
+            # Smooth histogram
+            smoothGaussStd = self.smoothingValue / float(binSize)
+            image = ndimage.gaussian_filter(positionHistogram.T, sigma=(smoothGaussStd, smoothGaussStd), order=0)
+            # Set image data maximum value as requested
+            image = np.float32(image)
+            image[image > self.hist_max_range] = np.float32(self.hist_max_range)
+            # Display image of histogram
+            image = np.uint8(image / np.float32(self.hist_max_range) * 255)
+            self.imageItem.setImage(image, autoLevels=False, lut=self.CMapLut)
+            # Draw arrow for position if position data available
+            self.plotBox.removeItem(self.arrow) # Remove previous arrow
+            if not (currPos is None) and not (pastPos is None):
+                arrowPos = ((currPos[0] + margins) / binSize, (currPos[1] + margins) / binSize)
+                if not (self.LED_angle is None) and not np.any(np.isnan(currPos[2:])):
+                    # Compute arrow angle with to align the line connecting the points
+                    head_angle = angle_clockwise(currPos[:2], currPos[2:]) + 90 + self.LED_angle
+                    # Draw the arro with the head/tip at the location of primary LED
+                    self.arrow = pg.ArrowItem(pos=arrowPos, 
+                                              angle=head_angle, headLen=40, tailLen=20, 
+                                              headWidth=40, tailWidth=7, 
+                                              brush=pg.mkBrush('b'), pen=pg.mkPen('c', width=3))
+                    self.plotBox.addItem(self.arrow)
+                else:
+                    # If no 2nd LED data, draw arrow based on movement direction
+                    head_angle = angle_clockwise(pastPos[:2], currPos[:2]) + 90
+                    self.arrow = pg.ArrowItem(pos=arrowPos, 
+                                              angle=head_angle, headLen=40, tailLen=0, 
+                                              headWidth=40, tailWidth=7, 
+                                              brush=pg.mkBrush('b'), pen=pg.mkPen('c', width=3))
+                    self.plotBox.addItem(self.arrow)
             else:
-                # If no 2nd LED data, draw arrow based on movement direction
-                head_angle = angle_clockwise(pastPos[:2], currPos[:2]) + 90
-                self.arrow = pg.ArrowItem(pos=arrowPos, 
-                                          angle=head_angle, headLen=40, tailLen=0, 
-                                          headWidth=40, tailWidth=7, 
-                                          brush=pg.mkBrush('b'), pen=pg.mkPen('c', width=3))
+                # Add invisible arrow item to keep loop consistent
+                self.arrow = pg.ArrowItem(pos=[0, 0], 
+                                          angle=0, headLen=0, tailLen=0, 
+                                          headWidth=0, tailWidth=0, 
+                                          brush=pg.mkBrush('b'))
                 self.plotBox.addItem(self.arrow)
-        else:
-            # Add invisible arrow item to keep loop consistent
-            self.arrow = pg.ArrowItem(pos=[0, 0], 
-                                      angle=0, headLen=0, tailLen=0, 
-                                      headWidth=0, tailWidth=0, 
-                                      brush=pg.mkBrush('b'))
-            self.plotBox.addItem(self.arrow)
 
     def close(self):
         # Close the update loop, RPi Position tracking loop and application window
+        self.keep_updating_plot = False
         self.cumulativePlot_timer.stop()
         time.sleep(1)
         self.mainWindow.close()
