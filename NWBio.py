@@ -1062,9 +1062,9 @@ def get_recording_log_parser(filename, final_timestamp=None):
     :rtype: LogParser class
     """
     task_log_parser = import_task_specific_log_parser(load_task_name(filename))
-    return task_log_parser.LogParser(**load_network_events(filename), 
-                                     task_settings=load_settings(filename, path='/TaskSettings/'),
-                                     final_timestamp=final_timestamp)
+    return task_log_parser.LogParser(task_settings=load_settings(filename, path='/TaskSettings/'),
+                                     final_timestamp=final_timestamp,
+                                     **load_network_events(filename))
 
 
 def get_channel_map(filename):
