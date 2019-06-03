@@ -463,13 +463,14 @@ def getExperimentInfo(fpath=None):
     
     return experiment_info
 
-def get_first_available_spike_data(OpenEphysDataPath, tetrode_nrs, use_idx_keep, use_badChan):
+def get_first_available_spike_data(OpenEphysDataPath, tetrode_nrs, use_idx_keep, use_badChan, 
+                                   clustering_name=None):
     _, spike_names = NWBio.processing_method_and_spike_name_combinations()
     spike_data_available = False
     for spike_name in spike_names:
         spike_data = NWBio.load_spikes(OpenEphysDataPath, tetrode_nrs=tetrode_nrs, 
                                        spike_name=spike_name, use_idx_keep=use_idx_keep, 
-                                       use_badChan=use_badChan)
+                                       use_badChan=use_badChan, clustering_name=clustering_name)
         if len(spike_data) > 0:
             spike_data_available = True
             break
@@ -567,7 +568,7 @@ def load_eegData(fpath, eegChans, bitVolts=0.195):
 
 def createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name='first_available', channel_map=None, 
                                 subfolder='AxonaData', eegChans=None, pixels_per_metre=None, 
-                                show_output=False):
+                                show_output=False, clustering_name=None):
     # Construct path for AxonaData and get experiment info
     AxonaDataPath = os.path.join(os.path.dirname(OpenEphysDataPath), subfolder)
     experiment_info = getExperimentInfo(OpenEphysDataPath)
@@ -590,11 +591,12 @@ def createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name='first_available',
         print('Loading spikes for tetrodes nr: ' +  ', '.join(map(str, tetrode_nrs)))
         if spike_name == 'first_available':
             spike_data = get_first_available_spike_data(OpenEphysDataPath, tetrode_nrs, 
-                                                        use_idx_keep=True, use_badChan=True)
+                                                        use_idx_keep=True, use_badChan=True,
+                                                        clustering_name=clustering_name)
         else:
             spike_data = NWBio.load_spikes(OpenEphysDataPath, tetrode_nrs=tetrode_nrs, 
                                            spike_name=spike_name, use_idx_keep=True, 
-                                           use_badChan=True)
+                                           use_badChan=True, clustering_name=clustering_name)
         # Load eeg data
         if eegChans is None:
             eegData = None
@@ -665,7 +667,7 @@ def concatenate_eegData_across_recordings(eegData, data_time_edges, recording_ed
 def createAxonaData_for_multiple_NWBfiles(OpenEphysDataPaths, AxonaDataPath, 
                                           spike_name='first_available', channel_map=None, 
                                           eegChans=None, pixels_per_metre=None, 
-                                          show_output=False):
+                                          show_output=False, clustering_name=None):
     # Get experiment info
     if len(OpenEphysDataPaths) > 1:
         print('Using experiment_info from first recording only.')
@@ -716,7 +718,7 @@ def createAxonaData_for_multiple_NWBfiles(OpenEphysDataPaths, AxonaDataPath,
                 print([hfunct.time_string(), 'DEBUG: loading spikes of tet ', tetrode_nrs, ' from ', OpenEphysDataPath])
                 spike_data.append(NWBio.load_spikes(OpenEphysDataPath, tetrode_nrs=tetrode_nrs, 
                                                     spike_name=spike_name, use_idx_keep=True, 
-                                                    use_badChan=True))
+                                                    use_badChan=True, clustering_name=clustering_name))
         spike_data = concatenate_spike_data_across_recordings(spike_data, data_time_edges, 
                                                               recording_edges)
         # Load eeg data
@@ -883,10 +885,12 @@ if __name__ == "__main__":
                         help='enter the path to folder where to write data concatenated from all specified recordings')
     parser.add_argument('--show_output', action='store_true', 
                         help='to open AxonaData output folder after processing')
+    parser.add_argument('--clustering_name', type=str, nargs = 1, 
+                        help='specify cluster identities path to use in NWB file')
     args = parser.parse_args()
     # Get paths to recording files
     OpenEphysDataPaths = args.paths
-    if isinstance(OpenEphysDataPaths, basestring):
+    if isinstance(OpenEphysDataPaths, str):
         OpenEphysDataPaths = [OpenEphysDataPaths]
     # If directories entered as paths, attempt creating path to file by appending experiment_1.nwb
     for ndata, OpenEphysDataPath in enumerate(OpenEphysDataPaths):
@@ -935,15 +939,20 @@ if __name__ == "__main__":
         show_output = True
     else:
         show_output = False
+    # Get clustering_name variable
+    if args.clustering_name:
+        clustering_name = args.clustering_name[0]
+    else:
+        clustering_name = None
     # Run main script for each NWB file or to concatenate them if requested
     if concatenatedDataPath is None:
         for OpenEphysDataPath in OpenEphysDataPaths:
             createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name=spike_name, 
                                         channel_map=channel_map, subfolder=subfolder, 
                                         eegChans=eegChans, pixels_per_metre=pixels_per_metre, 
-                                        show_output=show_output)
+                                        show_output=show_output, clustering_name=clustering_name)
     else:
         createAxonaData_for_multiple_NWBfiles(OpenEphysDataPaths, concatenatedDataPath, 
                                               spike_name=spike_name, channel_map=channel_map, 
                                               eegChans=eegChans, pixels_per_metre=pixels_per_metre, 
-                                              show_output=show_output)
+                                              show_output=show_output, clustering_name=clustering_name)
