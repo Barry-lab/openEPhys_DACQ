@@ -690,6 +690,8 @@ def recursively_save_dict_contents_to_group(h5file, path, dic, overwrite=False, 
                         del h5file[path + key + list_suffix]
                 save_list_of_dicts_to_group(h5file, path + key + list_suffix + '/', item, 
                                             overwrite=overwrite, list_suffix=list_suffix)
+        elif item is None:
+            pass
         else:
             raise ValueError('Cannot save %s type'%type(item) + ' from ' + path + key)
 
@@ -712,13 +714,14 @@ def convert_bytes_to_string(b):
         return b
 
 
-def load_list_of_dicts_from_group(h5file, path, list_suffix='_NWBLIST'):
+def load_list_of_dicts_from_group(h5file, path, list_suffix='_NWBLIST', ignore=()):
     # Load all elements on this path
     items = []
     for key in list(h5file[path].keys()):
         items.append(
             (int(key), recursively_load_dict_contents_from_group(h5file, path + key + '/', 
-                                                                 list_suffix=list_suffix))
+                                                                 list_suffix=list_suffix,
+                                                                 ignore=ignore))
         )
     # Create a list from items sorted by group keys
     ans = [item for _, item in sorted(items)]
@@ -726,7 +729,7 @@ def load_list_of_dicts_from_group(h5file, path, list_suffix='_NWBLIST'):
     return ans
 
 
-def recursively_load_dict_contents_from_group(h5file, path, list_suffix='_NWBLIST'):
+def recursively_load_dict_contents_from_group(h5file, path, list_suffix='_NWBLIST', ignore=()):
     """
     Returns value at path if it has no further items
 
@@ -734,16 +737,28 @@ def recursively_load_dict_contents_from_group(h5file, path, list_suffix='_NWBLIS
     path   - str       - path to group in h5file. Must end with '/'
     list_suffix - str  - suffix used to highlight paths created from lists of dictionaries.
                          Must be consistent when saving and loading data.
+    ignore - tuple     - paths including elements matching any element in this tuple return None
     """
-    if path[:-1].endswith(list_suffix):
-        ans = load_list_of_dicts_from_group(h5file, path, list_suffix=list_suffix)
+    if not path.endswith('/'):
+        raise ValueError('Input path must end with "/"')
+
+    if path.split('/')[-2] in ignore or path.split('/')[-2][:-len(list_suffix)] in ignore:
+        ans = None
+
+    elif path[:-1].endswith(list_suffix):
+        ans = load_list_of_dicts_from_group(h5file, path, list_suffix=list_suffix,
+                                            ignore=ignore)
     elif hasattr(h5file[path], 'items'):
+
         ans = {}
         for key, item in h5file[path].items():
+
             if key.endswith(list_suffix):
                 ans[str(key)[:-len(list_suffix)]] = load_list_of_dicts_from_group(
-                    h5file, path + key + '/', list_suffix=list_suffix
+                    h5file, path + key + '/', list_suffix=list_suffix,
+                    ignore=ignore
                 )
+
             elif isinstance(item, h5py._hl.dataset.Dataset):
                 if 'S100' == item.dtype:
                     tmp = list(item[()])
@@ -752,8 +767,11 @@ def recursively_load_dict_contents_from_group(h5file, path, list_suffix='_NWBLIS
                     ans[str(key)] = np.array(bool(item[()]))
                 else:
                     ans[str(key)] = convert_bytes_to_string(item[()])
+
             elif isinstance(item, h5py._hl.group.Group):
-                ans[str(key)] = recursively_load_dict_contents_from_group(h5file, path + key + '/')
+                ans[str(key)] = recursively_load_dict_contents_from_group(h5file, path + key + '/',
+                                                                          ignore=ignore)
+
     else:
         ans = convert_bytes_to_string(h5file[path][()])
 
@@ -776,16 +794,18 @@ def save_settings(filename, Settings, path='/'):
     with h5py.File(filename, write_method) as h5file:
         recursively_save_dict_contents_to_group(h5file, full_path, Settings)
 
-def load_settings(filename, path='/'):
+def load_settings(filename, path='/', ignore=()):
     """
     By default loads all settings from path
         '/general/data_collection/Settings/'
     or for example to load animal ID, use:
         path='/General/animal/'
+
+    ignore - tuple - any paths including any element of ignore are returned as None
     """
     full_path = '/general/data_collection/Settings' + path
     with h5py.File(filename, 'r') as h5file:
-        data = recursively_load_dict_contents_from_group(h5file, full_path)
+        data = recursively_load_dict_contents_from_group(h5file, full_path, ignore=ignore)
 
     return data
 
@@ -818,13 +838,16 @@ def save_analysis(filename, data, overwrite=False, complete_overwrite=False):
         recursively_save_dict_contents_to_group(h5file, '/analysis/', data, overwrite=overwrite)
 
 
-def load_analysis(filename):
+def load_analysis(filename, ignore=()):
     """Loads analysis results from /analysis path in NWB file into a dictionary.
 
     :param str filename: path to NWB file
+    :param tuple ignore: paths containing any element of ignore are terminated with None.
+        In the output dictionary any elements downstream of a key matching any element of ignore
+        is not loaded and dictionary tree is terminated at that point with value None.
     """
     with h5py.File(filename, 'r') as h5file:
-        return recursively_load_dict_contents_from_group(h5file, '/analysis/')
+        return recursively_load_dict_contents_from_group(h5file, '/analysis/', ignore=ignore)
 
 
 def listBadChannels(filename):
