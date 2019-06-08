@@ -908,9 +908,9 @@ def get_recording_cameraIDs(filename):
 
 
 def load_raw_tracking_data(filename, cameraID, specific_path=None):
-    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/' + cameraID
+    path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/tracking/' + cameraID + '/'
     if not (specific_path is None):
-        path = path + '/' + specific_path
+        path = path + '/' + specific_path + '/'
     with h5py.File(filename, 'r') as h5file:
         if path in h5file:
             return recursively_load_dict_contents_from_group(h5file, path)
