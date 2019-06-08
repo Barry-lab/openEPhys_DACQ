@@ -350,7 +350,7 @@ def get_downsampling_info_old(filename):
 def get_downsampling_info(filename):
     root_path = '/acquisition/timeseries/' + get_recordingKey(filename) \
                 + '/continuous/' + get_processorKey(filename)
-    data_path = root_path + '/downsampling_info'
+    data_path = root_path + '/downsampling_info/'
     with h5py.File(filename, 'r') as h5file:
         return recursively_load_dict_contents_from_group(h5file, data_path)
 
@@ -1073,7 +1073,7 @@ def load_task_name(filename):
     :return: task_name
     :rtype: str
     """
-    return load_settings(filename, path='/TaskSettings/name')
+    return load_settings(filename, path='/TaskSettings/name/')
 
 
 def get_recording_log_parser(filename, final_timestamp=None):
@@ -1154,7 +1154,7 @@ def extract_recording_info(filename, selection='default'):
         pos_edges = get_processed_tracking_data_timestamp_edges(filename)
         recording_info['duration'] = pos_edges[1] - pos_edges[0]
         recording_info['duration (min)'] = int(round((pos_edges[1] - pos_edges[0]) / 60))
-        recording_info['time'] = load_settings(filename, '/Time')
+        recording_info['time'] = load_settings(filename, '/Time/')
     elif isinstance(selection, str) and selection == 'all':
         recording_info = load_settings(filename)
     elif isinstance(selection, dict):
@@ -1171,7 +1171,7 @@ def process_tracking_data(filename, save_to_file=False):
     # Get global clock timestamps
     OE_GC_times = load_GlobalClock_timestamps(filename)
     # Get arena_size
-    arena_size = load_settings(filename, '/General/arena_size')
+    arena_size = load_settings(filename, '/General/arena_size/')
     # Load position data for all cameras
     posdatas = []
     for cameraID in cameraIDs:
