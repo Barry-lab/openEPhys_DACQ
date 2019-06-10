@@ -1061,7 +1061,11 @@ def import_task_specific_log_parser(task_name):
     """
     if task_name == 'Pellets_and_Rep_Milk_Task': # Temporary workaround to function with older files
         task_name = 'Pellets_and_Rep_Milk'
-    return importlib.import_module('Tasks.' + task_name + '.LogParser')
+    try:
+        return importlib.import_module('Tasks.' + task_name + '.LogParser')
+    except ModuleNotFoundError:
+        print('Task {} LogParser not found. Returning None.'.format(task_name))
+        return None
 
 
 def load_task_name(filename):
@@ -1085,9 +1089,12 @@ def get_recording_log_parser(filename, final_timestamp=None):
     :rtype: LogParser class
     """
     task_log_parser = import_task_specific_log_parser(load_task_name(filename))
-    return task_log_parser.LogParser(task_settings=load_settings(filename, path='/TaskSettings/'),
-                                     final_timestamp=final_timestamp,
-                                     **load_network_events(filename))
+    if task_log_parser is None:
+        return None
+    else:
+        return task_log_parser.LogParser(task_settings=load_settings(filename, path='/TaskSettings/'),
+                                         final_timestamp=final_timestamp,
+                                         **load_network_events(filename))
 
 
 def get_channel_map(filename):
