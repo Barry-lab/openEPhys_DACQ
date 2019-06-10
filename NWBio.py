@@ -500,7 +500,6 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
         # Put waveforms and timestamps into a list of dictionaries in correct order
         data = []
         for nr_tetrode, tetrode_path in zip(tetrode_nrs, tetrode_paths):
-            print([time_string(), 'DEBUG: loading tetrode ', nr_tetrode])
             # Load waveforms and timestamps
             if no_waveforms:
                 waveforms = empty_spike_data()['waveforms']
