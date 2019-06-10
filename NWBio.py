@@ -4,12 +4,12 @@ import h5py
 import numpy as np
 import os
 import sys
-from HelperFunctions import tetrode_channels, channels_tetrode, time_string
+from .HelperFunctions import tetrode_channels, channels_tetrode, time_string
 from pprint import pprint
 from copy import copy
 import argparse
-from TrackingDataProcessing import remove_tracking_data_jumps
-from TrackingDataProcessing import iteratively_combine_multicamera_data_for_recording
+from .TrackingDataProcessing import remove_tracking_data_jumps
+from .TrackingDataProcessing import iteratively_combine_multicamera_data_for_recording
 import importlib
 
 
@@ -1058,10 +1058,10 @@ def import_task_specific_log_parser(task_name):
     :return: TaskLogParser
     :rtype: module
     """
-    if task_name == 'Pellets_and_Rep_Milk_Task': # Temporary workaround to function with older files
+    if task_name == 'Pellets_and_Rep_Milk_Task':  # Temporary workaround to function with older files
         task_name = 'Pellets_and_Rep_Milk'
     try:
-        return importlib.import_module('Tasks.' + task_name + '.LogParser')
+        return importlib.import_module('.Tasks.' + task_name + '.LogParser', package='openEPhys_DACQ')
     except ModuleNotFoundError:
         print('Task {} LogParser not found. Returning None.'.format(task_name))
         return None
