@@ -11,6 +11,7 @@ import argparse
 from .TrackingDataProcessing import remove_tracking_data_jumps
 from .TrackingDataProcessing import iteratively_combine_multicamera_data_for_recording
 import importlib
+from tqdm import tqdm
 
 
 def OpenEphys_SamplingRate():
@@ -472,7 +473,7 @@ def count_spikes(filename, tetrode_nrs, spike_name='spikes', use_idx_keep=False)
 
 
 def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=False,
-                use_badChan=False, no_waveforms=False, clustering_name=None):
+                use_badChan=False, no_waveforms=False, clustering_name=None, verbose=True):
     """
     Inputs:
         filename - pointer to NWB file to load
@@ -482,6 +483,7 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
         no_waveforms [bool]   - if True, waveforms are not loaded
         clustering_name [str] - if specified, clusterID will be loaded from:
                               electrode[nr]/clustering/clustering_name
+        verbose [bool]        - prints out loading progress bar if True (default)
     Output:
         List of dictionaries for each tetrode in correct order where:
         List is empty, if no spike data detected
@@ -499,7 +501,9 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
     with h5py.File(filename, 'r') as h5file:
         # Put waveforms and timestamps into a list of dictionaries in correct order
         data = []
-        for nr_tetrode, tetrode_path in zip(tetrode_nrs, tetrode_paths):
+        print('Loading tetrodes from {}'.format(filename))
+        iterable = zip(tetrode_nrs, tetrode_paths)
+        for nr_tetrode, tetrode_path in (tqdm(iterable) if verbose else iterable):
             # Load waveforms and timestamps
             if no_waveforms:
                 waveforms = empty_spike_data()['waveforms']
@@ -762,7 +766,7 @@ def recursively_load_dict_contents_from_group(h5file, path, list_suffix='_NWBLIS
                 if 'S100' == item.dtype:
                     tmp = list(item[()])
                     ans[str(key)] = [convert_bytes_to_string(i) for i in tmp]
-                elif item.dtype == 'bool':
+                elif item.dtype == 'bool' and item.ndim == 0:
                     ans[str(key)] = np.array(bool(item[()]))
                 else:
                     ans[str(key)] = convert_bytes_to_string(item[()])
