@@ -503,7 +503,7 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
         data = []
         print('Loading tetrodes from {}'.format(filename))
         iterable = zip(tetrode_nrs, tetrode_paths)
-        for nr_tetrode, tetrode_path in (tqdm(iterable) if verbose else iterable):
+        for nr_tetrode, tetrode_path in (tqdm(iterable, total=len(tetrode_nrs)) if verbose else iterable):
             # Load waveforms and timestamps
             if no_waveforms:
                 waveforms = empty_spike_data()['waveforms']
