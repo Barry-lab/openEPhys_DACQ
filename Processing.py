@@ -6,16 +6,19 @@ except:
 # To install matlab engine, go to folder /usr/local/MATLAB/R2017a/extern/engines/python
 # and run terminal command: sudo python setup.py install
 import argparse
-import numpy as np
+from time import sleep, time
 import os
 import tempfile
 import shutil
 import copy
-import NWBio
-from createAxonaData import createAxonaData_for_NWBfile
-import HelperFunctions as hfunct
-from KlustaKwikWrapper import applyKlustaKwik_on_spike_data_tet
-from time import sleep, time
+
+import numpy as np
+
+from openEPhys_DACQ import NWBio
+from openEPhys_DACQ.createAxonaData import createAxonaData_for_NWBfile
+from openEPhys_DACQ import HelperFunctions as hfunct
+from openEPhys_DACQ.KlustaKwikWrapper import applyKlustaKwik_on_spike_data_tet
+from openEPhys_DACQ.TrackingDataProcessing import use_binary_pos, process_tracking_data
 
 
 def lowpass_and_downsample_channel(
@@ -362,11 +365,11 @@ def get_channel_map(OpenEphysDataPaths):
 def process_position_data(OpenEphysDataPath, postprocess=False, maxjump=25):
     if NWBio.check_if_tracking_data_available(OpenEphysDataPath):
         print('Processing tracking data for: ' + OpenEphysDataPath)
-        ProcessedPos = NWBio.process_tracking_data(OpenEphysDataPath)
+        ProcessedPos = process_tracking_data(OpenEphysDataPath, verbose=True)
         NWBio.save_tracking_data(OpenEphysDataPath, ProcessedPos, ProcessedPos=True, overwrite=True)
         print('ProcessedPos saved to ' + OpenEphysDataPath)
     elif NWBio.check_if_binary_pos(OpenEphysDataPath):
-        NWBio.use_binary_pos(OpenEphysDataPath, postprocess=postprocess, maxjump=maxjump)
+        use_binary_pos(OpenEphysDataPath, postprocess=postprocess, maxjump=maxjump)
         print('Using binary position data for: ' + OpenEphysDataPath)
     else:
         print('Proceeding without position data for: ' + OpenEphysDataPath)

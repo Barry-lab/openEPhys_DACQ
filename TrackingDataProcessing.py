@@ -8,11 +8,17 @@
 
 ### By Sander Tanni, May 2017, UCL
 
-import numpy as np
-import pickle
 import os
+from multiprocessing import Process
 from itertools import combinations
+import argparse
+
+import numpy as np
 from scipy.spatial.distance import euclidean
+import h5py
+from tqdm import tqdm
+
+from openEPhys_DACQ import NWBio
 
 def combineCamerasData(cameraPos, lastCombPos, cameraIDs, CameraSettings, arena_size):
     # This outputs position data based on which camera is closest to tracking target.
@@ -108,7 +114,7 @@ def combineCamerasData(cameraPos, lastCombPos, cameraIDs, CameraSettings, arena_
 
     return combPos
 
-def estimate_OpenEphys_timestamps_for_tracking_data(OE_GC_times, RPi_GC_times, RPi_frame_times):
+def estimate_OpenEphys_timestamps_for_tracking_data(OE_GC_times, RPi_GC_times, RPi_frame_times, verbose=False):
     '''
     Estimates Open Ephys timestamps for each tracking data datapoint.
     OE_GC_times - Global Clock timestamps in Open Ephys time
@@ -127,8 +133,10 @@ def estimate_OpenEphys_timestamps_for_tracking_data(OE_GC_times, RPi_GC_times, R
         print('[ Warning ] RPi recorded more GlobalClock TTL pulses than Open Ephys.\n' + 
               'Dumping extra timestamps from the end.')
     # Find closest RPi GlobalClock timestamp to each RPi frame timestamp
+    if verbose:
+        print('Estimating camera timestamps in OpenEPhys time')
     RPtimes_idx = []
-    for RPFtime in RPi_frame_times:
+    for RPFtime in (tqdm(RPi_frame_times) if verbose else RPi_frame_times):
         RPtimes_idx.append(np.argmin(np.abs(RPi_GC_times - RPFtime)))
     # Compute difference from the GlobalClock timestamps for each frame
     RPtimes_full = RPi_GC_times[RPtimes_idx]
@@ -184,8 +192,33 @@ def remove_tracking_data_jumps(posdata, maxjump):
     return posdata
 
 
+def use_binary_pos(filename, postprocess=False, maxjump=25):
+    """
+    Copies binary position data into tracking data
+    Apply postprocessing with postprocess=True
+    """
+    recordingKey = NWBio.get_recordingKey(filename)
+    # Load timestamps and position data
+    with h5py.File(filename, 'r+') as h5file:
+        timestamps = np.array(h5file['acquisition']['timeseries'][recordingKey]['events']['binary1']['timestamps'])
+        xy = np.array(h5file['acquisition']['timeseries'][recordingKey]['events']['binary1']['data'][:,:2])
+    data = {'xy': xy, 'timestamps': timestamps}
+    # Construct data into repository familiar posdata format (single array with times in first column)
+    posdata = np.append(data['timestamps'][:,None], data['xy'].astype(np.float64), axis=1)
+    # Add NaNs for second LED if missing
+    if posdata.shape[1] < 5:
+        nanarray = np.zeros(data['xy'].shape, dtype=np.float64)
+        nanarray[:] = np.nan
+        posdata = np.append(posdata, nanarray, axis=1)
+    # Postprocess the data if requested
+    if postprocess:
+        posdata = remove_tracking_data_jumps(posdata, maxjump)
+    # Save data to ProcessedPos position in NWB file
+    NWBio.save_tracking_data(filename, posdata, ProcessedPos=True, overwrite=True)
+
+
 def iteratively_combine_multicamera_data_for_recording(
-    CameraSettings, arena_size, posdatas, OE_GC_times):
+    CameraSettings, arena_size, posdatas, OE_GC_times, verbose=False):
     """Return ProcessedPos
 
     Combines raw tracking data from multiple cameras into a single ProcessedPos array.
@@ -205,7 +238,9 @@ def iteratively_combine_multicamera_data_for_recording(
             # Compute position data timestamps in OpenEphys time
             RPi_frame_times = posdata['OnlineTrackerData_timestamps']
             RPi_GC_times = posdata['GlobalClock_timestamps']
-            RPi_frame_in_OE_times = estimate_OpenEphys_timestamps_for_tracking_data(OE_GC_times, RPi_GC_times, RPi_frame_times)
+            RPi_frame_in_OE_times = estimate_OpenEphys_timestamps_for_tracking_data(
+                OE_GC_times, RPi_GC_times, RPi_frame_times, verbose=verbose
+            )
             # Combine timestamps and position data into a single array
             posdata = np.concatenate((RPi_frame_in_OE_times.astype(np.float64)[:, None], posdata['OnlineTrackerData']), axis=1)
             posdatas[i] = posdata
@@ -216,14 +251,16 @@ def iteratively_combine_multicamera_data_for_recording(
         first_timepoints = []
         last_timepoints = []
         for posdata in posdatas:
-            first_timepoints.append(posdata[0,0])
-            last_timepoints.append(posdata[-1,0])
+            first_timepoints.append(posdata[0, 0])
+            last_timepoints.append(posdata[-1, 0])
         # Combine position data step-wise from first to last timepoint at PosDataFramesPerSecond
         # At each timepoint the closest matchin datapoints will be taken from different cameras
         timepoints = np.arange(np.array(first_timepoints).min(), np.array(last_timepoints).max(), 1.0 / PosDataFramesPerSecond)
         combPosData = [None]
         listNaNs = []
-        for npoint in range(len(timepoints)):
+        if verbose:
+            print('Combining iteratively camera data for each position timepoint')
+        for npoint in (tqdm(range(len(timepoints))) if verbose else range(len(timepoints))):
             # Find closest matchin timepoint from all RPis
             idx_tp = np.zeros(4, dtype=np.int32)
             for nRPi in range(len(posdatas)):
@@ -258,3 +295,67 @@ def iteratively_combine_multicamera_data_for_recording(
     ProcessedPos = ProcessedPos.astype(np.float64)
 
     return ProcessedPos
+
+
+def process_tracking_data(filename, save_to_file=False, verbose=False):
+    if verbose:
+        print('Processing tracking data for {}'.format(filename))
+
+    # Get CameraSettings
+    try:
+        CameraSettings = NWBio.load_settings(filename, '/CameraSettings/')
+    except KeyError as e:
+        raise Exception('Could not load CameraSettings for {}'.format(filename)
+                        + '\nLikely older version on file format.')
+    cameraIDs = sorted(CameraSettings['CameraSpecific'].keys())
+    # Get global clock timestamps
+    OE_GC_times = NWBio.load_GlobalClock_timestamps(filename)
+    # Get arena_size
+    arena_size = NWBio.load_settings(filename, '/General/arena_size/')
+    # Load position data for all cameras
+    posdatas = []
+    for cameraID in cameraIDs:
+        posdatas.append(NWBio.load_raw_tracking_data(filename, cameraID))
+    ProcessedPos = iteratively_combine_multicamera_data_for_recording(
+        CameraSettings, arena_size, posdatas, OE_GC_times, verbose=verbose)
+    if save_to_file:
+        # Save corrected data to file
+        NWBio.save_tracking_data(filename, ProcessedPos, ProcessedPos=True, overwrite=True)
+
+    return ProcessedPos
+
+
+def recompute_tracking_data_for_all_files_in_directory_tree(root_path, verbose=False):
+
+    # Commence directory walk
+    processeses = []
+    for dir_name, subdirList, fileList in os.walk(root_path):
+        for fname in fileList:
+            fpath = os.path.join(dir_name, fname)
+            if fname == 'experiment_1.nwb':
+                p = Process(target=process_tracking_data, args=(fpath,),
+                            kwargs={'save_to_file': True, 'verbose': verbose})
+                p.start()
+                processeses.append(p)
+    for p in processeses:
+        p.join()
+
+
+def main():
+    # Input argument handling and help info
+    parser = argparse.ArgumentParser(description=(
+            'Re-process tracking data with default settings in all.\n'
+            + 'files named experiment_1.nwb in all sub-folders from input directory.'))
+    parser.add_argument('folder_path', type=str, nargs=1,
+                        help='folder path from where to start directory walk')
+    parser.add_argument('--verbose', type=lambda x: eval(x) if len(x) == 4 else False, nargs=1,
+                        help='True or False (default)',
+                        default=[False])
+    args = parser.parse_args()
+
+    recompute_tracking_data_for_all_files_in_directory_tree(args.folder_path[0],
+                                                            verbose=args.verbose[0])
+
+
+if __name__ == '__main__':
+    main()

@@ -4,12 +4,10 @@ import h5py
 import numpy as np
 import os
 import sys
-from .HelperFunctions import tetrode_channels, channels_tetrode, time_string
+from .HelperFunctions import tetrode_channels, channels_tetrode
 from pprint import pprint
 from copy import copy
 import argparse
-from .TrackingDataProcessing import remove_tracking_data_jumps
-from .TrackingDataProcessing import iteratively_combine_multicamera_data_for_recording
 import importlib
 from tqdm import tqdm
 
@@ -501,7 +499,8 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
     with h5py.File(filename, 'r') as h5file:
         # Put waveforms and timestamps into a list of dictionaries in correct order
         data = []
-        print('Loading tetrodes from {}'.format(filename))
+        if verbose:
+            print('Loading tetrodes from {}'.format(filename))
         iterable = zip(tetrode_nrs, tetrode_paths)
         for nr_tetrode, tetrode_path in (tqdm(iterable, total=len(tetrode_nrs)) if verbose else iterable):
             # Load waveforms and timestamps
@@ -955,29 +954,6 @@ def check_if_binary_pos(filename):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/events/binary1/'
     return check_if_path_exists(filename, path)
 
-def use_binary_pos(filename, postprocess=False, maxjump=25):
-    """
-    Copies binary position data into tracking data
-    Apply postprocessing with postprocess=True
-    """
-    recordingKey = get_recordingKey(filename)
-    # Load timestamps and position data
-    with h5py.File(filename, 'r+') as h5file:
-        timestamps = np.array(h5file['acquisition']['timeseries'][recordingKey]['events']['binary1']['timestamps'])
-        xy = np.array(h5file['acquisition']['timeseries'][recordingKey]['events']['binary1']['data'][:,:2])
-    data = {'xy': xy, 'timestamps': timestamps}
-    # Construct data into repository familiar posdata format (single array with times in first column)
-    posdata = np.append(data['timestamps'][:,None], data['xy'].astype(np.float64), axis=1)
-    # Add NaNs for second LED if missing
-    if posdata.shape[1] < 5:
-        nanarray = np.zeros(data['xy'].shape, dtype=np.float64)
-        nanarray[:] = np.nan
-        posdata = np.append(posdata, nanarray, axis=1)
-    # Postprocess the data if requested
-    if postprocess:
-        posdata = remove_tracking_data_jumps(posdata, maxjump)
-    # Save data to ProcessedPos position in NWB file
-    save_tracking_data(filename, posdata, ProcessedPos=True, overwrite=True)
 
 def save_tetrode_idx_keep(filename, ntet, idx_keep, spike_name='spikes', overwrite=False):
     path = '/acquisition/timeseries/' + get_recordingKey(filename) + '/' + spike_name + '/' + \
@@ -1172,27 +1148,6 @@ def extract_recording_info(filename, selection='default'):
         recording_info = fill_empty_dictionary_from_source(selection, full_recording_info)
 
     return recording_info
-
-
-def process_tracking_data(filename, save_to_file=False):
-    # Get CameraSettings
-    CameraSettings = load_settings(filename, '/CameraSettings/')
-    cameraIDs = sorted(CameraSettings['CameraSpecific'].keys())
-    # Get global clock timestamps
-    OE_GC_times = load_GlobalClock_timestamps(filename)
-    # Get arena_size
-    arena_size = load_settings(filename, '/General/arena_size/')
-    # Load position data for all cameras
-    posdatas = []
-    for cameraID in cameraIDs:
-        posdatas.append(load_raw_tracking_data(filename, cameraID))
-    ProcessedPos = iteratively_combine_multicamera_data_for_recording(
-        CameraSettings, arena_size, posdatas, OE_GC_times)
-    if save_to_file:
-        # Save corrected data to file
-        save_tracking_data(filename, ProcessedPos, ProcessedPos=True, overwrite=True)
-
-    return ProcessedPos
 
 
 def display_recording_data(root_path, selection='default'):
