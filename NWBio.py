@@ -187,6 +187,18 @@ def repack_NWB_file(filename, replace_original=True, check_validity_with_downsam
         os.system('mv ' + (filename + '.repacked') + ' ' + filename)
 
 
+def repack_all_nwb_files_in_directory_tree(folder_path, replace_original=True,
+                                           check_validity_with_downsampled_data=True):
+    # Commence directory walk
+    for dir_name, subdirList, fileList in os.walk(folder_path):
+        for fname in fileList:
+            fpath = os.path.join(dir_name, fname)
+            if fname == 'experiment_1.nwb':
+                print('Repacking file {}'.format(fpath))
+                repack_NWB_file(fpath, replace_original=replace_original,
+                                check_validity_with_downsampled_data=check_validity_with_downsampled_data)
+
+
 def list_AUX_channels(filename, n_tetrodes):
     data = load_continuous(filename)
     n_channels = data['continuous'].shape[1]
