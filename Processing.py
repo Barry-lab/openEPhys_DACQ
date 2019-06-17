@@ -735,8 +735,11 @@ def process_data_tree(root_path, downsample=False, delete_raw=False, max_cluster
                              axonaDataArgs=(None, False), max_clusters=max_clusters)
                     if downsample:
                         if not NWBio.check_if_downsampled_data_available(fpath):
-                            print(hfunct.time_string() + ' Downsample ' + fpath)
-                            create_downsampled_data(fpath, n_tetrodes=32, downsample_factor=20)
+                            if NWBio.check_if_raw_data_available(fpath):
+                                print(hfunct.time_string() + ' Downsample ' + fpath)
+                                create_downsampled_data(fpath, n_tetrodes=32, downsample_factor=20)
+                            else:
+                                print('Warning', 'Neither Downsampled or Raw data is available, skipping ' + fpath)
                         else:
                             print('Warning', 'Downsampled data already available, skipping ' + fpath)
                     if delete_raw:
