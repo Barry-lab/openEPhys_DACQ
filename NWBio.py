@@ -4,7 +4,7 @@ import h5py
 import numpy as np
 import os
 import sys
-from .HelperFunctions import tetrode_channels, channels_tetrode
+from openEPhys_DACQ.HelperFunctions import tetrode_channels, channels_tetrode
 from pprint import pprint
 from copy import copy
 import argparse
