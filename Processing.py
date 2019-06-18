@@ -116,7 +116,7 @@ class ContinuousDataPreloader(object):
     """
     This class loads into memory and preprocesses continuous data.
     Data for specific channels can then be queried.
-        channels - continuous list of channels to prepare, e.g. range(0,16,1) for first 4 tetrodes
+        channels - continuous list of channels to prepare, e.g. list(range(0,16,1)) for first 4 tetrodes
     """
     def __init__(self, OpenEphysDataPath, channels):
         self.chan_nrs = list(channels)
@@ -409,9 +409,9 @@ def uncombine_spike_datas_tet_clusterIDs(clusterIDs, spike_datas_tet):
     for ndata in range(len(spike_datas_tet)):
         # Get clusterIDs for this dataset
         nspikes = sum(spike_datas_tet[ndata]['idx_keep'])
-        spike_datas_tet[ndata]['clusterIDs'] = clusterIDs[range(nspikes)]
+        spike_datas_tet[ndata]['clusterIDs'] = clusterIDs[list(range(nspikes))]
         # Remove these clusterIDs from the list
-        clusterIDs = np.delete(clusterIDs, range(nspikes), axis=0)
+        clusterIDs = np.delete(clusterIDs, list(range(nspikes)), axis=0)
 
     return spike_datas_tet
 
@@ -431,8 +431,8 @@ def split_KiloSort_output(datas_comb_clusterIDs, datas_comb_spike_indices, datas
         nspikes = sum(datas_comb_spike_indices < data_start_pos + data_shape[1])
         datas_spike_indices.append(datas_comb_spike_indices[:nspikes] - data_start_pos)
         datas_clusterIDs.append(datas_comb_clusterIDs[:nspikes])
-        datas_comb_spike_indices = np.delete(datas_comb_spike_indices, range(nspikes))
-        datas_comb_clusterIDs = np.delete(datas_comb_clusterIDs, range(nspikes))
+        datas_comb_spike_indices = np.delete(datas_comb_spike_indices, list(range(nspikes)))
+        datas_comb_clusterIDs = np.delete(datas_comb_clusterIDs, list(range(nspikes)))
         data_start_pos += data_shape[1]
 
     return datas_clusterIDs, datas_spike_indices
@@ -489,7 +489,7 @@ def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels,
                                               max_clusters=31):
     tetrode_nrs = hfunct.get_tetrode_nrs(channels)
     # Load spikes
-    spike_datas = [range(len(tetrode_nrs)) for i in range(len(OpenEphysDataPaths))]
+    spike_datas = [list(range(len(tetrode_nrs))) for i in range(len(OpenEphysDataPaths))]
     for n_dataset, OpenEphysDataPath in enumerate(OpenEphysDataPaths):
         print('Loading data for processing: ' + OpenEphysDataPath)
         spike_data = NWBio.load_spikes(OpenEphysDataPath, tetrode_nrs=tetrode_nrs, use_badChan=True)
@@ -528,7 +528,7 @@ def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels,
                                                   max_clusters=31):
     tetrode_nrs = hfunct.get_tetrode_nrs(channels)
     tooclose = 30
-    spike_datas = [range(len(tetrode_nrs)) for i in range(len(OpenEphysDataPaths))]
+    spike_datas = [list(range(len(tetrode_nrs))) for i in range(len(OpenEphysDataPaths))]
     # Preload continuous data
     preloaded_datas = []
     for OpenEphysDataPath in OpenEphysDataPaths:
@@ -585,7 +585,7 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
                                    num_clusters=31):
     KiloSortBinaryFileName = 'experiment_1.dat'
     tetrode_nrs = hfunct.get_tetrode_nrs(channels)
-    spike_datas = [range(len(tetrode_nrs)) for i in range(len(OpenEphysDataPaths))]
+    spike_datas = [list(range(len(tetrode_nrs))) for i in range(len(OpenEphysDataPaths))]
     # Preload continuous data
     preloaded_datas = []
     for OpenEphysDataPath in OpenEphysDataPaths:
@@ -808,7 +808,7 @@ if __name__ == '__main__':
             if np.mod(chan[1] - chan[0], 4) != 0:
                 raise ValueError('Channel range must cover full tetrodes')
             area_name = 'Chan' + str(args.chan[0]) + '-' + str(args.chan[1])
-            channel_map = {area_name: {'list': range(chan[0], chan[1], 1)}}
+            channel_map = {area_name: {'list': list(range(chan[0], chan[1], 1))}}
         else:
             channel_map = None
         # Rewrite default noisecut if specified
