@@ -392,7 +392,7 @@ def tetrode_channels(ntet):
 def get_tetrode_nrs(channels):
     firstTet = channels_tetrode(channels[0])
     lastTet = channels_tetrode(channels[-1])
-    tetrode_nrs = range(firstTet, lastTet + 1, 1)
+    tetrode_nrs = list(range(firstTet, lastTet + 1, 1))
 
     return tetrode_nrs
 
