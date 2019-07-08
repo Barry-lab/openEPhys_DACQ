@@ -82,7 +82,7 @@ def downsample_raw_timestamps(fpath, downsample_factor):
     return NWBio.load_raw_data_timestamps_as_array(fpath)[::downsample_factor]
 
 
-def create_downsampled_data(fpath, n_tetrodes=32, downsample_factor=20):
+def create_downsampled_data(fpath, n_tetrodes=32, downsample_factor=10):
     # Get original sampling rate and compute target rate based on downsampling factor
     original_sampling_rate = NWBio.OpenEphys_SamplingRate()
     target_sampling_rate = int(NWBio.OpenEphys_SamplingRate() / downsample_factor)
@@ -737,7 +737,7 @@ def process_data_tree(root_path, downsample=False, delete_raw=False, max_cluster
                         if not NWBio.check_if_downsampled_data_available(fpath):
                             if NWBio.check_if_raw_data_available(fpath):
                                 print(hfunct.time_string() + ' Downsample ' + fpath)
-                                create_downsampled_data(fpath, n_tetrodes=32, downsample_factor=20)
+                                create_downsampled_data(fpath, n_tetrodes=32, downsample_factor=10)
                             else:
                                 print('Warning', 'Neither Downsampled or Raw data is available, skipping ' + fpath)
                         else:
