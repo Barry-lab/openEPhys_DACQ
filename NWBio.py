@@ -683,6 +683,8 @@ def recursively_save_dict_contents_to_group(h5file, path, dic, overwrite=False, 
     Long lists of dictionaries are discouraged, as individual groups are created for each element.
     """
     for key, item in dic.items():
+        if isinstance(item, (int, float)):
+            item = np.array(item)
         if isinstance(item, (np.ndarray, np.int64, np.float64, str, bytes)):
             if overwrite:
                 if path + key in h5file:
