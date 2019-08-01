@@ -325,7 +325,7 @@ def filter_spike_data(spike_data_tet, pos_edges, threshold, noise_cut_off, verbo
         if verbose and np.sum(idx) < idx.size:
             percentage_too_big = (1 - np.sum(idx) / float(idx.size)) * 100
             print('{:.1f}% of spikes removed on tetrode {}'.format(percentage_too_big, spike_data_tet['nr_tetrode'] + 1))
-    idx_keep = idx_keep.squeeze()
+    idx_keep = idx_keep.reshape(idx_keep.size)
 
     return idx_keep
 
@@ -509,8 +509,7 @@ def process_available_spikes_using_klustakwik(OpenEphysDataPaths, channels,
             mp_KlustaKwik.add(spike_datas[0][n_tet], max_clusters=max_clusters)
             hfunct.print_progress(n_tet + 1, len(tetrode_nrs), prefix='Applying KlustaKwik:', suffix=' T: ' + str(n_tet + 1) + '/' + str(len(tetrode_nrs)))
         for n_tet in range(len(tetrode_nrs)):
-            clusterIDs = mp_KlustaKwik.get()[n_tet]
-            spike_datas[0][n_tet]['clusterIDs'] = np.int16(clusterIDs).squeeze()
+            spike_datas[0][n_tet]['clusterIDs'] = mp_KlustaKwik.get()[n_tet]
     elif len(spike_datas) > 1:
         spike_datas = process_combined_recordings_spike_datas(spike_datas, tetrode_nrs, max_clusters)
     # Overwrite clusterIDs on disk
@@ -561,7 +560,7 @@ def process_spikes_from_raw_data_using_klustakwik(OpenEphysDataPaths, channels,
         if len(spike_datas_tet) == 1:
             clusterIDs = applyKlustaKwik_on_spike_data_tet(spike_datas_tet[0], 
                                                            max_possible_clusters=max_clusters)
-            spike_datas_tet[0]['clusterIDs'] = np.int16(clusterIDs).squeeze()
+            spike_datas_tet[0]['clusterIDs'] = clusterIDs
         elif len(spike_datas_tet) > 1:
             spike_datas_tet = applyKlustaKwik_to_combined_recordings(spike_datas_tet, 
                                                                      max_clusters=max_clusters)
@@ -595,7 +594,7 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
         preloaded_datas.append(preloaded_data)
     # Start matlab engine
     eng = matlab.engine.start_matlab()
-    eng.cd('KiloSortScripts')
+    eng.cd('openEPhys_DACQ/KiloSortScripts')
     # Work through each tetrode
     for n_tet, tetrode_nr in enumerate(tetrode_nrs):
         print('Applying KiloSort to tetrode ' + str(n_tet + 1) + '/' + str(len(tetrode_nrs)))

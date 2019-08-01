@@ -520,19 +520,21 @@ def load_spikes(filename, spike_name='spikes', tetrode_nrs=None, use_idx_keep=Fa
                 waveforms = empty_spike_data()['waveforms']
             else:
                 waveforms = h5file[tetrode_path + 'data/'][()]
-            timestamps = h5file[tetrode_path + 'timestamps/'][()].squeeze()
+            timestamps = h5file[tetrode_path + 'timestamps/'][()]
+            if not isinstance(timestamps, np.ndarray):
+                timestamps = np.array([timestamps])
             if waveforms.shape[0] == 0:
                 # If no waveforms are available, enter one waveform of zeros at timepoint zero
                 waveforms = empty_spike_data()['waveforms']
                 timestamps = empty_spike_data()['timestamps']
             # Arrange waveforms, timestamps and nr_tetrode into a dictionary
-            tet_data = {'waveforms': np.int16(waveforms),
-                        'timestamps': np.float64(timestamps),
+            tet_data = {'waveforms': waveforms,
+                        'timestamps': timestamps,
                         'nr_tetrode': nr_tetrode}
             # Include idx_keep if available
             idx_keep_path = tetrode_path + 'idx_keep'
             if idx_keep_path in h5file:
-                tet_data['idx_keep'] = np.array(h5file[idx_keep_path][()]).squeeze()
+                tet_data['idx_keep'] = np.array(h5file[idx_keep_path][()])
                 if use_idx_keep:
                     # If requested, filter wavefoms and timestamps based on idx_keep
                     if np.sum(tet_data['idx_keep']) == 0:

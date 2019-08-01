@@ -525,7 +525,7 @@ def write_clusterIDs_in_CLU_format(clusterIDs, cluFileName):
         file.writelines(lines)
 
 def write_set_file(setFileName, new_values_dict):
-    sourcefile = 'SetFileBase.set'
+    sourcefile = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'SetFileBase.set')
     # Read in base .set file
     with open(sourcefile, 'rb') as file:
         lines = file.readlines()
@@ -854,7 +854,9 @@ def createAxonaData(AxonaDataPath, spike_data, data_time_edges, posdata=None,
     # Write CLU files
     for ntet in range(n_tetrodes):
         cluFileName = os.path.join(AxonaDataPath, axona_file_name + '.clu.' + str(ntet + 1))
-        write_clusterIDs_in_CLU_format(spike_data[ntet]['clusterIDs'], cluFileName)
+        if (isinstance(spike_data[ntet]['clusterIDs'], np.ndarray) 
+                and len(spike_data[ntet]['clusterIDs']) > 0):
+            write_clusterIDs_in_CLU_format(spike_data[ntet]['clusterIDs'], cluFileName)
     # Write SET file
     setFileName = os.path.join(AxonaDataPath, axona_file_name + '.set')
     duration_string = experiment_info['duration'] + (9 - len(experiment_info['duration'])) * ' '
