@@ -5,16 +5,14 @@ Note, absolute values of position data and therefore speed information will be i
 due to issue with conversion of position data. Spatial correlograms work fine though.
 '''
 
-import sys
 import os
 import numpy as np
 from scipy import interpolate
 import subprocess
-import NWBio
-import HelperFunctions as hfunct
+import openEPhys_DACQ.NWBio as NWBio
+import openEPhys_DACQ.HelperFunctions as hfunct
 from datetime import datetime
 import argparse
-from copy import copy
 
 
 def AxonaDataEEG_SamplingRate():
@@ -494,33 +492,33 @@ def write_file_in_axona_format(filename, header, header_keyorder, data):
                 stringval = header[key]
                 while len(stringval) < 10:
                     stringval += ' '
-                f.write(key + ' ' + stringval + '\r\n')
+                f.write(hfunct.b(key + ' ' + stringval + '\r\n'))
             elif 'num_pos_samples' in key:
                 # Replicate spaces following num_pos_samples in original dacq files
                 stringval = header[key]
                 while len(stringval) < 10:
                     stringval += ' '
-                f.write(key + ' ' + stringval + '\r\n')
+                f.write(hfunct.b(key + ' ' + stringval + '\r\n'))
             elif 'duration' in key:
                 # Replicate spaces following duration in original dacq files
                 stringval = header[key]
                 while len(stringval) < 10:
                     stringval += ' '
-                f.write(key + ' ' + stringval + '\r\n')
+                f.write(hfunct.b(key + ' ' + stringval + '\r\n'))
             else:
-                f.write(key + ' ' + header[key] + '\r\n')
+                f.write(hfunct.b(key + ' ' + header[key] + '\r\n'))
         # Write the start token string
-        f.write(DATA_START_TOKEN)
+        f.write(hfunct.b(DATA_START_TOKEN))
         # Write the data into the file in binary format
         data.tofile(f)
         # Write the end token string
-        f.write(DATA_END_TOKEN)
+        f.write(hfunct.b(DATA_END_TOKEN))
 
 
 def write_clusterIDs_in_CLU_format(clusterIDs, cluFileName):
-    lines = [str(max(clusterIDs)) + '\r\n']
+    lines = [hfunct.b(str(max(clusterIDs)) + '\r\n')]
     for nclu in list(clusterIDs):
-        lines.append(str(nclu) + '\r\n')
+        lines.append(hfunct.b(str(nclu) + '\r\n'))
     with open(cluFileName, 'wb') as file:
         file.writelines(lines)
 
@@ -532,8 +530,8 @@ def write_set_file(setFileName, new_values_dict):
     # Correct lines based on new_values_dict
     for key in new_values_dict.keys():
         for nl, line in enumerate(lines):
-            if (key + ' ') in line:
-                lines[nl] = key + ' ' + new_values_dict[key] + '\r\n'
+            if hfunct.b(key + ' ') in line:
+                lines[nl] = hfunct.b(key + ' ' + new_values_dict[key] + '\r\n')
                 break
     # Write the .set file with corrected lines
     with open(setFileName, 'wb') as file:

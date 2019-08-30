@@ -484,3 +484,16 @@ def clearLayout(layout, keep=0):
                 widget.deleteLater()
             else:
                 clearLayout(item.layout())
+
+
+if sys.version_info < (3,):
+
+    def b(x):
+        return x
+
+else:
+
+    import codecs
+
+    def b(x):
+        return x if isinstance(x, bytes) else codecs.latin_1_encode(x)[0]
