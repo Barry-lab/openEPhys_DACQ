@@ -713,7 +713,7 @@ def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None,
                                         show_output=axonaDataArgs[1])
 
 
-def process_data_tree(root_path, downsample=False, delete_raw=False, max_clusters=31):
+def process_data_tree(root_path, only_keep_processor=None, downsample=False, delete_raw=False, max_clusters=31):
     # Create list of dirnames skipped
     dir_names_skipped = []
     # Commence directory walk
@@ -732,6 +732,19 @@ def process_data_tree(root_path, downsample=False, delete_raw=False, max_cluster
                         main(fpath, processing_method='klustakwik',
                              noise_cut_off=1000, threshold=50, make_AxonaData=True,
                              axonaDataArgs=(None, False), max_clusters=max_clusters)
+                    if not (only_keep_processor is None):
+                        # Get all processor paths in this file
+                        processor_paths = NWBio.get_all_processor_paths(fpath)
+                        # Check that the processor key requested to keep is available
+                        if not any([path.endswith(only_keep_processor) for path in processor_paths]):
+                            raise ValueError('{} not found in {}. Can not delete others.'.format(only_keep_processor,
+                                                                                                 fpath))
+                        # Delete all other processor paths in the file, if any available
+                        if len(processor_paths) > 1:
+                            for path in processor_paths:
+                                if not path.endswith(only_keep_processor):
+                                    print('Deleting path: {}\n    in file: {}'.format(path, fpath))
+                                    NWBio.delete_path_in_file(fpath, path)
                     if downsample:
                         if not NWBio.check_if_downsampled_data_available(fpath):
                             if NWBio.check_if_raw_data_available(fpath):
@@ -782,6 +795,9 @@ if __name__ == '__main__':
                         help='(for AxonaData) to open AxonaData output folder after processing')
     parser.add_argument('--datatree', action='store_true', 
                         help='to process a whole data tree with default arguments in method process_data_tree')
+    parser.add_argument('--only_keep_processor', type=str, nargs=1,
+                        help=('All other continuous data subsets are deleted. Specify which one to keep.\n'
+                              + 'Only available with datatree option.'))
     parser.add_argument('--downsample', action='store_true', 
                         help='to downsample a whole data tree after processing. Only available with datatree option.')
     parser.add_argument('--delete_raw', action='store_true',
@@ -791,6 +807,10 @@ if __name__ == '__main__':
     OpenEphysDataPaths = args.paths
     # If datatree processing requested, use process_data_tree method
     if args.datatree:
+        if args.only_keep_processor:
+            only_keep_processor = args.only_keep_processor[0]
+        else:
+            only_keep_processor = None
         if args.downsample:
             downsample = True
         else:
@@ -799,7 +819,7 @@ if __name__ == '__main__':
             delete_raw = True
         else:
             delete_raw = False
-        process_data_tree(OpenEphysDataPaths[0], downsample, delete_raw)
+        process_data_tree(OpenEphysDataPaths[0], only_keep_processor, downsample, delete_raw)
     else:
         # Get chan input variable
         if args.chan:

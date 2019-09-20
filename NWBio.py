@@ -36,14 +36,29 @@ def get_filename(path):
         return path
 
 
+def delete_path_in_file(filename, path):
+    with h5py.File(filename, 'r+') as h5file:
+        del h5file[path]
+
+
 def get_recordingKey(filename):
     with h5py.File(filename, 'r') as h5file:
         return list(h5file['acquisition']['timeseries'].keys())[0]
 
 
-def get_processorKey(filename):
+def get_all_processorKeys(filename):
     with h5py.File(filename, 'r') as h5file:
-        return list(h5file['acquisition']['timeseries'][get_recordingKey(filename)]['continuous'].keys())[0]
+        return list(h5file['acquisition']['timeseries'][get_recordingKey(filename)]['continuous'].keys())
+
+
+def get_processorKey(filename):
+    return get_all_processorKeys(filename)[0]
+
+
+def get_all_processor_paths(filename):
+    return ['/acquisition/timeseries/' + get_recordingKey(filename)
+            + '/continuous/' + processorKey
+            for processorKey in get_all_processorKeys(filename)]
 
 
 def get_processor_path(filename):
