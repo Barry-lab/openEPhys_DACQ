@@ -1,11 +1,9 @@
 import zmq
 from threading import Lock, Thread
-import thread
 from time import sleep, time
-import sys
 import traceback
 import socket
-import cPickle as pickle
+import pickle
 
 def get_localhost_ip():
     # Get local IP address
