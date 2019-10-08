@@ -5,6 +5,7 @@ import traceback
 import socket
 import pickle
 
+
 def get_localhost_ip():
     # Get local IP address
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -14,8 +15,9 @@ def get_localhost_ip():
 
     return address
 
+
 class paired_messenger(object):
-    '''
+    """
     This class can exchange messages with another pair_messenger instance running on the same
         or different machine, pointed to the same IP address.
     Bind one of the instances to address='localhost' 
@@ -26,14 +28,16 @@ class paired_messenger(object):
     NOTE! On slower systems, the initialization process may take some time.
         If messages are expected to be received or sent immediately, a delay may be necessary
         after instantiation of this object. Depending on system, 0.25 to 1.0 seconds.
-    '''
+    """
     def __init__(self, address='localhost', port=5884, timeout=0.5, printMessages=False):
+
         # Identify if client or server instance
         if address == 'localhost':
             self.localhost = True
             address = get_localhost_ip()
         else:
             self.localhost = False
+
         # Connect to an address
         self.url = "tcp://%s:%d" % (address, port)
         context = zmq.Context()
@@ -43,15 +47,20 @@ class paired_messenger(object):
         else:
             self.socket.connect(self.url)
         self.socket.RCVTIMEO = int(timeout * 1000)  # in milliseconds
+
         # Set callbacks list
         self.callbacks = []
+        
         if printMessages:
-            self.add_callback(self._printMessage)
+            self.add_callback(lambda msg: print(msg))
+
         # Add verification callback
         self.verification_dict = {}
         self.add_callback(self._verification_check)
+
         # Wait a moment to allow connection to be established
         sleep(2)
+        
         # Start listening thread
         self.lock = Lock()
         self.is_running = True
@@ -59,16 +68,18 @@ class paired_messenger(object):
         self.thread.start()
 
     def sendMessage(self, message, verify=False):
-        '''
-        message - str - sent to paired device
-        verify - str - if set, sendMessage() waits until such message is received back
-        '''
-        if not (verify is False):
-            self.verification_dict[verify] = False
+        """Sends message to the paired messenger.
+
+        :param bytes message: sent to paired device
+        :param bool verify: if True, sendMessage() waits until such message is received back
+        """
+        if verify:
+            self.verification_dict[message] = False
         self.socket.send(message)
-        if not (verify is False):
-            while not self.verification_dict[verify]:
+        if verify:
+            while not self.verification_dict[message]:
                 sleep(0.05)
+            del self.verification_dict[message]
 
     def close(self):
 
@@ -83,14 +94,14 @@ class paired_messenger(object):
             self.socket.disconnect(self.url)
 
     def add_callback(self, cb):
-        '''
+        """
         The callback function is started in a new thread if a message is received.
         To pass arguments with callback function, input a list or a tuple with
             callback function as the first element and the rest as individual arguments.
         The callback function should be expecting a message input as a string. If additional
             arguments were passed using the list or tuple method, these arguments should be
             expected by the function in the same order after the message string.
-        '''
+        """
         self.callbacks.append(cb)
 
     def _send_message_to_callbacks(self, msg):
@@ -102,10 +113,10 @@ class paired_messenger(object):
                 Thread(target=cb, args=(msg,)).start()
 
     def _process_message(self, msg):
-        '''
+        """
         Called for each received message.
         Execution blocks reception of new messages. Threading recommended.
-        '''
+        """
         self._send_message_to_callbacks(msg)
 
     def _run(self):
@@ -128,9 +139,6 @@ class paired_messenger(object):
 
             sleep(.01)
 
-    def _printMessage(self, msg):
-        print(msg)
-
     def _verification_check(self, msg):
         if msg in self.verification_dict.keys():
             self.verification_dict[msg] = True
@@ -139,12 +147,13 @@ class paired_messenger(object):
 def decode_pickled_message(msg):
     return pickle.loads(msg)
 
+
 def encode_pickled_message(data):
     return pickle.dumps(data)
 
 
 class remote_controlled_object(paired_messenger):
-    '''
+    """
     When instantiated with an object this class executes any incoming commands on that object.
     The incoming commands are expected to be sent using remote_object_controller.
 
@@ -155,26 +164,27 @@ class remote_controlled_object(paired_messenger):
 
     Sending a 'close' command will call close command on the object,
     return value if requested and then closes the remote_controlled_object instance.
-    '''
+    """
     def __init__(self, obj, *args, **kwargs):
-        '''
+        """
         remote_controlled_object must be instantiated with the object as first input argument.
 
         See paired_messenger for other input arguments.
-        '''
+        """
         self.obj = obj
         super(remote_controlled_object, self).__init__(*args, **kwargs)
-        self.sendMessage('handshake')
+        self.sendMessage('handshake'.encode())
 
     @staticmethod
     def _parse_message(msg):
         # Extract command to call from message string
-        command, msg = msg.split(' ', 1)
+        command, msg = msg.split(' '.encode(), 1)
+        command = command.decode()
         # Extract return_value request from remaining message string
-        return_value, msg = msg.split(' ', 1)
-        if return_value == 'True':
+        return_value, msg = msg.split(' '.encode(), 1)
+        if return_value == 'True'.encode():
             return_value = True
-        elif return_value == 'False':
+        elif return_value == 'False'.encode():
             return_value = False
         else:
             raise ValueError('return_value was not as expected.')
@@ -193,20 +203,20 @@ class remote_controlled_object(paired_messenger):
             self._execute_command_with_return(command, args, kwargs)
         else:
             self._execute_command(command, args, kwargs)
-        # If close commmand sent, this remote_controlled_object is also closed.
+        # If close command sent, this remote_controlled_object is also closed.
         if command == 'close':
             self.close()
 
     def _execute_command(self, command, args, kwargs):
-        '''
+        """
         Parses incoming ZMQ message for function name, input arguments and calls that function.
-        '''
+        """
         getattr(self.obj, command)(*args, **kwargs)
     
     def _execute_command_with_return(self, command, args, kwargs):
-        '''
+        """
         Parses incoming ZMQ message for function name, input arguments and calls that function.
-        '''
+        """
         return_value = getattr(self.obj, command)(*args, **kwargs)
         encoded_return_value = encode_pickled_message(return_value)
         self.sendMessage(encoded_return_value)
@@ -216,7 +226,7 @@ class remote_controlled_object(paired_messenger):
 
 
 class remote_controlled_class(remote_controlled_object):
-    '''
+    """
     Allows using a class with remote_controlled_object before it is instantiated.
 
     Note! remote_object_controller must be instantiated pair() method called before
@@ -230,14 +240,14 @@ class remote_controlled_class(remote_controlled_object):
     must be called to instantiate the class before sendCommand method can be used.
 
     Once the class has been instantiated, remote_controlled_class behaves as remote_controlled_object.
-    '''
+    """
     def __init__(self, C, block, *args, **kwargs):
-        '''
+        """
         C - class to be used
         block - bool - if True, remote_controlled_class blocks until 'close' command is received.
 
         See paired_messenger for other input arguments.
-        '''
+        """
         self.C = C
         self.class_instantiated = False
         self.keep_class_alive = True
@@ -249,21 +259,21 @@ class remote_controlled_class(remote_controlled_object):
     def _init_object(self, args, kwargs):
         self.obj = self.C(*args, **kwargs)
         self.class_instantiated = True
-        self.sendMessage('init_confirmation')
+        self.sendMessage('init_confirmation'.encode())
 
     def _process_command(self, msg):
         if self.class_instantiated:
             super(remote_controlled_class, self)._process_command(msg)
         else:
-            command, return_value, args, kwargs = remote_controlled_object._parse_message(msg)
+            command, return_value, args, kwargs = self._parse_message(msg)
             if command == '__init__':
                 self._init_object(args, kwargs)
 
     def isAlive(self):
-        '''
+        """
         Returns boolean whether the remote_controlled_class is still alive.
         Returns False after close command has been received and instantiated class has been closed.
-        '''
+        """
         return self.keep_class_alive
 
     def close(self, *args, **kwargs):
@@ -272,7 +282,7 @@ class remote_controlled_class(remote_controlled_object):
 
 
 class remote_object_controller(paired_messenger):
-    '''
+    """
     Provides access to an object on a remote device via ZMQ.
 
     Can be paired with either remote_controlled_object or remote_controlled_class.
@@ -284,22 +294,22 @@ class remote_object_controller(paired_messenger):
     to use other methods.
 
     See sendCommand() method for how to send commands and receive return values.
-    '''
+    """
     def __init__(self, *args, **kwargs):
-        '''
+        """
         See paired_messenger for other input arguments.
-        '''
+        """
         self.wait_for_handshake = True
         self.new_return_message = False
         self.wait_for_init_confirmation = False
         super(remote_object_controller, self).__init__(*args, **kwargs)
 
     def pair(self, timeout=0):
-        '''
+        """
         Returns True if successfully paired. Returns False if timeout reached.
 
         timeout - float - in seconds. If timeout=0 (default), pair() waits indefinitely.
-        '''
+        """
         wait_start_time = time()
         while self.wait_for_handshake:
             sleep(0.1)
@@ -315,43 +325,43 @@ class remote_object_controller(paired_messenger):
         return encode_pickled_message(input_arguments)
 
     def sendInitCommand(self, timeout, *args, **kwargs):
-        '''
+        """
         Returns True if class successfully instantiated. Returns False if timeout reached.
 
         timeout - float - in seconds. If timeout=0 (default), sendInitCommand() waits indefinitely.
 
         Any following arguments are passed into the class __init__().
-        '''
+        """
         self.wait_for_init_confirmation = True
         encoded_input_arguments = remote_object_controller.encode_input_arguments(args, kwargs)
-        self.sendMessage('__init__' + ' ' + 'True' + ' ' + encoded_input_arguments)
+        self.sendMessage('__init__'.encode() + ' '.encode() + 'True'.encode() + ' '.encode() + encoded_input_arguments)
         wait_start_time = time()
         while self.wait_for_init_confirmation:
             sleep(0.1)
-            if timeout > 0 and (time() - wait_start_time) > timeout:
+            if 0 < timeout < (time() - wait_start_time):
                 break
         
         return not self.wait_for_init_confirmation
 
     def sendCommand(self, command, return_value, *args, **kwargs):
-        '''
+        """
         command - str - Name of the command to call on the object controlled via ZMQ
         return_value - bool - Whether to return value from command call.
                               return_value=True blocks until return value is received.
         Any additional input arguments are used as input arguments in command call on controlled object.
         These additional input arguments are pickled, compressed on this end
         and uncompressed, unpickled on the paired device.
-        '''
+        """
         encoded_input_arguments = remote_object_controller.encode_input_arguments(args, kwargs)
-        self.sendMessage(command + ' ' + str(return_value) + ' ' + encoded_input_arguments)
+        self.sendMessage(command.encode() + ' ' + str(return_value).encode() + ' ' + encoded_input_arguments)
         if return_value:
             return self._wait_for_return_value()
 
     def _wait_for_return_value(self):
-        '''
+        """
         Blocks until return value is available.
         Returns the return value.
-        '''
+        """
         while not self.new_return_message:
             sleep(0.1)
         return_value = decode_pickled_message(self.return_message)
@@ -360,27 +370,27 @@ class remote_object_controller(paired_messenger):
         return return_value
 
     def _process_return_message(self, msg):
-        assert not self.new_return_message # Assuming return values are always processed before next arrives.
+        assert not self.new_return_message  # Assuming return values are always processed before next arrives.
         self.return_message = msg
         self.new_return_message = True
 
     def _process_message(self, msg):
         if self.wait_for_handshake:
-            if msg == 'handshake':
+            if msg == 'handshake'.encode():
                 self.wait_for_handshake = False
         elif self.wait_for_init_confirmation:
-            if msg == 'init_confirmation':
+            if msg == 'init_confirmation'.encode():
                 self.wait_for_init_confirmation = False
         else:
             Thread(target=self._process_return_message, args=(msg,)).start()
 
 
 class PublishToOpenEphys(object):
-    '''
+    """
     This class allows sending messages to Open Ephys GUI over ZMQ.
     When created with defulat inputs, it will connect to Open Ephys GUI.
     Use sendMessage method to send messages to Open Ephys GUI
-    '''
+    """
     def __init__(self, address='localhost', port=5556):
         # Set up ZMQ connection to OpenEphysGUI
         url = "tcp://%s:%d" % (address, port)
@@ -389,18 +399,23 @@ class PublishToOpenEphys(object):
         self.socket.connect(url)
 
     def sendMessage(self, message):
-        self.socket.send(message)
-        dump_response = self.socket.recv()
+        """Encodes message string into bytes and sends to OpenEphysGUI
+
+        :param str message:
+        :return:
+        """
+        self.socket.send(message.encode())
+        _ = self.socket.recv()
 
     def close(self):
         self.socket.close()
 
 
 def SendOpenEphysSingleMessage(message):
-    '''
+    """
     This function creates ZMQ connection with Open Ephys GUI just to send one message.
     This is sufficiently fast for single messages that are not very time sensitive.
-    '''
+    """
     messenger = PublishToOpenEphys()
     messenger.sendMessage(message)
     messenger.close()
@@ -522,7 +537,7 @@ class SubscribeToOpenEphys(object):
     def _send_message_to_callbacks(self, msg):
 
         for cb in self.callbacks:
-            thread.start_new_thread(cb, (msg,))
+            Thread(target=cb, args=(msg,)).start()
 
     def _run(self):
 
@@ -543,7 +558,7 @@ class SubscribeToOpenEphys(object):
                     self.messages.append(msg)
                     self.lock.release()
 
-                self._send_message_to_callbacks(msg)
+                self._send_message_to_callbacks(msg.decode())
 
             except zmq.ZMQError:
                 pass
@@ -554,9 +569,9 @@ def SubscribeToOpenEphys_message_callback(msg):
     print("received event:", msg)
 
 def SubscribeToOpenEphys_run_example(args):
-    '''
+    """
     An example script for using SubscribeToOpenEphys
-    '''
+    """
 
     # parse arguments
     address = 'localhost'  # address of system on which OE is running

@@ -699,6 +699,10 @@ def recursively_save_dict_contents_to_group(h5file, path, dic, overwrite=False, 
     Also works with lists dictionaries as part of the hierachy.
     Long lists of dictionaries are discouraged, as individual groups are created for each element.
     """
+    if len(dic) == 0:
+        if path in h5file:
+            del h5file[path]
+        h5file.create_group(path)
     for key, item in dic.items():
         if isinstance(item, (int, float)):
             item = np.array(item)
@@ -724,7 +728,7 @@ def recursively_save_dict_contents_to_group(h5file, path, dic, overwrite=False, 
                 save_list_of_dicts_to_group(h5file, path + key + list_suffix + '/', item, 
                                             overwrite=overwrite, list_suffix=list_suffix)
         elif item is None:
-            pass
+            h5file.create_group(path + key)
         else:
             raise ValueError('Cannot save %s type'%type(item) + ' from ' + path + key)
 
