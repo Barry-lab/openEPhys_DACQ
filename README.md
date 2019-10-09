@@ -1,4 +1,7 @@
-# openEPhys_DACQ
-This repository holds the necessary code and instructions on how to use the OpenEphysGUI based electrophysiological recording system along with LED tracking system (using Raspberry Pis) on a Linux PC.
+# Welcome to openEPhys_DACQ repository.
 
-There is extensive documentation in the README folder. You can download it and view it by opening in a web browser the file ``/README/_build/html/index.html``. This documentation explains everything from installing the Operating System on the Recording PC and adding LEDs to the headstages to how to detect waveforms in the recorded signal.
+This recording system works in synchrony with [Open Ephys GUI](https://github.com/open-ephys/plugin-GUI) and allows acquisition of video data from multiple cameras together with online tracking.
+
+The package also includes a behavioural task for study of spatial navigation. The behavioural task involves physical actuators (reward modules) which can be built based on instructions in the documentation.
+
+Please follow this link for [documentation](https://barry-lab.github.io/openEPhys_DACQ/index.html)
