@@ -3,62 +3,72 @@
 import pygame
 import numpy as np
 from threading import Lock, Thread
-from RPiInterface import RewardControl
-from time import asctime, time, sleep
+from openEPhys_DACQ.RPiInterface import RewardControl
+from time import time, sleep
 from scipy.spatial.distance import euclidean
 import random
-from PyQt4 import QtGui, QtCore
-from copy import copy, deepcopy
-from audioSignalGenerator import createAudioSignal
-from sshScripts import ssh
-from HelperFunctions import show_message, clearLayout
+from PyQt5 import QtWidgets, QtGui
 import warnings
+from copy import copy, deepcopy
+import multiprocessing
+
+from openEPhys_DACQ.audioSignalGenerator import createAudioSignal
+from openEPhys_DACQ.sshScripts import ssh
+from openEPhys_DACQ.HelperFunctions import show_message
 
 
 def init_pygame():
     pygame.mixer.pre_init(48000, -16, 2)  # This is necessary for sound to work
     pygame.init()
 
+
 def close_pygame():
     pygame.mixer.quit()
     pygame.quit()
 
-def activateFEEDER(FEEDER_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
+
+def activate_feeder(feeder_type, RPiIPBox, RPiUsernameBox, RPiPasswordBox, quantityBox):
     ssh_connection = ssh(str(RPiIPBox.text()), str(RPiUsernameBox.text()), str(RPiPasswordBox.text()))
-    if FEEDER_type == 'milk':
+    if feeder_type == 'milk':
         command = 'python milkFeederController.py --openValve ' + str(float(str(quantityBox.text())))
-    elif FEEDER_type == 'pellet':
+    elif feeder_type == 'pellet':
         command = 'python pelletFeederController.py --releasePellet ' + str(int(str(quantityBox.text())))
+    else:
+        raise Exception('Unknown feeder_type {}'.format(feeder_type))
     ssh_connection.sendCommand(command)
     ssh_connection.disconnect()
 
-def setDoubleHBoxStretch(hbox):
-    hbox.setStretch(0,2)
-    hbox.setStretch(1,1)
+
+def set_double_h_box_stretch(hbox):
+    hbox.setStretch(0, 2)
+    hbox.setStretch(1, 1)
 
     return hbox
 
-def setTripleHBoxStretch(hbox):
-    hbox.setStretch(0,3)
-    hbox.setStretch(1,1)
-    hbox.setStretch(2,1)
+
+def set_triple_h_box_stretch(hbox):
+    hbox.setStretch(0, 3)
+    hbox.setStretch(1, 1)
+    hbox.setStretch(2, 1)
 
     return hbox
 
-def setQuadrupleHBoxStretch(hbox):
-    hbox.setStretch(0,2)
-    hbox.setStretch(1,1)
-    hbox.setStretch(2,1)
-    hbox.setStretch(3,1)
+
+def set_quadruple_h_box_stretch(hbox):
+    hbox.setStretch(0, 2)
+    hbox.setStretch(1, 1)
+    hbox.setStretch(2, 1)
+    hbox.setStretch(3, 1)
 
     return hbox
 
-def playSignal(frequency, frequency_band_width, modulation_frequency, duration=2):
-    if type(frequency) == QtGui.QLineEdit:
+
+def play_audio_signal(frequency, frequency_band_width, modulation_frequency, duration=2):
+    if type(frequency) == QtWidgets.QLineEdit:
         frequency = np.int64(float(str(frequency.text())))
-    if type(frequency_band_width) == QtGui.QLineEdit:
+    if type(frequency_band_width) == QtWidgets.QLineEdit:
         frequency_band_width = np.int64(float(str(frequency_band_width.text())))
-    if type(modulation_frequency) == QtGui.QLineEdit:
+    if type(modulation_frequency) == QtWidgets.QLineEdit:
         modulation_frequency = np.int64(float(str(modulation_frequency.text())))
     # Initialize pygame for playing sound
     init_pygame()
@@ -69,12 +79,14 @@ def playSignal(frequency, frequency_band_width, modulation_frequency, duration=2
     sleep(duration)
     close_pygame()
 
+
 def distance_from_segment(point, seg_p1, seg_p2):
-    '''
+    """
     Computes distance of numpy array point from a segment defined by two numpy array points
     seg_p1 and seg_p2.
-    '''
+    """
     return np.cross(seg_p2 - seg_p1, point - seg_p1) / np.linalg.norm(seg_p2 - seg_p1)
+
 
 def distance_from_boundaries(point, arena_size):
     # North wall
@@ -104,16 +116,15 @@ def distance_from_boundaries(point, arena_size):
 class SettingsGUI(object):
 
     def __init__(self, main_settings_layout, further_settings_layout, arena_size):
-        '''
-        main_settings_layout    - QtGui VBox Layout
-        further_settings_layout - QtGui HBox Layout
+        """
+        main_settings_layout    - QtWidgets VBox Layout
+        further_settings_layout - QtWidgets HBox Layout
         arena_size              - list or numpy array of x and y size of the arena
-        '''
+        """
 
         # Create empty settings variables
         self.arena_size = arena_size
-        self.settings = {}
-        self.settings['FEEDERs'] = {'pellet': [], 'milk': []}
+        self.settings = {'FEEDERs': {'pellet': [], 'milk': []}}
         # Create GUI size requirements
         self.min_size = [0, 0]
         # Create empty button groups dictionary
@@ -127,60 +138,60 @@ class SettingsGUI(object):
         self.min_size[1] = max(self.min_size[1], frame.minimumHeight())
  
     def populate_main_settings_layout(self, main_settings_layout):
-        vbox = QtGui.QVBoxLayout()
+        vbox = QtWidgets.QVBoxLayout()
         font = QtGui.QFont('SansSerif', 15)
-        string = QtGui.QLabel('General Settings')
+        string = QtWidgets.QLabel('General Settings')
         string.setFont(font)
         string.setMaximumHeight(40)
         vbox.addWidget(string)
         # Specify which game is active Pellet, Milk or both
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Games active'))
-        self.settings['games_active'] = {'pellet': QtGui.QCheckBox('Pellet'), 
-                                         'milk': QtGui.QCheckBox('Milk')}
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Games active'))
+        self.settings['games_active'] = {'pellet': QtWidgets.QCheckBox('Pellet'),
+                                         'milk': QtWidgets.QCheckBox('Milk')}
         self.settings['games_active']['pellet'].setChecked(True)
         self.settings['games_active']['milk'].setChecked(True)
         hbox.addWidget(self.settings['games_active']['pellet'])
         hbox.addWidget(self.settings['games_active']['milk'])
-        vbox.addLayout(setTripleHBoxStretch(hbox))
+        vbox.addLayout(set_triple_h_box_stretch(hbox))
         # Add option to specify how far into past to check travel distance
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Last travel time (s)'))
-        self.settings['LastTravelTime'] = QtGui.QLineEdit('2')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Last travel time (s)'))
+        self.settings['LastTravelTime'] = QtWidgets.QLineEdit('2')
         hbox.addWidget(self.settings['LastTravelTime'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        vbox.addLayout(set_double_h_box_stretch(hbox))
         # Add smoothing factor for calculating last travel distance
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Last travel smoothing (dp)'))
-        self.settings['LastTravelSmooth'] = QtGui.QLineEdit('3')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Last travel smoothing (dp)'))
+        self.settings['LastTravelSmooth'] = QtWidgets.QLineEdit('3')
         hbox.addWidget(self.settings['LastTravelSmooth'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        vbox.addLayout(set_double_h_box_stretch(hbox))
         # Add minimum distance for last travel
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Last travel min distance (cm)'))
-        self.settings['LastTravelDist'] = QtGui.QLineEdit('50')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Last travel min distance (cm)'))
+        self.settings['LastTravelDist'] = QtWidgets.QLineEdit('50')
         hbox.addWidget(self.settings['LastTravelDist'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        vbox.addLayout(set_double_h_box_stretch(hbox))
         # Specify pellet vs milk reward ratio
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Pellet vs Milk Reward ratio'))
-        self.settings['PelletMilkRatio'] = QtGui.QLineEdit('0.25')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Pellet vs Milk Reward ratio'))
+        self.settings['PelletMilkRatio'] = QtWidgets.QLineEdit('0.25')
         hbox.addWidget(self.settings['PelletMilkRatio'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        vbox.addLayout(set_double_h_box_stretch(hbox))
         # Specify raspberry pi username
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Raspberry Pi usernames'))
-        self.settings['Username'] = QtGui.QLineEdit('pi')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Raspberry Pi usernames'))
+        self.settings['Username'] = QtWidgets.QLineEdit('pi')
         hbox.addWidget(self.settings['Username'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        vbox.addLayout(set_double_h_box_stretch(hbox))
         # Specify raspberry pi password
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Raspberry Pi passwords'))
-        self.settings['Password'] = QtGui.QLineEdit('raspberry')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Raspberry Pi passwords'))
+        self.settings['Password'] = QtWidgets.QLineEdit('raspberry')
         hbox.addWidget(self.settings['Password'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        vbox.addLayout(set_double_h_box_stretch(hbox))
         # Put these settings into a frame
-        frame = QtGui.QFrame()
+        frame = QtWidgets.QFrame()
         frame.setLayout(vbox)
         frame.setFrameStyle(3)
         # Set minimum size for frame
@@ -199,59 +210,59 @@ class SettingsGUI(object):
 
     def create_pellet_task_settings(self):
         # Create Pellet task specific menu items
-        vbox = QtGui.QVBoxLayout()
+        vbox = QtWidgets.QVBoxLayout()
         font = QtGui.QFont('SansSerif', 15)
-        string = QtGui.QLabel('Pellet Game Settings')
+        string = QtWidgets.QLabel('Pellet Game Settings')
         string.setFont(font)
         vbox.addWidget(string)
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Initial Pellets'))
-        self.settings['InitPellets'] = QtGui.QLineEdit('5')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Initial Pellets'))
+        self.settings['InitPellets'] = QtWidgets.QLineEdit('5')
         hbox.addWidget(self.settings['InitPellets'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Reward Quantity'))
-        self.settings['PelletQuantity'] = QtGui.QLineEdit('1')
+        vbox.addLayout(set_double_h_box_stretch(hbox))
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Reward Quantity'))
+        self.settings['PelletQuantity'] = QtWidgets.QLineEdit('1')
         hbox.addWidget(self.settings['PelletQuantity'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Min Separation (s)'))
-        self.settings['PelletRewardMinSeparationMean'] = QtGui.QLineEdit('10')
+        vbox.addLayout(set_double_h_box_stretch(hbox))
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Min Separation (s)'))
+        self.settings['PelletRewardMinSeparationMean'] = QtWidgets.QLineEdit('10')
         hbox.addWidget(self.settings['PelletRewardMinSeparationMean'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Min Separation variance (%)'))
-        self.settings['PelletRewardMinSeparationVariance'] = QtGui.QLineEdit('0.5')
+        vbox.addLayout(set_double_h_box_stretch(hbox))
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Min Separation variance (%)'))
+        self.settings['PelletRewardMinSeparationVariance'] = QtWidgets.QLineEdit('0.5')
         hbox.addWidget(self.settings['PelletRewardMinSeparationVariance'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Chewing Target count'))
-        self.settings['Chewing_Target'] = QtGui.QLineEdit('4')
+        vbox.addLayout(set_double_h_box_stretch(hbox))
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Chewing Target count'))
+        self.settings['Chewing_Target'] = QtWidgets.QLineEdit('4')
         hbox.addWidget(self.settings['Chewing_Target'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Inactivity pellet time (s)'))
-        self.settings['MaxInactivityDuration'] = QtGui.QLineEdit('90')
+        vbox.addLayout(set_double_h_box_stretch(hbox))
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Inactivity pellet time (s)'))
+        self.settings['MaxInactivityDuration'] = QtWidgets.QLineEdit('90')
         hbox.addWidget(self.settings['MaxInactivityDuration'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        vbox.addLayout(set_double_h_box_stretch(hbox))
         # Specify chewing signal TTL channel
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Chewing TTL channel'))
-        self.settings['Chewing_TTLchan'] = QtGui.QLineEdit('5')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Chewing TTL channel'))
+        self.settings['Chewing_TTLchan'] = QtWidgets.QLineEdit('5')
         hbox.addWidget(self.settings['Chewing_TTLchan'])
-        vbox.addLayout(setDoubleHBoxStretch(hbox))
+        vbox.addLayout(set_double_h_box_stretch(hbox))
         # Create Pellet FEEDER items
-        scroll_widget = QtGui.QWidget()
-        self.pellet_feeder_settings_layout = QtGui.QVBoxLayout(scroll_widget)
-        self.addPelletFeederButton = QtGui.QPushButton('Add FEEDER')
+        scroll_widget = QtWidgets.QWidget()
+        self.pellet_feeder_settings_layout = QtWidgets.QVBoxLayout(scroll_widget)
+        self.addPelletFeederButton = QtWidgets.QPushButton('Add FEEDER')
         self.addPelletFeederButton.clicked.connect(lambda: self.addFeedersToList('pellet'))
         self.pellet_feeder_settings_layout.addWidget(self.addPelletFeederButton)
-        scroll = QtGui.QScrollArea()
+        scroll = QtWidgets.QScrollArea()
         scroll.setWidget(scroll_widget)
         scroll.setWidgetResizable(True)
         vbox.addWidget(scroll)
         # Add Pellet Task settings to task specific settings layout
-        frame = QtGui.QFrame()
+        frame = QtWidgets.QFrame()
         frame.setLayout(vbox)
         frame.setFrameStyle(3)
         # Set minimum size for frame
@@ -260,171 +271,171 @@ class SettingsGUI(object):
         return frame
 
     def create_milk_task_settings(self):
-        vbox = QtGui.QVBoxLayout()
+        vbox = QtWidgets.QVBoxLayout()
         # Create Milk task label
         font = QtGui.QFont('SansSerif', 15)
-        string = QtGui.QLabel('Milk Game Settings')
+        string = QtWidgets.QLabel('Milk Game Settings')
         string.setFont(font)
         vbox.addWidget(string)
         # Create top grid layout
-        grid = QtGui.QGridLayout()
+        grid = QtWidgets.QGridLayout()
         vbox.addLayout(grid)
         # Add initiation milk amount
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Initial Milk'))
-        self.settings['InitMilk'] = QtGui.QLineEdit('2')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Initial Milk'))
+        self.settings['InitMilk'] = QtWidgets.QLineEdit('2')
         hbox.addWidget(self.settings['InitMilk'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 0, 0)
+        grid.addLayout(set_double_h_box_stretch(hbox), 0, 0)
         # Specify audio signal mode
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Audio Signal Mode'))
-        self.settings['AudioSignalMode'] = {'ambient': QtGui.QRadioButton('Ambient'), 
-                                            'localised': QtGui.QRadioButton('Localised')}
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Audio Signal Mode'))
+        self.settings['AudioSignalMode'] = {'ambient': QtWidgets.QRadioButton('Ambient'),
+                                            'localised': QtWidgets.QRadioButton('Localised')}
         self.settings['AudioSignalMode']['ambient'].setChecked(True)
         hbox.addWidget(self.settings['AudioSignalMode']['ambient'])
         hbox.addWidget(self.settings['AudioSignalMode']['localised'])
-        self.button_groups['AudioSignalMode'] = QtGui.QButtonGroup()
+        self.button_groups['AudioSignalMode'] = QtWidgets.QButtonGroup()
         self.button_groups['AudioSignalMode'].addButton(self.settings['AudioSignalMode']['ambient'])
         self.button_groups['AudioSignalMode'].addButton(self.settings['AudioSignalMode']['localised'])
-        grid.addLayout(setTripleHBoxStretch(hbox), 1, 0)
+        grid.addLayout(set_triple_h_box_stretch(hbox), 1, 0)
         # Add Milk reward quantity
         self.settings['MilkQuantity'] = {}
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Reward Quantity'))
-        sub_hbox = QtGui.QHBoxLayout()
-        sub_hbox.addWidget(QtGui.QLabel('present'))
-        self.settings['MilkQuantity']['presentation'] = QtGui.QLineEdit('1')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Reward Quantity'))
+        sub_hbox = QtWidgets.QHBoxLayout()
+        sub_hbox.addWidget(QtWidgets.QLabel('present'))
+        self.settings['MilkQuantity']['presentation'] = QtWidgets.QLineEdit('1')
         sub_hbox.addWidget(self.settings['MilkQuantity']['presentation'])
-        hbox.addLayout(setDoubleHBoxStretch(sub_hbox))
-        sub_hbox = QtGui.QHBoxLayout()
-        sub_hbox.addWidget(QtGui.QLabel('repeat'))
-        self.settings['MilkQuantity']['repeat'] = QtGui.QLineEdit('1')
+        hbox.addLayout(set_double_h_box_stretch(sub_hbox))
+        sub_hbox = QtWidgets.QHBoxLayout()
+        sub_hbox.addWidget(QtWidgets.QLabel('repeat'))
+        self.settings['MilkQuantity']['repeat'] = QtWidgets.QLineEdit('1')
         sub_hbox.addWidget(self.settings['MilkQuantity']['repeat'])
-        hbox.addLayout(setDoubleHBoxStretch(sub_hbox))
-        grid.addLayout(setTripleHBoxStretch(hbox), 2, 0)
+        hbox.addLayout(set_double_h_box_stretch(sub_hbox))
+        grid.addLayout(set_triple_h_box_stretch(hbox), 2, 0)
         # Specify light signal pins to use, separated by comma
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Light Signal Pin(s)'))
-        self.settings['lightSignalPins'] = QtGui.QLineEdit('1')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Light Signal Pin(s)'))
+        self.settings['lightSignalPins'] = QtWidgets.QLineEdit('1')
         hbox.addWidget(self.settings['lightSignalPins'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 3, 0)
+        grid.addLayout(set_double_h_box_stretch(hbox), 3, 0)
         # Specify light signal settings regarding repeating trials
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Light Signal On'))
-        self.settings['LightSignalOnRepetitions'] = {'presentation': QtGui.QCheckBox('present'), 
-                                                     'repeat': QtGui.QCheckBox('repeat')}
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Light Signal On'))
+        self.settings['LightSignalOnRepetitions'] = {'presentation': QtWidgets.QCheckBox('present'),
+                                                     'repeat': QtWidgets.QCheckBox('repeat')}
         self.settings['LightSignalOnRepetitions']['presentation'].setChecked(True)
         hbox.addWidget(self.settings['LightSignalOnRepetitions']['presentation'])
         hbox.addWidget(self.settings['LightSignalOnRepetitions']['repeat'])
-        grid.addLayout(setTripleHBoxStretch(hbox), 4, 0)
+        grid.addLayout(set_triple_h_box_stretch(hbox), 4, 0)
         # Specify probability that light signal does turn on
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Light Signal probability (0 - 1)'))
-        self.settings['lightSignalProbability'] = QtGui.QLineEdit('1')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Light Signal probability (0 - 1)'))
+        self.settings['lightSignalProbability'] = QtWidgets.QLineEdit('1')
         hbox.addWidget(self.settings['lightSignalProbability'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 5, 0)
+        grid.addLayout(set_double_h_box_stretch(hbox), 5, 0)
         # Specify light signal intensity
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Light Signal intensity (0 - 100)'))
-        self.settings['lightSignalIntensity'] = QtGui.QLineEdit('100')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Light Signal intensity (0 - 100)'))
+        self.settings['lightSignalIntensity'] = QtWidgets.QLineEdit('100')
         hbox.addWidget(self.settings['lightSignalIntensity'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 6, 0)
+        grid.addLayout(set_double_h_box_stretch(hbox), 6, 0)
         # Specify light signal delay relative to trial start
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Light Signal delay (s)'))
-        self.settings['lightSignalDelay'] = QtGui.QLineEdit('0')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Light Signal delay (s)'))
+        self.settings['lightSignalDelay'] = QtWidgets.QLineEdit('0')
         hbox.addWidget(self.settings['lightSignalDelay'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 7, 0)
+        grid.addLayout(set_double_h_box_stretch(hbox), 7, 0)
         # Option to set duration of negative audio feedback
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Negative Audio Feedback (s)'))
-        self.settings['NegativeAudioSignal'] = QtGui.QLineEdit('0')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Negative Audio Feedback (s)'))
+        self.settings['NegativeAudioSignal'] = QtWidgets.QLineEdit('0')
         hbox.addWidget(self.settings['NegativeAudioSignal'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 8, 0)
+        grid.addLayout(set_double_h_box_stretch(hbox), 8, 0)
         # Specify milk trial fail penalty duration
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Milk Trial Fail Penalty (s)'))
-        self.settings['MilkTrialFailPenalty'] = QtGui.QLineEdit('10')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Milk Trial Fail Penalty (s)'))
+        self.settings['MilkTrialFailPenalty'] = QtWidgets.QLineEdit('10')
         hbox.addWidget(self.settings['MilkTrialFailPenalty'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 9, 0)
+        grid.addLayout(set_double_h_box_stretch(hbox), 9, 0)
         # Specify milk trial mean separation
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Min Separation (s)'))
-        self.settings['MilkTrialMinSeparationMean'] = QtGui.QLineEdit('40')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Min Separation (s)'))
+        self.settings['MilkTrialMinSeparationMean'] = QtWidgets.QLineEdit('40')
         hbox.addWidget(self.settings['MilkTrialMinSeparationMean'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 0, 1)
+        grid.addLayout(set_double_h_box_stretch(hbox), 0, 1)
         # Specify milk trial separation variance
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Min Separation variance (%)'))
-        self.settings['MilkTrialMinSeparationVariance'] = QtGui.QLineEdit('0.5')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Min Separation variance (%)'))
+        self.settings['MilkTrialMinSeparationVariance'] = QtWidgets.QLineEdit('0.5')
         hbox.addWidget(self.settings['MilkTrialMinSeparationVariance'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 1, 1)
+        grid.addLayout(set_double_h_box_stretch(hbox), 1, 1)
         # Specify minimum distance to feeder for starting a trial
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Minimum Start Distance (cm)'))
-        self.settings['MilkTaskMinStartDistance'] = QtGui.QLineEdit('50')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Minimum Start Distance (cm)'))
+        self.settings['MilkTaskMinStartDistance'] = QtWidgets.QLineEdit('50')
         hbox.addWidget(self.settings['MilkTaskMinStartDistance'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 2, 1)
+        grid.addLayout(set_double_h_box_stretch(hbox), 2, 1)
         # Specify minimum angular distance to goal for starting a trial
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Minimum Goal angular distance (deg)'))
-        self.settings['MilkTaskMinGoalAngularDistance'] = QtGui.QLineEdit('45')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Minimum Goal angular distance (deg)'))
+        self.settings['MilkTaskMinGoalAngularDistance'] = QtWidgets.QLineEdit('45')
         hbox.addWidget(self.settings['MilkTaskMinGoalAngularDistance'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 3, 1)
+        grid.addLayout(set_double_h_box_stretch(hbox), 3, 1)
         # Specify position history period for computing goal angular distance
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Goal angular distance time (s)'))
-        self.settings['MilkTaskGoalAngularDistanceTime'] = QtGui.QLineEdit('2')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Goal angular distance time (s)'))
+        self.settings['MilkTaskGoalAngularDistanceTime'] = QtWidgets.QLineEdit('2')
         hbox.addWidget(self.settings['MilkTaskGoalAngularDistanceTime'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 4, 1)
+        grid.addLayout(set_double_h_box_stretch(hbox), 4, 1)
         # Specify minimum distance to goal feeder for ending the trial
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Minimum Goal Distance (cm)'))
-        self.settings['MilkTaskMinGoalDistance'] = QtGui.QLineEdit('10')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Minimum Goal Distance (cm)'))
+        self.settings['MilkTaskMinGoalDistance'] = QtWidgets.QLineEdit('10')
         hbox.addWidget(self.settings['MilkTaskMinGoalDistance'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 5, 1)
+        grid.addLayout(set_double_h_box_stretch(hbox), 5, 1)
         # Specify maximum trial duration
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Maximum Trial Duration (s)'))
-        self.settings['MilkTrialMaxDuration'] = QtGui.QLineEdit('9')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Maximum Trial Duration (s)'))
+        self.settings['MilkTrialMaxDuration'] = QtWidgets.QLineEdit('9')
         hbox.addWidget(self.settings['MilkTrialMaxDuration'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 6, 1)
+        grid.addLayout(set_double_h_box_stretch(hbox), 6, 1)
         # Specify method of choosing the next milk feeder
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Next Goal'))
-        self.settings['MilkGoalNextFeederMethod'] = {'random': QtGui.QRadioButton('Random'), 
-                                                     'weighted': QtGui.QRadioButton('Weighted'), 
-                                                     'cycle': QtGui.QRadioButton('Cycle')}
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Next Goal'))
+        self.settings['MilkGoalNextFeederMethod'] = {'random': QtWidgets.QRadioButton('Random'),
+                                                     'weighted': QtWidgets.QRadioButton('Weighted'),
+                                                     'cycle': QtWidgets.QRadioButton('Cycle')}
         self.settings['MilkGoalNextFeederMethod']['cycle'].setChecked(True)
         hbox.addWidget(self.settings['MilkGoalNextFeederMethod']['random'])
         hbox.addWidget(self.settings['MilkGoalNextFeederMethod']['weighted'])
         hbox.addWidget(self.settings['MilkGoalNextFeederMethod']['cycle'])
-        self.button_groups['MilkGoalNextFeederMethod'] = QtGui.QButtonGroup()
+        self.button_groups['MilkGoalNextFeederMethod'] = QtWidgets.QButtonGroup()
         self.button_groups['MilkGoalNextFeederMethod'].addButton(
             self.settings['MilkGoalNextFeederMethod']['random'])
         self.button_groups['MilkGoalNextFeederMethod'].addButton(
             self.settings['MilkGoalNextFeederMethod']['weighted'])
         self.button_groups['MilkGoalNextFeederMethod'].addButton(
             self.settings['MilkGoalNextFeederMethod']['cycle'])
-        grid.addLayout(setQuadrupleHBoxStretch(hbox), 7, 1)
+        grid.addLayout(set_quadruple_h_box_stretch(hbox), 7, 1)
         # Specify number of repretitions of each milk trial goal
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('Milk goal repetitions'))
-        self.settings['MilkGoalRepetition'] = QtGui.QLineEdit('0')
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('Milk goal repetitions'))
+        self.settings['MilkGoalRepetition'] = QtWidgets.QLineEdit('0')
         hbox.addWidget(self.settings['MilkGoalRepetition'])
-        grid.addLayout(setDoubleHBoxStretch(hbox), 8, 1)
+        grid.addLayout(set_double_h_box_stretch(hbox), 8, 1)
         # Create Milk FEEDER items
-        scroll_widget = QtGui.QWidget()
-        self.milk_feeder_settings_layout = QtGui.QVBoxLayout(scroll_widget)
-        self.addMilkFeederButton = QtGui.QPushButton('Add FEEDER')
+        scroll_widget = QtWidgets.QWidget()
+        self.milk_feeder_settings_layout = QtWidgets.QVBoxLayout(scroll_widget)
+        self.addMilkFeederButton = QtWidgets.QPushButton('Add FEEDER')
         self.addMilkFeederButton.clicked.connect(lambda: self.addFeedersToList('milk'))
         self.milk_feeder_settings_layout.addWidget(self.addMilkFeederButton)
-        scroll = QtGui.QScrollArea()
+        scroll = QtWidgets.QScrollArea()
         scroll.setWidget(scroll_widget)
         scroll.setWidgetResizable(True)
         vbox.addWidget(scroll)
         # Add Milk Task settings to task specific settings layout
-        frame = QtGui.QFrame()
+        frame = QtWidgets.QFrame()
         frame.setLayout(vbox)
         frame.setFrameStyle(3)
         # Set minimum size for frame
@@ -474,7 +485,7 @@ class SettingsGUI(object):
         else:
             show_message('Could not find a position matching the criteria.')
 
-    def addFeedersToList(self, FEEDER_type, FEEDER_settings=None):
+    def addFeedersToList(self, feeder_type, FEEDER_settings=None):
         if FEEDER_settings is None:
             FEEDER_settings = {'ID': '1', 
                                'Present': True, 
@@ -488,64 +499,64 @@ class SettingsGUI(object):
                                'SignalHzWidth': np.array(500), 
                                'ModulHz': np.array(4)}
         # Create interface for interacting with this FEEDER
-        FEEDER = {'Type': FEEDER_type}
-        vbox = QtGui.QVBoxLayout()
-        hbox = QtGui.QHBoxLayout()
-        hbox.addWidget(QtGui.QLabel('ID:'))
-        FEEDER['ID'] = QtGui.QLineEdit(FEEDER_settings['ID'])
+        FEEDER = {'Type': feeder_type}
+        vbox = QtWidgets.QVBoxLayout()
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(QtWidgets.QLabel('ID:'))
+        FEEDER['ID'] = QtWidgets.QLineEdit(FEEDER_settings['ID'])
         FEEDER['ID'].setMaximumWidth(40)
         hbox.addWidget(FEEDER['ID'])
-        hbox.addWidget(QtGui.QLabel('IP:'))
-        FEEDER['IP'] = QtGui.QLineEdit(FEEDER_settings['IP'])
+        hbox.addWidget(QtWidgets.QLabel('IP:'))
+        FEEDER['IP'] = QtWidgets.QLineEdit(FEEDER_settings['IP'])
         FEEDER['IP'].setMinimumWidth(105)
         hbox.addWidget(FEEDER['IP'])
-        activateButton = QtGui.QPushButton('Activate')
+        activateButton = QtWidgets.QPushButton('Activate')
         activateButton.setMinimumWidth(70)
         activateButton.setMaximumWidth(70)
-        FEEDER['ReleaseQuantity'] = QtGui.QLineEdit('1')
+        FEEDER['ReleaseQuantity'] = QtWidgets.QLineEdit('1')
         FEEDER['ReleaseQuantity'].setMaximumWidth(40)
-        activateButton.clicked.connect(lambda: activateFEEDER(FEEDER_type, FEEDER['IP'], 
+        activateButton.clicked.connect(lambda: activate_feeder(feeder_type, FEEDER['IP'], 
                                                               self.settings['Username'], 
                                                               self.settings['Password'], 
                                                               FEEDER['ReleaseQuantity']))
         hbox.addWidget(activateButton)
         hbox.addWidget(FEEDER['ReleaseQuantity'])
         vbox.addLayout(hbox)
-        hbox = QtGui.QHBoxLayout()
-        FEEDER['Present'] = QtGui.QCheckBox('Present')
+        hbox = QtWidgets.QHBoxLayout()
+        FEEDER['Present'] = QtWidgets.QCheckBox('Present')
         FEEDER['Present'].setChecked(FEEDER_settings['Present'])
         hbox.addWidget(FEEDER['Present'])
-        FEEDER['Active'] = QtGui.QCheckBox('Active')
+        FEEDER['Active'] = QtWidgets.QCheckBox('Active')
         FEEDER['Active'].setChecked(FEEDER_settings['Active'])
         hbox.addWidget(FEEDER['Active'])
-        hbox.addWidget(QtGui.QLabel('Position:'))
-        FEEDER['Position'] = QtGui.QLineEdit(','.join(map(str,FEEDER_settings['Position'])))
+        hbox.addWidget(QtWidgets.QLabel('Position:'))
+        FEEDER['Position'] = QtWidgets.QLineEdit(','.join(map(str, FEEDER_settings['Position'])))
         FEEDER['Position'].setMinimumWidth(70)
         FEEDER['Position'].setMaximumWidth(70)
         hbox.addWidget(FEEDER['Position'])
         vbox.addLayout(hbox)
-        if FEEDER_type == 'milk':
-            hbox = QtGui.QHBoxLayout()
+        if feeder_type == 'milk':
+            hbox = QtWidgets.QHBoxLayout()
             # Add minimum spacing betwen feeders
-            hbox.addWidget(QtGui.QLabel('Spacing:'))
-            FEEDER['Spacing'] = QtGui.QLineEdit(str(FEEDER_settings['Spacing']))
+            hbox.addWidget(QtWidgets.QLabel('Spacing:'))
+            FEEDER['Spacing'] = QtWidgets.QLineEdit(str(FEEDER_settings['Spacing']))
             FEEDER['Spacing'].setMinimumWidth(40)
             FEEDER['Spacing'].setMaximumWidth(40)
             hbox.addWidget(FEEDER['Spacing'])
             # Add minimum clearence from boundaries
-            hbox.addWidget(QtGui.QLabel('Clearence:'))
-            FEEDER['Clearence'] = QtGui.QLineEdit(str(FEEDER_settings['Clearence']))
+            hbox.addWidget(QtWidgets.QLabel('Clearence:'))
+            FEEDER['Clearence'] = QtWidgets.QLineEdit(str(FEEDER_settings['Clearence']))
             FEEDER['Clearence'].setMinimumWidth(40)
             FEEDER['Clearence'].setMaximumWidth(40)
             hbox.addWidget(FEEDER['Clearence'])
             # Add angular position to specify feeder orientation
-            hbox.addWidget(QtGui.QLabel('Angle:'))
-            FEEDER['Angle'] = QtGui.QLineEdit(str(FEEDER_settings['Angle']))
+            hbox.addWidget(QtWidgets.QLabel('Angle:'))
+            FEEDER['Angle'] = QtWidgets.QLineEdit(str(FEEDER_settings['Angle']))
             FEEDER['Angle'].setMinimumWidth(60)
             FEEDER['Angle'].setMaximumWidth(60)
             hbox.addWidget(FEEDER['Angle'])
             # Add a button to automatically select feeder orientation and angle
-            autoPosButton = QtGui.QPushButton('AutoPos')
+            autoPosButton = QtWidgets.QPushButton('AutoPos')
             autoPosButton.setMinimumWidth(70)
             autoPosButton.setMaximumWidth(70)
             autoPosButton.clicked.connect(lambda: self.autoFeederPosition(FEEDER))
@@ -553,68 +564,68 @@ class SettingsGUI(object):
             # Finish this row of options
             vbox.addLayout(hbox)
             # Add sound signal values
-            hbox = QtGui.QHBoxLayout()
-            hbox.addWidget(QtGui.QLabel('Signal (Hz):'))
-            FEEDER['SignalHz'] = QtGui.QLineEdit(str(FEEDER_settings['SignalHz']))
+            hbox = QtWidgets.QHBoxLayout()
+            hbox.addWidget(QtWidgets.QLabel('Signal (Hz):'))
+            FEEDER['SignalHz'] = QtWidgets.QLineEdit(str(FEEDER_settings['SignalHz']))
             hbox.addWidget(FEEDER['SignalHz'])
-            hbox.addWidget(QtGui.QLabel('W:'))
+            hbox.addWidget(QtWidgets.QLabel('W:'))
             if not 'SignalHzWidth' in FEEDER_settings.keys():
                 print('Remove this section in Pellets_and_Milk_Task.py when settings resaved!')
                 FEEDER_settings['SignalHzWidth'] = np.array(500)
-            FEEDER['SignalHzWidth'] = QtGui.QLineEdit(str(FEEDER_settings['SignalHzWidth']))
+            FEEDER['SignalHzWidth'] = QtWidgets.QLineEdit(str(FEEDER_settings['SignalHzWidth']))
             hbox.addWidget(FEEDER['SignalHzWidth'])
-            hbox.addWidget(QtGui.QLabel('M:'))
-            FEEDER['ModulHz'] = QtGui.QLineEdit(str(FEEDER_settings['ModulHz']))
+            hbox.addWidget(QtWidgets.QLabel('M:'))
+            FEEDER['ModulHz'] = QtWidgets.QLineEdit(str(FEEDER_settings['ModulHz']))
             hbox.addWidget(FEEDER['ModulHz'])
-            playSignalButton = QtGui.QPushButton('Play')
+            playSignalButton = QtWidgets.QPushButton('Play')
             playSignalButton.setMaximumWidth(40)
-            playSignalButton.clicked.connect(lambda: playSignal(FEEDER['SignalHz'], 
+            playSignalButton.clicked.connect(lambda: play_audio_signal(FEEDER['SignalHz'], 
                                                                  FEEDER['SignalHzWidth'], 
                                                                  FEEDER['ModulHz']))
             hbox.addWidget(playSignalButton)
             vbox.addLayout(hbox)
-        frame = QtGui.QFrame()
+        frame = QtWidgets.QFrame()
         frame.setLayout(vbox)
         frame.setFrameStyle(3)
-        if FEEDER_type == 'milk':
+        if feeder_type == 'milk':
             frame.setMaximumHeight(160)
         else:
             frame.setMaximumHeight(90)
-        if FEEDER_type == 'pellet':
+        if feeder_type == 'pellet':
             self.pellet_feeder_settings_layout.addWidget(frame)
-        elif FEEDER_type == 'milk':
+        elif feeder_type == 'milk':
             self.milk_feeder_settings_layout.addWidget(frame)
-        self.settings['FEEDERs'][FEEDER_type].append(FEEDER)
+        self.settings['FEEDERs'][feeder_type].append(FEEDER)
 
-    def exportSettingsFromGUI(self):
+    def export_settings_from_gui(self):
         # Get task settings from text boxes
-        TaskSettings = {'LastTravelTime': np.float64(str(self.settings['LastTravelTime'].text())), 
-                        'LastTravelSmooth': np.int64(float(str(self.settings['LastTravelSmooth'].text()))), 
-                        'LastTravelDist': np.int64(float(str(self.settings['LastTravelDist'].text()))), 
-                        'PelletMilkRatio': np.float64(str(self.settings['PelletMilkRatio'].text())), 
-                        'Chewing_TTLchan': np.int64(float(str(self.settings['Chewing_TTLchan'].text()))), 
-                        'MilkGoalRepetition': np.int64(float(str(self.settings['MilkGoalRepetition'].text()))), 
-                        'Username': str(self.settings['Username'].text()), 
-                        'Password': str(self.settings['Password'].text()), 
-                        'NegativeAudioSignal': np.float64(str(self.settings['NegativeAudioSignal'].text())), 
-                        'lightSignalProbability': np.float64(str(self.settings['lightSignalProbability'].text())), 
-                        'lightSignalIntensity': np.int64(str(self.settings['lightSignalIntensity'].text())), 
-                        'lightSignalDelay': np.float64(str(self.settings['lightSignalDelay'].text())), 
-                        'lightSignalPins': str(self.settings['lightSignalPins'].text()), 
-                        'InitPellets': np.int64(float(str(self.settings['InitPellets'].text()))), 
-                        'PelletQuantity': np.int64(float(str(self.settings['PelletQuantity'].text()))), 
-                        'PelletRewardMinSeparationMean': np.int64(float(str(self.settings['PelletRewardMinSeparationMean'].text()))), 
-                        'PelletRewardMinSeparationVariance': np.float64(str(self.settings['PelletRewardMinSeparationVariance'].text())), 
-                        'Chewing_Target': np.int64(float(str(self.settings['Chewing_Target'].text()))), 
-                        'MaxInactivityDuration': np.int64(float(str(self.settings['MaxInactivityDuration'].text()))), 
-                        'MilkTrialFailPenalty': np.int64(float(str(self.settings['MilkTrialFailPenalty'].text()))), 
-                        'InitMilk': np.float64(str(self.settings['InitMilk'].text())), 
-                        'MilkTrialMinSeparationMean': np.int64(float(str(self.settings['MilkTrialMinSeparationMean'].text()))), 
-                        'MilkTrialMinSeparationVariance': np.float64(str(self.settings['MilkTrialMinSeparationVariance'].text())), 
-                        'MilkTaskMinStartDistance': np.int64(float(str(self.settings['MilkTaskMinStartDistance'].text()))), 
-                        'MilkTaskMinGoalDistance': np.int64(float(str(self.settings['MilkTaskMinGoalDistance'].text()))), 
-                        'MilkTaskMinGoalAngularDistance': np.int64(float(str(self.settings['MilkTaskMinGoalAngularDistance'].text()))), 
-                        'MilkTaskGoalAngularDistanceTime': np.float64(float(str(self.settings['MilkTaskGoalAngularDistanceTime'].text()))), 
+        TaskSettings = {'LastTravelTime': np.float64(str(self.settings['LastTravelTime'].text())),
+                        'LastTravelSmooth': np.int64(float(str(self.settings['LastTravelSmooth'].text()))),
+                        'LastTravelDist': np.int64(float(str(self.settings['LastTravelDist'].text()))),
+                        'PelletMilkRatio': np.float64(str(self.settings['PelletMilkRatio'].text())),
+                        'Chewing_TTLchan': np.int64(float(str(self.settings['Chewing_TTLchan'].text()))),
+                        'MilkGoalRepetition': np.int64(float(str(self.settings['MilkGoalRepetition'].text()))),
+                        'Username': str(self.settings['Username'].text()),
+                        'Password': str(self.settings['Password'].text()),
+                        'NegativeAudioSignal': np.float64(str(self.settings['NegativeAudioSignal'].text())),
+                        'lightSignalProbability': np.float64(str(self.settings['lightSignalProbability'].text())),
+                        'lightSignalIntensity': np.int64(str(self.settings['lightSignalIntensity'].text())),
+                        'lightSignalDelay': np.float64(str(self.settings['lightSignalDelay'].text())),
+                        'lightSignalPins': str(self.settings['lightSignalPins'].text()),
+                        'InitPellets': np.int64(float(str(self.settings['InitPellets'].text()))),
+                        'PelletQuantity': np.int64(float(str(self.settings['PelletQuantity'].text()))),
+                        'PelletRewardMinSeparationMean': np.int64(float(str(self.settings['PelletRewardMinSeparationMean'].text()))),
+                        'PelletRewardMinSeparationVariance': np.float64(str(self.settings['PelletRewardMinSeparationVariance'].text())),
+                        'Chewing_Target': np.int64(float(str(self.settings['Chewing_Target'].text()))),
+                        'MaxInactivityDuration': np.int64(float(str(self.settings['MaxInactivityDuration'].text()))),
+                        'MilkTrialFailPenalty': np.int64(float(str(self.settings['MilkTrialFailPenalty'].text()))),
+                        'InitMilk': np.float64(str(self.settings['InitMilk'].text())),
+                        'MilkTrialMinSeparationMean': np.int64(float(str(self.settings['MilkTrialMinSeparationMean'].text()))),
+                        'MilkTrialMinSeparationVariance': np.float64(str(self.settings['MilkTrialMinSeparationVariance'].text())),
+                        'MilkTaskMinStartDistance': np.int64(float(str(self.settings['MilkTaskMinStartDistance'].text()))),
+                        'MilkTaskMinGoalDistance': np.int64(float(str(self.settings['MilkTaskMinGoalDistance'].text()))),
+                        'MilkTaskMinGoalAngularDistance': np.int64(float(str(self.settings['MilkTaskMinGoalAngularDistance'].text()))),
+                        'MilkTaskGoalAngularDistanceTime': np.float64(float(str(self.settings['MilkTaskGoalAngularDistanceTime'].text()))),
                         'MilkTrialMaxDuration': np.int64(float(str(self.settings['MilkTrialMaxDuration'].text())))}
         # Get boolean selection for Active Game settings
         TaskSettings['games_active'] = {}
@@ -639,34 +650,34 @@ class SettingsGUI(object):
             TaskSettings['LightSignalOnRepetitions'][key] = np.array(state)
         # Get FEEDER specific information
         FEEDERs = {}
-        for FEEDER_type in self.settings['FEEDERs'].keys():
-            if len(self.settings['FEEDERs'][FEEDER_type]) > 0:
-                FEEDERs[FEEDER_type] = {}
+        for feeder_type in self.settings['FEEDERs'].keys():
+            if len(self.settings['FEEDERs'][feeder_type]) > 0:
+                FEEDERs[feeder_type] = {}
                 IDs = []
-                for feeder in self.settings['FEEDERs'][FEEDER_type]:
+                for feeder in self.settings['FEEDERs'][feeder_type]:
                     IDs.append(str(int(str(feeder['ID'].text()))))
-                    FEEDERs[FEEDER_type][IDs[-1]] = {'ID': IDs[-1], 
+                    FEEDERs[feeder_type][IDs[-1]] = {'ID': IDs[-1], 
                                                      'Present': np.array(feeder['Present'].isChecked()), 
                                                      'Active': np.array(feeder['Active'].isChecked()), 
                                                      'IP': str(feeder['IP'].text()), 
-                                                     'Position': np.array(map(int, str(feeder['Position'].text()).split(',')))}
-                    if FEEDER_type == 'milk':
-                        FEEDERs[FEEDER_type][IDs[-1]]['Spacing'] = np.int64(float(str(feeder['Spacing'].text())))
-                        FEEDERs[FEEDER_type][IDs[-1]]['Clearence'] = np.int64(float(str(feeder['Clearence'].text())))
-                        FEEDERs[FEEDER_type][IDs[-1]]['Angle'] = np.int64(float(str(feeder['Angle'].text())))
-                        FEEDERs[FEEDER_type][IDs[-1]]['SignalHz'] = np.int64(float(str(feeder['SignalHz'].text())))
-                        FEEDERs[FEEDER_type][IDs[-1]]['SignalHzWidth'] = np.int64(float(str(feeder['SignalHzWidth'].text())))
-                        FEEDERs[FEEDER_type][IDs[-1]]['ModulHz'] = np.int64(float(str(feeder['ModulHz'].text())))
+                                                     'Position': np.array(list(map(int, str(feeder['Position'].text()).split(','))))}
+                    if feeder_type == 'milk':
+                        FEEDERs[feeder_type][IDs[-1]]['Spacing'] = np.int64(float(str(feeder['Spacing'].text())))
+                        FEEDERs[feeder_type][IDs[-1]]['Clearence'] = np.int64(float(str(feeder['Clearence'].text())))
+                        FEEDERs[feeder_type][IDs[-1]]['Angle'] = np.int64(float(str(feeder['Angle'].text())))
+                        FEEDERs[feeder_type][IDs[-1]]['SignalHz'] = np.int64(float(str(feeder['SignalHz'].text())))
+                        FEEDERs[feeder_type][IDs[-1]]['SignalHzWidth'] = np.int64(float(str(feeder['SignalHzWidth'].text())))
+                        FEEDERs[feeder_type][IDs[-1]]['ModulHz'] = np.int64(float(str(feeder['ModulHz'].text())))
                 # Check if there are duplicates of FEEDER IDs
                 if any(IDs.count(ID) > 1 for ID in IDs):
-                    raise ValueError('Duplicates of IDs in ' + FEEDER_type + ' feeders!')
+                    raise ValueError('Duplicates of IDs in ' + feeder_type + ' feeders!')
             else:
-                show_message('No ' + FEEDER_type + ' FEEDERs entered.')
+                show_message('No ' + feeder_type + ' FEEDERs entered.')
         TaskSettings['FEEDERs'] = FEEDERs
 
         return TaskSettings
 
-    def importSettingsToGUI(self, TaskSettings):
+    def import_settings_to_gui(self, TaskSettings):
         # Load all settings
         for key in TaskSettings.keys():
             try:
@@ -689,10 +700,10 @@ class SettingsGUI(object):
                         state = TaskSettings['LightSignalOnRepetitions'][repeat_key]
                         self.settings['LightSignalOnRepetitions'][repeat_key].setChecked(state)
                 elif key == 'FEEDERs':
-                    for FEEDER_type in TaskSettings['FEEDERs'].keys():
-                        for ID in sorted(TaskSettings['FEEDERs'][FEEDER_type].keys(), key=int):
-                            FEEDER_settings = TaskSettings['FEEDERs'][FEEDER_type][ID]
-                            self.addFeedersToList(FEEDER_type, FEEDER_settings)
+                    for feeder_type in TaskSettings['FEEDERs'].keys():
+                        for ID in sorted(TaskSettings['FEEDERs'][feeder_type].keys(), key=int):
+                            FEEDER_settings = TaskSettings['FEEDERs'][feeder_type][ID]
+                            self.addFeedersToList(feeder_type, FEEDER_settings)
                 elif isinstance(TaskSettings[key], dict):
                     for sub_key in TaskSettings[key]:
                         self.settings[key][sub_key].setText(str(TaskSettings[key][sub_key]))
@@ -761,10 +772,10 @@ def compute_mean_posHistory(posHistory):
     return mean_posHistory
 
 def compute_movement_angular_distance_to_target(posHistory, target_location):
-    '''
+    """
     Computes angular distance between mean movement vector and direct path to target location.
     Outputs None if norm of mean movement vector is 0.
-    '''
+    """
     posVector = compute_mean_movement_vector(posHistory)
     if np.linalg.norm(posVector) > 0:
         targetVector = target_location - posHistory[-1][:2]
@@ -782,16 +793,16 @@ def draw_rect_with_border(surface, fill_color, outline_color, position, border=1
 
 
 class PelletChoice(object):
-    '''
+    """
     Selects the next feeder using positional occupancy.
 
     Query read PelletChoice.ID for current feeder.
     Use PelletChoice.next() method to choose next feeder.
-    '''
+    """
 
-    def __init__(self, PelletRewardDevices, RPIPos, arena_size):
+    def __init__(self, PelletRewardDevices, position_histogram_dict, arena_size):
         self.PelletRewardDevices = PelletRewardDevices
-        self.RPIPos = RPIPos
+        self.position_histogram_dict = position_histogram_dict
         self.arena_size = arena_size
         self.next()
 
@@ -801,14 +812,12 @@ class PelletChoice(object):
         FEEDER_Locs = []
         for ID in IDs_active:
             FEEDER_Locs.append(np.array(self.PelletRewardDevices.positions[ID], dtype=np.float32))
-        # Get occupancy histogram information from RPIPos class
-        with self.RPIPos.histogramLock:
-            histparam = deepcopy(self.RPIPos.HistogramParameters)
-            histXedges = deepcopy(self.RPIPos.positionHistogramEdges['x'])
-            histYedges = deepcopy(self.RPIPos.positionHistogramEdges['y'])
-        self.old_PelletHistogramParameters = histparam
+        # Get occupancy histogram information from position_histogram_dict
+        self.old_PelletHistogramParameters = deepcopy(self.position_histogram_dict['parameters'])
         self.histogramPfeederMap = {}
         # Convert histogram edges to bin centers
+        histXedges = self.position_histogram_dict['edges']['x']
+        histYedges = self.position_histogram_dict['edges']['y']
         histXbin = (histXedges[1:] + histXedges[:-1]) / 2
         histYbin = (histYedges[1:] + histYedges[:-1]) / 2
         # Crop data to only include parts inside the arena boundaries
@@ -832,8 +841,7 @@ class PelletChoice(object):
         self.histogramPfeederMap['feeder_map'] = histFeeder
 
     def _ensure_nearest_feeder_map_valid(self, IDs_active):
-        with self.RPIPos.histogramLock:
-            histparam = deepcopy(self.RPIPos.HistogramParameters)
+        histparam = deepcopy(self.position_histogram_dict['parameters'])
         histogram_same = hasattr(self, 'old_PelletHistogramParameters') and \
                                  self.old_PelletHistogramParameters == histparam
         feeders_same = hasattr(self, 'old_IDs_active') and \
@@ -849,16 +857,15 @@ class PelletChoice(object):
         return np.random.choice(len(probability), p=probability)
 
     def next(self):
-        '''
+        """
         Uses relative mean occupancy in bins closest to each feeder
         to increase probability of selecting feeder with lower mean occupancy.
-        '''
+        """
         IDs_active = copy(self.PelletRewardDevices.IDs_active)
         self._ensure_nearest_feeder_map_valid(IDs_active)
         if len(IDs_active) > 1:
-            # Get occupancy information from RPIPos class
-            with self.RPIPos.histogramLock:
-                histmap = deepcopy(self.RPIPos.positionHistogram)
+            # Get occupancy information from position_histogram_dict
+            histmap = self.position_histogram_dict['data']
             # Crop histogram to relavant parts
             histmap = histmap[self.histogramPfeederMap['idx_crop_Y'], self.histogramPfeederMap['idx_crop_X']]
             # Find mean occupancy in bins nearest to each feeder
@@ -880,18 +887,18 @@ class PelletChoice(object):
 
 
 class MilkGoal(object):
-    '''
+    """
     Determines the sequence of milk feeder goal decisions.
 
     Query read MilkGoal.ID for current feeder.
     Use MilkGoal.next() method to choose next feeder.
-    '''
+    """
     def __init__(self, activeMfeeders, next_feeder_method='random', repetitions=0):
-        '''
+        """
         activeMfeeders - list - elements are returned with next() method as choices
         next_feeder_method - str - 'random' (default) or 'cycle'
         repetitions - int - number of repetitions to do per each feeder
-        '''
+        """
         self.activeMfeeders = activeMfeeders
         self.next_feeder_method = next_feeder_method
         self.repetitions = repetitions
@@ -906,9 +913,9 @@ class MilkGoal(object):
             raise ValueError('Unexpected next_feeder_method argument.')
 
     def _initialize_sequence(self):
-        '''
+        """
         Initializes the sequence of feeders and initial position.
-        '''
+        """
         if self.next_feeder_method == 'cycle':
             self.sequence = range(len(self.activeMfeeders))
             np.random.shuffle(self.sequence)
@@ -918,9 +925,9 @@ class MilkGoal(object):
             self.sequence_position = len(self.activeMfeeders)
 
     def re_init(self, activeMfeeders=None, next_feeder_method=None, repetitions=None):
-        '''
+        """
         Allows re-initializing the class with any subset of input variables.
-        '''
+        """
         if not (activeMfeeders is None):
             self.activeMfeeders = activeMfeeders
         if not (next_feeder_method is None):
@@ -933,11 +940,11 @@ class MilkGoal(object):
 
     @staticmethod
     def choose_with_weighted_randomness(activeMfeeders, game_counters):
-        '''
+        """
         Chooses feeder from list with weighted randomness that is based on
         performance in the task. Feeders that where there has been
         fewer successful trials are more likely to be chosen.
-        '''
+        """
         # Find number of successful trials for each feeder
         n_successful_trials = []
         for ID in activeMfeeders:
@@ -967,13 +974,13 @@ class MilkGoal(object):
         return copy(self.ID)
 
     def next(self, game_counters=None):
-        '''
+        """
         Selects the next feeder chosen from the activeMfeeders list elements, 
         using the choice method provided during initialization.
 
         game_counters - dict with specific structure (see choose_with_weighted_randomness() method)
                         only required for weighted random choice.
-        '''
+        """
         if self.next_feeder_method == 'random':
             n_feeder = MilkGoal.choose_randomly(self.activeMfeeders)
         elif self.next_feeder_method == 'weighted':
@@ -995,21 +1002,21 @@ class MilkGoal(object):
 
 class RewardDevices(object):
 
-    def __init__ (self, FEEDERs, FEEDER_type, username, password, 
+    def __init__ (self, FEEDERs, feeder_type, username, password, 
                   feeder_kwargs={}, inactivation_signal=None):
-        '''
+        """
         FEEDERs            - dict - key (ID) and value (feeder specific parameters)
-        FEEDER_type        - str - passed on to RPiInterface.RewardControl
+        feeder_type        - str - passed on to RPiInterface.RewardControl
         username           - str - username for all the Raspberry Pis in FEEDERs dict
         password           - str - password for all the Raspberry Pis in FEEDERs dict
         feeder_kwargs      - dict - key (ID) and value (feeder specific kwargs to be
                            passed to RPiInterfaces.RwardControl)
-        inactivation_signal - this method is called with FEEDER_type and ID as argument 
+        inactivation_signal - this method is called with feeder_type and ID as argument 
                               when a feeder is being inactivated.
-        '''
+        """
         # Parse input arguments
         self.FEEDERs = FEEDERs
-        self.FEEDER_type = FEEDER_type
+        self.feeder_type = feeder_type
         self.username = username
         self.password = password
         self.FEEDER_kwargs = feeder_kwargs
@@ -1052,7 +1059,7 @@ class RewardDevices(object):
             IP = self.FEEDERs[ID]['IP']
         try:
             kwargs = self.FEEDER_kwargs[ID] if ID in self.FEEDER_kwargs.keys() else {}
-            actuator = RewardControl(self.FEEDER_type, IP, self.username, 
+            actuator = RewardControl(self.feeder_type, IP, self.username, 
                                      self.password, **kwargs)
             with self.FEEDERs_Locks[ID]:
                 self.FEEDERs[ID]['actuator'] = actuator
@@ -1067,12 +1074,12 @@ class RewardDevices(object):
                 self.FEEDERs[ID]['init_successful'] = False
 
     def actuator_method_call(self, ID, method_name, *args, **kwargs):
-        '''
+        """
         ID          - str - identifies which feeder to use
         method_name - str - name of the method to call
 
         Method will be called with any following args and kwargs
-        '''
+        """
         with self.FEEDERs_Locks[ID]:
             if 'actuator' in self.FEEDERs[ID].keys():
                 return getattr(self.FEEDERs[ID]['actuator'], method_name)(*args, **kwargs)
@@ -1084,7 +1091,7 @@ class RewardDevices(object):
         self.IDs_active.remove(ID)
         # Invoke the deactivation signal if provided during initialization
         if not (self._inactivation_signal is None):
-            self._inactivation_signal(self.FEEDER_type, ID)
+            self._inactivation_signal(self.feeder_type, ID)
         # Close actuator for this feeder
         with self.FEEDERs_Locks[ID]:
             if 'actuator' in self.FEEDERs[ID].keys():
@@ -1122,15 +1129,15 @@ class ChewingTracker(object):
 
 
 class Abstract_Variables(object):
-    '''
+    """
     If self._variable_state_update_pending is set True, get() and get_all()
     methods only return after a new update has taken place.
-    '''
+    """
 
     def __init__(self):
-        '''
+        """
         Can be reimplemented but must be called as well with super.
-        '''
+        """
         # Create variable states
         self._variable_states = []
         self._variable_state_names = []
@@ -1157,12 +1164,12 @@ class Abstract_Variables(object):
             sleep(0.005)
 
     def _recompute_dynamic_variables(self):
-        '''
+        """
         Must be re-implemented.
 
         This method must finish by calling self._update_variable_states method.
         This method is called iteratively to keep track of dynamic variables.
-        '''
+        """
         raise NotImplementedError
         self._update_variable_states(variable_states, variable_state_names)
 
@@ -1203,10 +1210,10 @@ class Abstract_Variables(object):
             return copy(self._variable_states)
 
     def get_all_relevance(self):
-        '''
+        """
         Returns list of time in seconds for each variable in _variable_states list
         since this was last set as relevant.
-        '''
+        """
         return [time() - rel for rel in self._last_relevance]
 
     def _set_relevant(self, name):
@@ -1218,9 +1225,9 @@ class Abstract_Variables(object):
 
 class GenericGame_Variables(Abstract_Variables):
 
-    def __init__(self, TaskSettings, RPIPos):
+    def __init__(self, TaskSettings, processed_position_list):
         # Parse inputs
-        self._RPIPos = RPIPos
+        self.processed_position_list = processed_position_list
         # Parse TaskSettings
         self._distance_steps = TaskSettings['distance_steps']
         self._last_travel_smoothing = TaskSettings['LastTravelSmooth']
@@ -1228,16 +1235,15 @@ class GenericGame_Variables(Abstract_Variables):
         # Initialize position data for use in computing variable states
         self._initialize_position_data_for_update_variable_states()
         # Proceed with original __init__ method
-        return super(GenericGame_Variables, self).__init__()
+        super(GenericGame_Variables, self).__init__()
 
     def _initialize_position_data_for_update_variable_states(self):
         posHistory = [None]
         while None in posHistory:
-            with self._RPIPos.combPosHistoryLock:
-                if len(self._RPIPos.combPosHistory) > self._distance_steps:
-                    posHistory = copy(self._RPIPos.combPosHistory[-self._distance_steps:])
-                else:
-                    posHistory = [None]
+            if len(self.processed_position_list) > self._distance_steps:
+                posHistory = copy(self.processed_position_list[-self._distance_steps:])
+            else:
+                posHistory = [None]
             if not (None in posHistory):
                 self._lastKnownPosHistory = posHistory
             else:
@@ -1245,8 +1251,7 @@ class GenericGame_Variables(Abstract_Variables):
 
     def _recompute_dynamic_variables(self):
         # Get animal position history
-        with self._RPIPos.combPosHistoryLock:
-            posHistory = self._RPIPos.combPosHistory[-self._distance_steps:]
+        posHistory = self.processed_position_list[-self._distance_steps:]
         if not (None in posHistory):
             self._lastKnownPosHistory = posHistory[-1]
         else:
@@ -1268,9 +1273,8 @@ class GenericGame_Variables(Abstract_Variables):
 
 class PelletGame_Variables(Abstract_Variables):
 
-    def __init__(self, TaskSettings, RPIPos, ChewingTracker):
+    def __init__(self, TaskSettings, ChewingTracker):
         # Parse inputs
-        self._RPIPos = RPIPos
         self._ChewingTracker = ChewingTracker
         # Parse TaskSettings
         self._distance_steps = TaskSettings['distance_steps']
@@ -1282,23 +1286,8 @@ class PelletGame_Variables(Abstract_Variables):
         # Create timers
         self._last_reward = time()
         self.update_reward_min_separation()
-        # Initialize position data for use in computing variable states
-        self._initialize_position_data_for_update_variable_states()
         # Proceed with original __init__ method
-        return super(PelletGame_Variables, self).__init__()
-
-    def _initialize_position_data_for_update_variable_states(self):
-        posHistory = [None]
-        while None in posHistory:
-            with self._RPIPos.combPosHistoryLock:
-                if len(self._RPIPos.combPosHistory) > self._distance_steps:
-                    posHistory = copy(self._RPIPos.combPosHistory[-self._distance_steps:])
-                else:
-                    posHistory = [None]
-            if not (None in posHistory):
-                self._lastKnownPosHistory = posHistory
-            else:
-                sleep(0.01)
+        super(PelletGame_Variables, self).__init__()
 
     def update_reward_min_separation(self):
         mean_val = self._reward_min_separation_mean
@@ -1316,14 +1305,6 @@ class PelletGame_Variables(Abstract_Variables):
         self._variable_state_update_pending = True
 
     def _recompute_dynamic_variables(self):
-        # Get animal position history
-        with self._RPIPos.combPosHistoryLock:
-            posHistory = self._RPIPos.combPosHistory[-self._distance_steps:]
-            posHistory_one_second_steps = self._RPIPos.combPosHistory[-self._one_second_steps:]
-        if not (None in posHistory):
-            self._lastKnownPosHistory = posHistory[-1]
-        else:
-            posHistory = [self._lastKnownPosHistory] * self._distance_steps
         # Compute all game progress variables
         variable_states = []
         variable_state_names = []
@@ -1346,7 +1327,6 @@ class PelletGame_Variables(Abstract_Variables):
                                     'percentage': n_chewings / float(self._chewing_target)})
         else:
             variable_state_names.append('chewing')
-            n_chewings = 0
             variable_states.append({'name': 'Chewing', 
                                     'target': self._chewing_target, 
                                     'status': 0, 
@@ -1366,9 +1346,9 @@ class PelletGame_Variables(Abstract_Variables):
 
 class MilkGame_Variables(Abstract_Variables):
 
-    def __init__(self, TaskSettings, RPIPos, MilkRewardDevices, MilkGoal):
+    def __init__(self, TaskSettings, processed_position_list, MilkRewardDevices, MilkGoal):
         # Parse inputs
-        self._RPIPos = RPIPos
+        self.processed_position_list = processed_position_list
         self._MilkRewardDevices = MilkRewardDevices
         self._MilkGoal = MilkGoal
         # Parse TaskSettings
@@ -1388,16 +1368,15 @@ class MilkGame_Variables(Abstract_Variables):
         # Initialize position data for use in computing variable states
         self._initialize_position_data_for_update_variable_states()
         # Proceed with original __init__ method
-        return super(MilkGame_Variables, self).__init__()
+        super(MilkGame_Variables, self).__init__()
 
     def _initialize_position_data_for_update_variable_states(self):
         posHistory = [None]
         while None in posHistory:
-            with self._RPIPos.combPosHistoryLock:
-                if len(self._RPIPos.combPosHistory) > self._distance_steps:
-                    posHistory = copy(self._RPIPos.combPosHistory[-self._distance_steps:])
-                else:
-                    posHistory = [None]
+            if len(self.processed_position_list) > self._distance_steps:
+                posHistory = copy(self.processed_position_list[-self._distance_steps:])
+            else:
+                posHistory = [None]
             if not (None in posHistory):
                 self._lastKnownPosHistory = posHistory
             else:
@@ -1430,13 +1409,13 @@ class MilkGame_Variables(Abstract_Variables):
 
     def _recompute_dynamic_variables(self):
         # Get animal position history
-        with self._RPIPos.combPosHistoryLock:
-            posHistory = self._RPIPos.combPosHistory[-self._distance_steps:]
-            posHistory_one_second_steps = self._RPIPos.combPosHistory[-self._one_second_steps:]
-            posHistory_for_angularDistance = self._RPIPos.combPosHistory[-self._angular_distance_steps:]
+        max_len = max([self._distance_steps, self._one_second_steps, self._angular_distance_steps])
+        posHistory_max_length = self.processed_position_list[-max_len:]
+        posHistory = posHistory_max_length[-self._distance_steps:]
+        posHistory_one_second_steps = posHistory_max_length[-self._one_second_steps:]
+        posHistory_for_angularDistance = posHistory_max_length[-self._angular_distance_steps:]
         # If animal position history is flaulty, use last known position as current static position
         if None in posHistory or None in posHistory_one_second_steps or None in posHistory_for_angularDistance:
-            posHistory = [self._lastKnownPosHistory] * self._distance_steps
             posHistory_one_second_steps = [self._lastKnownPosHistory] * self._one_second_steps
             posHistory_for_angularDistance = [self._lastKnownPosHistory] * self._angular_distance_steps
         else:
@@ -1508,20 +1487,20 @@ class MilkGame_Variables(Abstract_Variables):
 
 
 class Variables(object):
-    def __init__(self, TaskSettings, RPIPos, ChewingTracker=None, MilkRewardDevices=None, MilkGoal=None):
+    def __init__(self, TaskSettings, processed_position_list, ChewingTracker=None,
+                 MilkRewardDevices=None, MilkGoal=None):
         self._names = []
         self._instances = {}
         # Instantiate Generic variables
-        self._instances['GenericGame_Variables'] = GenericGame_Variables(TaskSettings, RPIPos)
+        self._instances['GenericGame_Variables'] = GenericGame_Variables(TaskSettings, processed_position_list)
         self._names.append('GenericGame_Variables')
         # Instantiate Pellet Game variables if pellet game active
         if TaskSettings['games_active']['pellet']:
-            self._instances['PelletGame_Variables'] = PelletGame_Variables(TaskSettings, RPIPos, 
-                                                                           ChewingTracker)
+            self._instances['PelletGame_Variables'] = PelletGame_Variables(TaskSettings, ChewingTracker)
             self._names.append('PelletGame_Variables')
         # Instantiate Milk Game variables if milk game active
         if TaskSettings['games_active']['milk']:
-            self._instances['MilkGame_Variables'] = MilkGame_Variables(TaskSettings, RPIPos, 
+            self._instances['MilkGame_Variables'] = MilkGame_Variables(TaskSettings, processed_position_list,
                                                                        MilkRewardDevices, MilkGoal)
             self._names.append('MilkGame_Variables')
 
@@ -1553,11 +1532,11 @@ class Variables(object):
 class VariableDisplay(object):
 
     def __init__(self, position_on_screen, renderText, Variables):
-        '''
+        """
         position_on_screen - dict - ['top', 'bottom', 'left', 'right'] border of the data on screen
         renderText         - pygame.font.SysFont.render method for an existing font instace
         Variables          - Variables instance
-        '''
+        """
         self._renderText = renderText
         self._Variables = Variables
         self._pre_render(position_on_screen)
@@ -1566,12 +1545,12 @@ class VariableDisplay(object):
         return self._Variables.full_list(), self._Variables.full_list_relevance()
 
     def _pre_render(self, position_on_screen):
-        '''
+        """
         Pre-computes variable state display positions and renders static text
         
         position_on_screen - dict - ['top', 'bottom', 'left', 'right'] border of the data on screen
                              provided to VariableDisplay.render method
-        '''
+        """
         variable_states, _ = self._get_all_variable_states()
         # Initialise random color generation
         random.seed(1232)
@@ -1603,10 +1582,10 @@ class VariableDisplay(object):
         self.progress_bars = progress_bars
 
     def render(self, screen, max_relevance_latency=0.2):
-        '''
+        """
         screen                - pygame.display.set_mode output
         max_relevance_latency - float - if more seconds since last relevance, colored dark gray
-        '''
+        """
         variable_states, relevance = self._get_all_variable_states()
         for vs, pb, rel in zip(variable_states, self.progress_bars, relevance):
             screen.blit(pb['name_text'], pb['name_position'])
@@ -1631,21 +1610,21 @@ class VariableDisplay(object):
 class GameState(object):
 
     def __init__(self, **kwargs):
-        '''
+        """
         Can be re-reimplemented, but must accept **kwargs. These can be used
         further but must not be changed.
-        '''
+        """
 
     def pre_logic(self, **kwargs):
-        '''
+        """
         Is called once before GameState.repeat_logic method calls, using same input kwargs.
 
         Can be re-implemented.
-        '''
+        """
         pass
 
     def repeat_logic(self, **kwargs):
-        '''
+        """
         Must be re-implemented and must accept **kwargs.
 
         This method should utilize kwargs provided to __init__ and this method.
@@ -1656,18 +1635,18 @@ class GameState(object):
             next_state - str - name of the next state class
             kwargs     - dict - at minimum must be an empty dicitonary.
                          This is passed to the next state class repeat_logic method.
-        '''
+        """
         raise NotImplementedError
 
         return next_state, kwargs
 
     def enter(self, game_rate, **kwargs):
-        '''
+        """
         This should be called immediately after instantiation.
         This method blocks, calls GameState.repeat_logic repeatedly, 
         until it outputs the next_state and kwargs.
 
-        '''
+        """
         self._continue = True
         # Call GameState.pre_logic before successive GameState.repeat_logic method calls.
         self.pre_logic(**kwargs)
@@ -1688,17 +1667,17 @@ class GameState(object):
             return next_state, kwargs
 
     def exit(self):
-        '''
+        """
         Interrupts repeated GameState.repeat_logic calls and 
         causes GameState.enter method to return None.
-        '''
+        """
         self._continue = False
 
 
 class GameState_Init_Rewards(GameState):
-    '''
+    """
     This state dispenses rewards if any are required during initialization.
-    '''
+    """
     def __init__(self, **kwargs):
         # Parse input arguments
         self._GameState_kwargs = kwargs
@@ -1897,11 +1876,11 @@ class GameState_Pellet(GameState):
 
 
 class GameState_PelletReward(GameState):
-    '''
+    """
     This state just means pellet reward is released.
     This is implemented in pre_logic method to avoid
     warnings about too slow processing in GameState.repeat_logic method.
-    '''
+    """
     def __init__(self, **kwargs):
         # Parse input arguments
         self.MessageToOE = kwargs['MessageToOE']
@@ -2051,11 +2030,11 @@ class GameState_MilkTrial(GameState):
 
 
 class GameState_MilkTrial_Fail(GameState):
-    '''
+    """
     In this state the game halts for the duration of milk trial penalty.
     This is implemented in pre_logic to avoid warnings regarding slow processing
     in GameState.repeat_logic method.
-    '''
+    """
     
     def __init__(self, **kwargs):
         # Parse input arguments
@@ -2072,11 +2051,11 @@ class GameState_MilkTrial_Fail(GameState):
 
 
 class GameState_MilkReward(GameState):
-    '''
+    """
     This state just means milk reward is released.
     This is implemented in pre_logic method to avoid
     warnings about too slow processing in GameState.repeat_logic method.
-    '''
+    """
     def __init__(self, **kwargs):
         # Parse input arguments
         self.MessageToOE = kwargs['MessageToOE']
@@ -2120,7 +2099,7 @@ class GameStateOperator(object):
     def __init__(self, TaskSettings, MessageToOE, Variables, game_counters, game_state_display_update, 
                  PelletRewardDevices=None, PelletChoice=None, MilkRewardDevices=None, 
                  MilkTrialSignals=None, MilkGoal=None):
-        '''
+        """
         TaskSettings  - dict - see below which values are required
         MessageToOE   - method - this method is called with string to log messages
         Variables     - dict - instance of same name classes
@@ -2136,7 +2115,7 @@ class GameStateOperator(object):
             MilkRewardDevices
             MilkTrialSignals
             MilkGoal
-        '''
+        """
         # Specify game update rate
         self.game_rate = 5 # Game update rate in Hz
         # Parse game state display input
@@ -2204,12 +2183,12 @@ class GameStateOperator(object):
 class MilkTrial_AudioSignal(object):
 
     def __init__(self, actuator_method_call, MessageToOE, AudioSignalMode, FEEDERsettings):
-        '''
+        """
         actuator_method_call - MilkRewardDevices.actuator_method_call method
         MessageToOE          - method is called when signal is started with a message string
         AudioSignalMode - str - 'ambient' or 'localised'
         FEEDERsettings  - dict - key (ID) and value (feeder specific parameters)
-        '''
+        """
         # Parse input
         self.actuator_method_call = actuator_method_call
         self.MessageToOE = MessageToOE
@@ -2249,10 +2228,10 @@ class MilkTrial_AudioSignal(object):
 class MilkTrial_LightSignal(object):
 
     def __init__(self, actuator_method_call, MessageToOE):
-        '''
+        """
         actuator_method_call - MilkRewardDevices.actuator_method_call method
         MessageToOE          - method is called when signal is started with a message string
-        '''
+        """
         # Parse input
         self.actuator_method_call = actuator_method_call
         self.MessageToOE = MessageToOE
@@ -2277,9 +2256,9 @@ class MilkTrial_LightSignal(object):
             self.light_on = False
 
     def _delayed_starter(self, ID, delay):
-        '''
+        """
         delay - float - time to wait in seconds
-        '''
+        """
         self._waiting_on_delay = True
         sleep(delay)
         self._waiting_on_delay = False
@@ -2294,12 +2273,12 @@ class MilkTrial_LightSignal(object):
 class MilkTrialSignals(object):
 
     def __init__(self, TaskSettings, actuator_method_call, MessageToOE, FEEDERsettings=None):
-        '''
+        """
         TaskSettings    - dict - General Task settings. See below for what is used.
         actuator_method_call - MilkRewardDevices.actuator_method_call method
         MessageToOE          - method is called when signal is started with a message string
         FEEDERsettings  - dict - key (ID) and value (feeder specific parameters)
-        '''
+        """
         # Parse TaskSettings
         self.FirstTrialLightOn      = TaskSettings['LightSignalOnRepetitions']['presentation']
         self.OtherTrialLightOn      = TaskSettings['LightSignalOnRepetitions']['repeat']
@@ -2353,7 +2332,7 @@ class Buttons(object):
 
     def __init__(self, position_on_screen, renderText, 
                  PelletRewardDevices=None, MilkRewardDevices=None):
-        '''
+        """
         position_on_screen  - dict - ['top', 'bottom', 'left', 'right'] border of the buttons 
                               on screen provided to Buttons.render method
         renderText          - pygame.font.SysFont.render method for an existing font instace
@@ -2361,7 +2340,7 @@ class Buttons(object):
                               If not provided, relevant buttons will not be created.
         MilkRewardDevices   - instance of class with same name.
                               If not provided, relevant buttons will not be created.
-        '''
+        """
         self._PelletRewardDevices = PelletRewardDevices
         self._MilkRewardDevices = MilkRewardDevices
         self._define()
@@ -2405,9 +2384,9 @@ class Buttons(object):
         return button
 
     def _inactivate_device(self, device_type, ID):
-        '''
+        """
         This method is called whenever a device is inactivated
-        '''
+        """
         if device_type == 'pellet':
             # Inactivate pellet reward button
             self.get('buttonReleasePellet', ID)['enabled'] = False
@@ -2420,12 +2399,12 @@ class Buttons(object):
             raise ValueError('Unknown device_type.')
 
     def _define(self):
-        '''
+        """
         Add or remove buttons in this function
         Create new callbacks for new button if necessary
         Callbacks are called at button click in a new thread with button dictionary as argument
         Note default settings applied in Buttons._addDefaultProperties method
-        '''
+        """
         self.list = []
         self.names = []
         # Game On/Off button
@@ -2593,11 +2572,11 @@ class Buttons(object):
                     Buttons._draw_button(screen, subbutton)
 
     def click(self, pos):
-        '''
+        """
         Checks if pos matches collidepoint of any buttons in self.list
         If there is a match, callback function is called for that button, 
         if it is enabled (['enabled'] = True).
-        '''
+        """
         for button in self.list:
             if isinstance(button, dict):
                 if button['Rect'].collidepoint(pos) and button['enabled']:
@@ -2681,12 +2660,12 @@ class TextRenderer(object):
 class Display(object):
 
     def __init__(self, size, variable_display, button_display, info_display, update_rate=20):
-        '''
+        """
         size             - tuple - (width, height) of screen as int
         variable_display - VariableDisplay instance render method
         button_display   - Buttons instance render method
         info_display     - InfoDisplay instance render method
-        '''
+        """
         self._render_methods = []
         self._render_methods.append(variable_display)
         self._render_methods.append(button_display)
@@ -2790,16 +2769,31 @@ class UserEventHandler(object):
 
 class Core(object):
 
-    def __init__(self, TaskSettings, TaskIO):
-        '''
-        Initializes all possible devices to prepare for start command.
-        '''
+    def __init__(self, TaskSettings, open_ephys_message_pipe, processed_position_list,
+                 processed_position_update_interval, position_histogram_dict):
+        """Initializes all possible devices to prepare for start command.
+
+        :param TaskSettings:
+        :param multiprocessing.connection open_ephys_message_pipe:
+        :param multiprocessing.managers.List processed_position_list:
+        :param int processed_position_update_interval:
+        :param multiprocessing.managers.Dict position_histogram_dict:
+        """
+
         # Parse input
-        self.TaskIO = TaskIO
         FEEDERs = TaskSettings.pop('FEEDERs')
         self.TaskSettings = TaskSettings
+
+        self.open_ephys_message_pipe = open_ephys_message_pipe
+        self.processed_position_list = processed_position_list
+        self.processed_position_update_interval = processed_position_update_interval
+        self.position_histogram_dict = position_histogram_dict
+
+        self._closed = False
+
         # Initialize pygame engine
         init_pygame()
+
         # Initialize Pellet Rewards
         if self.TaskSettings['games_active']['pellet']:
             print('Initializing Pellet FEEDERs...')
@@ -2810,6 +2804,7 @@ class Core(object):
             print('Initializing Pellet FEEDERs Successful')
         else:
             self.PelletRewardDevices = None
+
         # Initialize Milk Rewards
         if self.TaskSettings['games_active']['milk']:
             print('Initializing Milk FEEDERs ...')
@@ -2822,6 +2817,7 @@ class Core(object):
             print('Initializing Milk FEEDERs Successful')
         else:
             self.MilkRewardDevices = None
+
         # Initialize counters
         self.game_counters = {}
         if self.TaskSettings['games_active']['pellet']:
@@ -2832,38 +2828,55 @@ class Core(object):
                                                  'count': [0] * len(self.MilkRewardDevices.IDs_active)}
             self.game_counters['Successful'] = {'ID': deepcopy(self.MilkRewardDevices.IDs_active), 
                                                 'count': [0] * len(self.MilkRewardDevices.IDs_active)}
+
         # Initialize Pellet Game
         if self.TaskSettings['games_active']['pellet']:
-            self.PelletChoice = PelletChoice(self.PelletRewardDevices, self.TaskIO['RPIPos'], 
+            self.PelletChoice = PelletChoice(self.PelletRewardDevices, position_histogram_dict,
                                              self.TaskSettings['arena_size'])
         else:
             self.PelletChoice = None
+
         # Initialize Milk Game
         if self.TaskSettings['games_active']['milk']:
             self.MilkTrialSignals = MilkTrialSignals(self.TaskSettings, 
                                                      self.MilkRewardDevices.actuator_method_call, 
-                                                     self.TaskIO['MessageToOE'], FEEDERs['milk'])
+                                                     self.send_message_to_open_ephys, FEEDERs['milk'])
             self.MilkGoal = MilkGoal(self.MilkRewardDevices.IDs_active, 
                                      next_feeder_method=self.TaskSettings['MilkGoalNextFeederMethod'], 
                                      repetitions=self.TaskSettings['MilkGoalRepetition'])
         else:
             self.MilkTrialSignals = None
             self.MilkGoal = None
+
         # Prepare chewing counter
         if self.TaskSettings['games_active']['pellet']:
             self.ChewingTracker = ChewingTracker(self.TaskSettings['Chewing_TTLchan'])
-            self.TaskIO['OEmessages'].add_callback(self.ChewingTracker.check_for_chewing_message)
+            self.chewing_tracker_update_method_thread = Thread(target=self.chewing_tracker_update_method)
+            self.chewing_tracker_update_method_thread.start()
         else:
             self.ChewingTracker = None
 
+    @property
+    def closed(self):
+        return self._closed
+
+    def send_message_to_open_ephys(self, message):
+        self.open_ephys_message_pipe.send(message)
+
+    def chewing_tracker_update_method(self):
+        while not self.closed:
+            if self.open_ephys_message_pipe.poll(0.1):
+                message = self.open_ephys_message_pipe.recv()
+                self.ChewingTracker.check_for_chewing_message(message)
+
     @staticmethod
     def prepare_milk_feeder_kwargs(FEEDERs, TaskSettings):
-        '''
+        """
         Prepares specific milk feeder kwargs for use in Reward Devices class
 
         FEEDERs      - dict - key (ID) and value (feeder specific parameters)
         TaskSettings - dict - see below for used keys
-        '''
+        """
         # Grab relavant values from TaskSettings
         AudioSignalMode = TaskSettings['AudioSignalMode']
         negativeAudioSignal = TaskSettings['NegativeAudioSignal']
@@ -2886,13 +2899,14 @@ class Core(object):
         return feeder_kwargs
 
     def _final_initialization(self):
-        '''
+        """
         Final initialization that depends on task inputs to be active (e.g. tracking).
-        '''
+        """
         # Initialize text rendering for faster display
         self.TextRenderer = TextRenderer()
         # Initialize variables first to find out how many are in use
-        self.Variables = Core.init_Variables(self.TaskSettings, self.TaskIO['RPIPos'], self.ChewingTracker, 
+        self.Variables = Core.init_Variables(self.TaskSettings, self.processed_position_list,
+                                             self.processed_position_update_interval, self.ChewingTracker,
                                              self.MilkRewardDevices, self.MilkGoal)
         # Get positions of all display elements based on number of variables
         display_size, variable_pos, buttons_pos, info_pos = Display.Positions(len(self.Variables.full_list()))
@@ -2908,7 +2922,7 @@ class Core(object):
         self.Display = Display(display_size, self.VariableDisplay.render, 
                                self.Buttons.render, self.InfoDisplay.render)
         # Initialize Game State Process
-        self.GameStateOperator = GameStateOperator(self.TaskSettings, self.TaskIO['MessageToOE'], 
+        self.GameStateOperator = GameStateOperator(self.TaskSettings, self.send_message_to_open_ephys,
                                                    self.Variables, self.game_counters, 
                                                    self.InfoDisplay.update_game_state, 
                                                    self.PelletRewardDevices, self.PelletChoice, 
@@ -2918,19 +2932,24 @@ class Core(object):
         self.UserEventHandler = UserEventHandler(self.Buttons.click, self.KillSwitch)
 
     @staticmethod
-    def init_Variables(TaskSettings, RPIPos, ChewingTracker=None, MilkRewardDevices=None, MilkGoal=None):
+    def init_Variables(TaskSettings, processed_position_list, processed_position_update_interval,
+                       ChewingTracker=None, MilkRewardDevices=None, MilkGoal=None):
         # Pre-compute variables
-        TaskSettings['one_second_steps'] = int(np.round(1 / RPIPos.combPos_update_interval))
-        TaskSettings['max_distance_in_arena'] = int(round(np.hypot(TaskSettings['arena_size'][0], TaskSettings['arena_size'][1])))
-        TaskSettings['distance_steps'] = int(np.round(TaskSettings['LastTravelTime'] * TaskSettings['one_second_steps']))
-        TaskSettings['angular_distance_steps'] = int(np.round(TaskSettings['MilkTaskGoalAngularDistanceTime'] * TaskSettings['one_second_steps']))
+        TaskSettings['one_second_steps'] = \
+            int(np.round(1 / processed_position_update_interval))
+        TaskSettings['max_distance_in_arena'] = \
+            int(round(np.hypot(TaskSettings['arena_size'][0], TaskSettings['arena_size'][1])))
+        TaskSettings['distance_steps'] = \
+            int(np.round(TaskSettings['LastTravelTime'] * TaskSettings['one_second_steps']))
+        TaskSettings['angular_distance_steps'] = \
+            int(np.round(TaskSettings['MilkTaskGoalAngularDistanceTime'] * TaskSettings['one_second_steps']))
         # Start Variable class
-        return Variables(TaskSettings, RPIPos, ChewingTracker, MilkRewardDevices, MilkGoal)
+        return Variables(TaskSettings, processed_position_list, ChewingTracker, MilkRewardDevices, MilkGoal)
 
     def _inactivation_signal(self, device_type, ID):
-        '''
+        """
         This method is passed to reward devices and invoked each time a device is inactivated.
-        '''
+        """
         self.Buttons._inactivate_device(device_type, ID)
         if device_type == 'pellet':
             self.PelletChoice._ensure_nearest_feeder_map_valid(self.PelletRewardDevices.IDs_active)
@@ -2950,23 +2969,28 @@ class Core(object):
         self.UserEventHandler.start()
 
     def KillSwitch(self):
-        '''
+        """
         Allows shutting down all downstream and upstream processes.
         Can be called by child proceses.
-        '''
+        """
         self.stop()
 
     def stop(self):
         print('Closing Task processes ...')
+
         # Stop Display event detection
         self.UserEventHandler.close()
+
         # Stop Game State Process
         self.GameStateOperator.close()
+
         # Stop updating display
         self.Display.close()
+
         # Stop updating ingame variables
         self.Variables.close()
         print('Closing Task processes successful')
+
         # Close FEEDER connections
         if hasattr(self.PelletRewardDevices, 'close'):
             print('Closing Pellet FEEDER connections...')
@@ -2976,6 +3000,77 @@ class Core(object):
             print('Closing Pellet FEEDER connections...')
             self.MilkRewardDevices.close()
             print('Closing Pellet FEEDER connections successful.')
+
         # Close pygame engine
         close_pygame()
 
+        self._closed = True
+
+
+class CoreInSeparateProcess(object):
+    """
+    This class can be used instead of the :py:class:`Core` to allow the task to run in a separate process.
+
+    Inputs to the task must be functional in a separate process created with multiprocessing package.
+    """
+
+    def __init__(self, *args):
+        """
+        Same input arguments as for :py:class:`Core`.
+        """
+
+        command_receiver_pipe, self._command_sender_pipe = multiprocessing.Pipe()
+
+        args = (command_receiver_pipe,) + args
+        self._core_process = multiprocessing.Process(target=self.core_process_method, args=args)
+        self._core_process.start()
+
+        while not self._command_sender_pipe.poll(0.1):
+            if self._command_sender_pipe.recv() == 'initialization successful':
+                print('Task started successfully in separate process.')
+            else:
+                raise Exception('Unknown input from task process.')
+
+    @staticmethod
+    def core_process_method(command_receiver_pipe, *args):
+        """This method initializes :py:class:`Core` and runs until it has completed `close` command.
+        Any strings received via `command_receiver_pipe` are executed as `Core` class method names.
+
+        :param multiprocessing.connection command_receiver_pipe:
+        :param args: all other arguments passed on to :py:class:`Core`
+        """
+
+        core = Core(*args)
+
+        command_receiver_pipe.send('initialization successful')
+
+        while not core.closed:
+
+            if command_receiver_pipe.poll(0.1):
+
+                method_name = command_receiver_pipe.recv()
+
+                ret = getattr(core, method_name)()
+
+                command_receiver_pipe.send(ret)
+
+    def run(self):
+        """
+        Same functionality as for :py:class:`Core`.
+        """
+        if self._core_process.is_alive():
+            self._command_sender_pipe.send('run')
+            return self._command_sender_pipe.recv()
+        else:
+            raise Exception('Task Process is not running. Can not receive commands.')
+
+    def stop(self):
+        """
+        Same functionality as for :py:class:`Core`.
+        """
+        if self._core_process.is_alive():
+            self._command_sender_pipe.send('stop')
+            self._core_process.join()
+            return self._command_sender_pipe.recv()
+        else:
+            raise Exception('Task Process is not running. Can not receive commands.')

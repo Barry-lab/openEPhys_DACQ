@@ -10,9 +10,7 @@ import zmq
 import json
 import pigpio
 import os
-import cPickle as pickle
 from scipy.spatial.distance import euclidean
-import sys
 from multiprocessing import Manager, Process, RawArray, Value
 from threading import Thread
 from copy import copy, deepcopy
@@ -230,7 +228,7 @@ class OnlineTracker(object):
         cutout_shape = (cutout_radius * 2 + 1, cutout_radius * 2 + 1)
         blank = np.zeros(cutout_shape, dtype=np.uint8)
         # Find indices in array at correct distance from center
-        all_indices = np.unravel_index(range(blank.size),blank.shape, order='F')
+        all_indices = np.unravel_index(list(range(blank.size)), blank.shape, order='F')
         center_ind = [cutout_radius, cutout_radius]
         ind_1 = np.array([], dtype=np.int16)
         ind_2 = np.array([], dtype=np.int16)
@@ -473,7 +471,7 @@ class SharedArrayQueue(object):
         self.ctype = ctype
         self.array_shape = array_shape
         self.manager = Manager()
-        self.data_indices = range(max_queue_length)
+        self.data_indices = list(range(max_queue_length))
         self.occupied_data_indices = self.manager.list()
         self.shared_arrays, self.shared_array_wrappers = SharedArrayQueue.create_shared_arrays(ctype, array_shape, max_queue_length)
 
@@ -496,7 +494,7 @@ class SharedArrayQueue(object):
         '''
         shared_arrays = []
         shared_array_wrappers = []
-        for n in range(max_queue_length):
+        for _ in range(max_queue_length):
             shared_array, shared_array_wrapper = SharedArrayQueue.create_shared_array(ctype, array_shape)
             shared_arrays.append(shared_array)
             shared_array_wrappers.append(shared_array_wrapper)

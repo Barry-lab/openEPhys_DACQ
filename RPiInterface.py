@@ -3,21 +3,20 @@
 ### By Sander Tanni, January 2018, UCL
 
 import zmq
+import multiprocessing
 from time import time, sleep
-from sshScripts import ssh
+from openEPhys_DACQ.sshScripts import ssh
 import json
 from threading import Lock, Thread
 import numpy as np
 from scipy.spatial.distance import euclidean
-from itertools import combinations
-from TrackingDataProcessing import combineCamerasData
-from ZMQcomms import paired_messenger, remote_object_controller
+from openEPhys_DACQ.TrackingDataProcessing import combineCamerasData
+from openEPhys_DACQ.ZMQcomms import paired_messenger, remote_object_controller
 from multiprocessing.dummy import Pool as ThreadPool
 from tempfile import mkdtemp
 from shutil import rmtree
 import os
-from HelperFunctions import test_pinging_address
-import HelperFunctions as hfunct
+from openEPhys_DACQ.HelperFunctions import test_pinging_address, time_string
 
 
 def write_files_to_RPi(files, address, username='pi', verbose=False):
@@ -80,7 +79,7 @@ class Camera_RPi_file_manager(object):
         write_files_to_RPi(Camera_RPi_file_manager.Camera_RPi_files(), self.address, self.username, self.verbose)
 
     def retrieve_timestamps(self):
-        print(['DEBUG', hfunct.time_string(), 'Retrieving timestamps from ' + self.address])
+        print(['DEBUG', time_string(), 'Retrieving timestamps from ' + self.address])
         temp_folder = mkdtemp('RPiTempFolder')
         files = ('RawVideoEncoderTimestamps.csv', 
                  'VideoEncoderTimestamps.csv', 
@@ -93,7 +92,7 @@ class Camera_RPi_file_manager(object):
         filename = os.path.join(temp_folder, files[2])
         self.GlobalClock_timestamps = np.genfromtxt(filename, dtype=int)
         rmtree(temp_folder)
-        print(['DEBUG', hfunct.time_string(), 'Retrieving timestamps from ' + self.address + ' complete.'])
+        print(['DEBUG', time_string(), 'Retrieving timestamps from ' + self.address + ' complete.'])
 
     def retrieve_OnlineTrackerData(self):
         '''
@@ -102,13 +101,13 @@ class Camera_RPi_file_manager(object):
 
         Note! OnlineTrackerData_timestamps must be obtained first using retrieve_timestamps() method. 
         '''
-        print(['DEBUG', hfunct.time_string(), 'Retrieving tracking data from ' + self.address])
+        print(['DEBUG', time_string(), 'Retrieving tracking data from ' + self.address])
         if hasattr(self, 'OnlineTrackerData_timestamps'):
             temp_folder = mkdtemp('RPiTempFolder')
             self.OnlineTrackerData = np.zeros((0, 0))
             while self.OnlineTrackerData.shape[0] != self.OnlineTrackerData_timestamps.size:
                 try:
-                    print(['DEBUG', hfunct.time_string(), 'Retrieving tracking data from ' + self.address + ' attempt'])
+                    print(['DEBUG', time_string(), 'Retrieving tracking data from ' + self.address + ' attempt'])
                     read_files_from_RPi(('OnlineTrackerData.csv',), temp_folder, self.address, self.username, self.verbose)
                     filename = os.path.join(temp_folder, 'OnlineTrackerData.csv')
                     self.OnlineTrackerData = np.genfromtxt(filename, delimiter=',', dtype=float)
@@ -117,7 +116,7 @@ class Camera_RPi_file_manager(object):
             rmtree(temp_folder)
         else:
             raise Exception('OnlineTrackerData_timestamps must be obtained first.')
-        print(['DEBUG', hfunct.time_string(), 'Retrieving tracking data from ' + self.address + ' complete.'])
+        print(['DEBUG', time_string(), 'Retrieving tracking data from ' + self.address + ' complete.'])
 
     def retrieve_timestamps_and_OnlineTrackerData(self):
         '''
@@ -141,11 +140,11 @@ class Camera_RPi_file_manager(object):
         '''
         Copies over video data to folder_path with cameraID included in the filename.
         '''
-        print(['DEBUG', hfunct.time_string(), 'Retrieving video data from ' + self.address])
+        print(['DEBUG', time_string(), 'Retrieving video data from ' + self.address])
         read_file_from_RPi(Camera_RPi_file_manager.video_file_name_on_RPi(), 
                            os.path.join(folder_path, Camera_RPi_file_manager.video_file_name_on_RecordingPC(cameraID)), 
                            self.address, self.username, self.verbose)
-        print(['DEBUG', hfunct.time_string(), 'Retrieving video data from ' + self.address + ' complete.'])
+        print(['DEBUG', time_string(), 'Retrieving video data from ' + self.address + ' complete.'])
 
 
 class CameraControl(object):
@@ -333,9 +332,7 @@ class onlineTrackingData(object):
     # Initialize this class as RPIpos = onlineTrackingData(CameraSettings, arena_size)
     # Check for latest position with combPos = RPIpos.combPosHistory[-1]
 
-    # Make sure to use Locks to avoid errors, for example:
-    # with self.combPosLock:
-    #     combPos = RPIpos.combPosHistory[-1]
+    # RPIpos.combPosHistory is multiprocessing.managers.List and can take care of locks across processes
 
     # Optional arguments during initialization:
     #   HistogramParameters is a list: [margins, binSize, histogram_speed_limit]
@@ -347,18 +344,18 @@ class onlineTrackingData(object):
         # Make a list of cameraIDs from CameraSettings for reference to other lists in this class.
         self.cameraIDs = sorted(self.CameraSettings['CameraSpecific'].keys())
         if HistogramParameters is None:
-            HistogramParameters = {'margins': 10, # histogram data margins in centimeters
-                                   'binSize': 2, # histogram binSize in centimeters
-                                   'speedLimit': 10}# centimeters of distance in last second to be included
+            HistogramParameters = {'margins': 10,  # histogram data margins in centimeters
+                                   'binSize': 2,  # histogram binSize in centimeters
+                                   'speedLimit': 10}  # centimeters of distance in last second to be included
         self.KeepGettingData = True # Set True for endless while loop of updating latest data
         self.posDatas = [None for i in range(len(self.cameraIDs))]
-        self.combPosHistory = []
+        self.multiprocess_manager = multiprocessing.Manager()
+        self.combPosHistory = self.multiprocess_manager.list([])
         self.sockSUBs = onlineTrackingData.setupSockets(self.cameraIDs, self.CameraSettings)
         # Initialize Locks to avoid errors
         self.posDatasLock = Lock()
-        self.combPosHistoryLock = Lock()
-        self.histogramLock = Lock()
         # Initialize histogram
+        self.position_histogram_dict = self.multiprocess_manager.dict()
         self.initializePosHistogram(HistogramParameters, update=False)
         # Start updating position data and storing it in history
         self.T_updateCombPosHistory = Thread(target=self.updateCombPosHistory)
@@ -440,8 +437,7 @@ class onlineTrackingData(object):
                                      self.arena_size[1] + margins)
         # If update requested with new parameters, recompute histogram
         if update:
-            with self.combPosHistoryLock:
-                combPos = np.array(self.combPosHistory)
+            combPos = np.array(self.combPosHistory)
             # Keep datapoints above speed limit
             one_second_steps = int(np.round(1 / self.combPos_update_interval))
             idx_keep = np.zeros(combPos.shape[0], dtype=bool)
@@ -454,10 +450,9 @@ class onlineTrackingData(object):
         else:
             histmap = np.zeros((yHistogram_edges.size - 1, xHistogram_edges.size - 1), dtype=np.float32)
         # Update shared data
-        with self.histogramLock:
-            self.HistogramParameters = HistogramParameters
-            self.positionHistogram = histmap
-            self.positionHistogramEdges = {'x': xHistogram_edges, 'y': yHistogram_edges}
+        self.position_histogram_dict['data'] = histmap
+        self.position_histogram_dict['parameters'] = HistogramParameters
+        self.position_histogram_dict['edges'] = {'x': xHistogram_edges, 'y': yHistogram_edges}
 
     def updateCombPosHistory(self):
         # Initialize RPi position data listening, unless synthetic data requested
@@ -478,40 +473,36 @@ class onlineTrackingData(object):
         one_second_steps = int(np.round(1 / self.combPos_update_interval))
         self.lastSecondDistance = 0 # vector distance from position 1 second in past
         # Check data is available before proceeding
-        with self.combPosHistoryLock:
-            lastCombPos = None
-            while lastCombPos is None:
-                lastCombPos = self.combineCurrentLineData(None)
-            self.combPosHistory.append(list(lastCombPos))
+        lastCombPos = None
+        while lastCombPos is None:
+            lastCombPos = self.combineCurrentLineData(None)
+        self.combPosHistory.append(list(lastCombPos))
         time_of_last_datapoint = time()
         # Update the data at specific interval
         while self.KeepGettingData:
             time_since_last_datapoint = time() - time_of_last_datapoint
             if time_since_last_datapoint > self.combPos_update_interval:
                 # If enough time has passed since last update, append to combPosHistory list
-                with self.combPosHistoryLock:
-                    lastCombPos = self.combineCurrentLineData(self.combPosHistory[-1])
-                    if not (lastCombPos is None):
-                        self.combPosHistory.append(list(lastCombPos))
-                    else:
-                        self.combPosHistory.append(lastCombPos)
+                lastCombPos = self.combineCurrentLineData(self.combPosHistory[-1])
+                if not (lastCombPos is None):
+                    self.combPosHistory.append(list(lastCombPos))
+                else:
+                    self.combPosHistory.append(lastCombPos)
                 time_of_last_datapoint = time()
                 if len(self.combPosHistory) > one_second_steps:
                     # Compute distance from one second in the past if enough data available
-                    with self.combPosHistoryLock:
-                        currPos = self.combPosHistory[-1]
-                        pastPos = self.combPosHistory[-one_second_steps]
+                    currPos = self.combPosHistory[-1]
+                    pastPos = self.combPosHistory[-one_second_steps]
                     if not (currPos is None) and not (pastPos is None):
                         self.lastSecondDistance = euclidean(currPos[:2], pastPos[:2])
-                        if self.lastSecondDistance > self.HistogramParameters['speedLimit']:
+                        if self.lastSecondDistance > self.position_histogram_dict['parameters']['speedLimit']:
                             # If animal has been moving enough, update histogram
-                            with self.histogramLock:
-                                tmp_x = np.array([currPos[0]]).astype(np.float32)
-                                tmp_y = np.array([currPos[1]]).astype(np.float32)
-                                yedges = self.positionHistogramEdges['y']
-                                xedges = self.positionHistogramEdges['x']
-                                histmap, _1, _2 = np.histogram2d(tmp_y, tmp_x, [yedges, xedges])
-                                self.positionHistogram = self.positionHistogram + histmap
+                            tmp_x = np.array([currPos[0]]).astype(np.float32)
+                            tmp_y = np.array([currPos[1]]).astype(np.float32)
+                            yedges = self.position_histogram_dict['edges']['y']
+                            xedges = self.position_histogram_dict['edges']['x']
+                            histmap, _1, _2 = np.histogram2d(tmp_y, tmp_x, [yedges, xedges])
+                            self.position_histogram_dict['data'] = self.position_histogram_dict['data'] + histmap
                     else:
                         self.lastSecondDistance = None
             else:

@@ -3,13 +3,8 @@ import sys
 from scipy.signal import butter, lfilter, decimate
 import os
 import numpy as np
-try:
-    from PyQt4 import QtGui
-    from PyQt4.QtCore import QThread, pyqtSignal
-    PyQt4_Available = True
-except:
-    print('PyQt4 not found. Some functions may not be available')
-    PyQt4_Available = False
+from PyQt5 import QtWidgets
+from PyQt5.QtCore import QThread, pyqtSignal
 import subprocess
 import multiprocessing as mp
 import threading
@@ -417,61 +412,72 @@ def test_pinging_address(address='localhost'):
     else:
         return False
 
-if PyQt4_Available:
 
-    def openSingleFileDialog(loadsave, directory=os.path.expanduser("~"), suffix='', caption='Choose File'):
-        # Pops up a GUI to select a single file.
-        dialog = QtGui.QFileDialog(directory=directory, caption=caption)
-        if loadsave is 'save':
-            dialog.setFileMode(QtGui.QFileDialog.AnyFile)
-        elif loadsave is 'load':
-            dialog.setFileMode(QtGui.QFileDialog.ExistingFile)
-        dialog.setViewMode(QtGui.QFileDialog.List) # or Detail
-        if len(suffix) > 0:
-            dialog.setNameFilter('*.' + suffix)
-            dialog.setDefaultSuffix(suffix)
-        if dialog.exec_():
-            # Get path and file name of selection
-            tmp = dialog.selectedFiles()
-            selected_file = str(tmp[0])
-            return selected_file
+def openSingleFileDialog(load_save, directory_path=os.path.expanduser("~"), suffix='', caption='Choose File'):
+    """Opens a GUI dialog for browsing files when closed returns full path to file.
 
-    def show_message(message, message_more=None):
-        # This function is used to display a message in a separate window
-        msg = QtGui.QMessageBox()
-        msg.setIcon(QtGui.QMessageBox.Information)
-        msg.setText(message)
-        if message_more:
-            msg.setInformativeText(message_more)
-        msg.setWindowTitle('Message')
-        msg.setStandardButtons(QtGui.QMessageBox.Ok)
-        msg.exec_()
+    If no file is selected but dialog is closed, then this function returns None.
 
-    class QThread_with_completion_callback(QThread):
-        finishedSignal = pyqtSignal()
+    :param str load_save: either 'save' or 'load', which determines if all or only existing files can be selected
+    :param str directory_path: optionally specify starting directory
+    :param str suffix: specify filename suffixes to filter for
+    :param str caption: caption to display on dialog
+    :return: fpath
+    """
+    # Pops up a GUI to select a single file.
+    dialog = QtWidgets.QFileDialog(directory=directory_path, caption=caption)
+    if load_save is 'save':
+        dialog.setFileMode(QtWidgets.QFileDialog.AnyFile)
+    elif load_save is 'load':
+        dialog.setFileMode(QtWidgets.QFileDialog.ExistingFile)
+    dialog.setViewMode(QtWidgets.QFileDialog.List) # or Detail
+    if len(suffix) > 0:
+        dialog.setNameFilter('*.' + suffix)
+        dialog.setDefaultSuffix(suffix)
+    if dialog.exec_():
+        # Get path and file name of selection
+        tmp = dialog.selectedFiles()
+        selected_file = str(tmp[0])
+        return selected_file
+
+
+def show_message(message, message_more=None):
+    # This function is used to display a message in a separate window
+    msg = QtWidgets.QMessageBox()
+    msg.setIcon(QtWidgets.QMessageBox.Information)
+    msg.setText(message)
+    if message_more:
+        msg.setInformativeText(message_more)
+    msg.setWindowTitle('Message')
+    msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+    msg.exec()
+
+
+class QThread_with_completion_callback(QThread):
+    finishedSignal = pyqtSignal()
+    """
+    Allows calling funcitons in separate threads with a callback function executed at completion.
+
+    Note! Make sure QThread_with_completion_callback instance does not go out of scope during execution.
+    """
+    def __init__(self, callback_function, function, return_output=False, callback_args=(), function_args=()):
         """
-        Allows calling funcitons in separate threads with a callback function executed at completion.
-
-        Note! Make sure QThread_with_completion_callback instance does not go out of scope during execution.
+        The callback_function is called when function has finished.
+        The function is called with any input arguments that follow it.
         """
-        def __init__(self, callback_function, function, return_output=False, callback_args=(), function_args=()):
-            """
-            The callback_function is called when function has finished.
-            The function is called with any input arguments that follow it.
-            """
-            super(QThread_with_completion_callback, self).__init__()
-            if return_output:
-                self.finishedSignal.connect(lambda: callback_function(self.function_output, *self.callback_args))
-            else:
-                self.finishedSignal.connect(lambda: callback_function(*self.callback_args))
-            self.function = function
-            self.callback_args = callback_args
-            self.function_args = function_args
-            self.start()
+        super(QThread_with_completion_callback, self).__init__()
+        if return_output:
+            self.finishedSignal.connect(lambda: callback_function(self.function_output, *self.callback_args))
+        else:
+            self.finishedSignal.connect(lambda: callback_function(*self.callback_args))
+        self.function = function
+        self.callback_args = callback_args
+        self.function_args = function_args
+        self.start()
 
-        def run(self):
-            self.function_output = self.function(*self.function_args)
-            self.finishedSignal.emit()
+    def run(self):
+        self.function_output = self.function(*self.function_args)
+        self.finishedSignal.emit()
 
 
 def clearLayout(layout, keep=0):

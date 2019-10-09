@@ -1,5 +1,5 @@
-import os
-import NWBio
+
+from openEPhys_DACQ import NWBio
 import matplotlib.pyplot as plt
 import numpy as np
 import argparse
