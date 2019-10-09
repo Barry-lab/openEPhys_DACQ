@@ -1,0 +1,552 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Recording PC setup for Data Acquisition &mdash; openEPhys_DACQ 0.75 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script type="text/javascript" src="_static/jquery.js"></script>
+        <script type="text/javascript" src="_static/underscore.js"></script>
+        <script type="text/javascript" src="_static/doctools.js"></script>
+        <script type="text/javascript" src="_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Camera and GlobalClock Raspberry Pi setup" href="trackingRPiSetup.html" />
+    <link rel="prev" title="Setup for Open Ephys Recordings and Analysis" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home"> openEPhys_DACQ
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.75
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Recording PC setup for Data Acquisition</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#setting-up-the-operating-system">Setting up the Operating System</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#install-ubuntu">Install Ubuntu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#fix-slow-shutdown-issue">Fix slow shutdown issue</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#connect-to-the-local-network">Connect to the local network</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#update-the-system">Update the system</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-additional-drivers">Install additional drivers</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#other-useful-steps">Other useful steps</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#install-git-for-using-github">Install git for using github</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#connect-to-a-network-drive">Connect to a network drive</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-google-chrome">Install Google Chrome</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-sublime-text-3-for-editing-scripts">Install Sublime Text 3 for editing scripts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-sphinx-for-editing-readthedocs-files">Install Sphinx for editing ReadTheDocs files</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-qt-designer-for-editing-guis">Install QT Designer for editing GUIs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#turn-off-screen-lock">Turn off screen lock</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-convenient-brightness-controller">Install convenient brightness controller</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#install-open-ephys-gui">Install Open Ephys GUI</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#install-dependencies">Install Dependencies</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-open-ephys">Install Open Ephys</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#intan-headstage-setup">Intan Headstage setup</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#reference-and-ground">Reference and Ground</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-leds-on-intan-headstage-for-tracking">Install LEDs on Intan Headstage for tracking</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#setup-recording-pc-for-using-recording-manager">Setup Recording PC for using Recording Manager</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#install-the-dependencies-for-the-scripts">Install the dependencies for the scripts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#make-changes-in-the-scripts-to-suit-your-pc">Make changes in the scripts to suit your PC</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="trackingRPiSetup.html">Camera and GlobalClock Raspberry Pi setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howToUseTheseScripts.html">Tutorial for using Open Ephys Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="wirelessRewardSetup.html">FEEDER setup</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">openEPhys_DACQ</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html">Docs</a> &raquo;</li>
+        
+      <li>Recording PC setup for Data Acquisition</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/recordingPCandOpenEphysGUI.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="recording-pc-setup-for-data-acquisition">
+<span id="recordingpcandopenephysgui"></span><h1>Recording PC setup for Data Acquisition<a class="headerlink" href="#recording-pc-setup-for-data-acquisition" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="setting-up-the-operating-system">
+<span id="settinguptheoperatingsystem"></span><h2>Setting up the Operating System<a class="headerlink" href="#setting-up-the-operating-system" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="install-ubuntu">
+<h3>Install Ubuntu<a class="headerlink" href="#install-ubuntu" title="Permalink to this headline">¶</a></h3>
+<p>This document is based on Ubuntu 16.04 LTS installation. Instructions can be found on Ubuntu  <a class="reference external" href="https://www.ubuntu.com/download/desktop/install-ubuntu-desktop">website</a>.</p>
+<p><em>((During installation agree to using 3rd party repositories))</em></p>
+<p><em>((Make sure you keep the option the ask for password on startup))</em></p>
+<p>If the PC has multiple hard drives, then Ubuntu may put the boot loader (the thing that starts the Operating System) on a different hard drive than the one where Ubuntu files will be. To have control over this, you will need to use the option that also requires you to set up partitions manually. Preferably you would want to have the boot loader on the same drive as your Ubuntu installation. See below.</p>
+<p>During installation you can also manually edit the partition sizes and have a separate partition for the Home folder. To do this, use the <em>Something else</em> option when the installation prompt asks how to set up the Disks. Use <a class="reference external" href="https://askubuntu.com/questions/343268/how-to-use-manual-partitioning-during-installation">this guide</a> for setting up the paritions. Here Primary Type option was used for all partitions and Swap was placed to the end of the drive.</p>
+</div>
+<div class="section" id="fix-slow-shutdown-issue">
+<h3>Fix slow shutdown issue<a class="headerlink" href="#fix-slow-shutdown-issue" title="Permalink to this headline">¶</a></h3>
+<p>This is an optional step, if this issue occurs with your PC setup. It may happen that after installation shutdown process is very slow, which you would notice as you restart your PC. In this case during shutdown, when you see Ubuntu loading logo, hit F12 on the keyboard. If over the next few minutes check if you see similar error messages to the following:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>ata2.00: exception Emask 0x0 SAct 0x0 SErr 0x0 action 0x6 frozen
+ata2.00: status: { DRDY}
+ata2.00: revalidation failed (errno=-5)
+</pre></div>
+</div>
+<p>If you see similar error messages, do the following to fix it (It is based on the 2nd solution in <a class="reference external" href="https://askubuntu.com/questions/764568/ubuntu-16-04-hangs-on-shutdown-restart/769972#769972">this post</a>)</p>
+<p>Open Dash and search for <code class="docutils literal notranslate"><span class="pre">Software</span> <span class="pre">and</span> <span class="pre">Updates</span></code>. Open Software and Updates -&gt; Go to Developr Options -&gt; Tick the box next to where it says <em>Pre-released updates (xenial-proposed)</em>. It will promt you to Reload your sources, which you should do. After this <a class="reference internal" href="#updatethesystem"><span class="std std-ref">Update the system</span></a>. After restarting the computer again, this problem should no longer occur.</p>
+<p>This is a temoporary fix. It could be a hardware configuration incompatibility with Ubuntu that will be permanently fixed in a future release.</p>
+</div>
+<div class="section" id="connect-to-the-local-network">
+<span id="recpcnetworkinterfaces"></span><h3>Connect to the local network<a class="headerlink" href="#connect-to-the-local-network" title="Permalink to this headline">¶</a></h3>
+<p>It may be possible to connect to the local network automatically by connecting the PC to a network socket or simply by selecting a WiFi network.</p>
+<p>If may be necessary to manually assign network settings. This can be done by editing <code class="docutils literal notranslate"><span class="pre">/etc/network/interfaces</span></code> with the terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">gedit</span> <span class="pre">/etc/network/interfaces</span></code>. An example file will look like this:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span># interfaces(5) file used by ifup(8) and ifdown(8)
+auto lo
+iface lo inet loopback
+auto enp2s0
+iface enp2s0 inet static
+address 128.40.50.165
+netmask 255.255.255.0
+gateway 128.40.50.245
+dns-nameservers 128.40.200.1 128.40.200.2 8.8.4.4 8.8.8.8
+</pre></div>
+</div>
+<p>You can get the correct values for these numbers from the network administrator. The value <cite>enp2s0</cite> here is the network adapter name. This is usually the first adapter in the output for the terminal commant <code class="docutils literal notranslate"><span class="pre">ifconfig</span></code>.</p>
+</div>
+<div class="section" id="update-the-system">
+<span id="updatethesystem"></span><h3>Update the system<a class="headerlink" href="#update-the-system" title="Permalink to this headline">¶</a></h3>
+<p>Use the terminal commands:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo apt-get update        # Fetches the list of available updates
+sudo apt-get upgrade       # Strictly upgrades the current packages
+sudo apt-get dist-upgrade  # Installs updates (new ones)
+</pre></div>
+</div>
+<p>This should be done regularly as the machine is being used and especially before any major changes, such as installing new software or drivers.</p>
+</div>
+<div class="section" id="install-additional-drivers">
+<h3>Install additional drivers<a class="headerlink" href="#install-additional-drivers" title="Permalink to this headline">¶</a></h3>
+<p>You may be able to get the very latest drivers only from the website of your hardware manufacturer. E.g. for NVIDIA GPU drivers you should go to <a class="reference external" href="http://www.nvidia.com/Download/index.aspx?lang=en-us">http://www.nvidia.com/Download/index.aspx?lang=en-us</a></p>
+<p>Installing drivers, especially the latest ones for most up-to-date hardware can be challenging. The easier and minimal step for ensuring you have all necessary drivers available is to use Ubuntu built-in utility. To do this, open <strong>Dash</strong> (Windows start menu equivalent) and type in <code class="docutils literal notranslate"><span class="pre">Additional</span> <span class="pre">Drivers</span></code>. Open the tool that comes up and select the preferred drivers where possible and click <cite>Apply Changes</cite>.</p>
+<p><em>((In the case of the PC which this readme is based on, the available NVIDIA driver was version 340.101, while NVIDIA website provided version 340.102. Since the difference is not likely to be so great, I used the Additional Drivers utility to update the graphics drivers.</em></p>
+</div>
+</div>
+<div class="section" id="other-useful-steps">
+<span id="otherusefulsteps"></span><h2>Other useful steps<a class="headerlink" href="#other-useful-steps" title="Permalink to this headline">¶</a></h2>
+<p>Setting up the programs described in this part is not necessary for taking recordings and doing preliminary analysis. However, they can be useful otherwise and following these guidelines should ensure that setting them up doesn’t interfere with the recording part of the system.</p>
+<p>At the very least, you should install git and map a network drive to which to transfer the data.</p>
+<div class="section" id="install-git-for-using-github">
+<h3>Install git for using github<a class="headerlink" href="#install-git-for-using-github" title="Permalink to this headline">¶</a></h3>
+<p>This program is essential for interfacing with github as well as installing some of the programs for using OpenEphys. Install git with terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">apt-get</span> <span class="pre">install</span> <span class="pre">git</span></code>.</p>
+</div>
+<div class="section" id="connect-to-a-network-drive">
+<h3>Connect to a network drive<a class="headerlink" href="#connect-to-a-network-drive" title="Permalink to this headline">¶</a></h3>
+<p>Use <a class="reference external" href="http://ubuntuhandbook.org/index.php/2014/08/map-network-drive-onto-ubuntu-14-04/">this guide</a> to map a network drive permanently.</p>
+<p>Here are the steps using as an example a server named QNAP:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo apt-get install cifs-utils
+sudo mkdir /media/QNAP
+sudo gedit /etc/nsswitch.conf
+</pre></div>
+</div>
+<p>Find the line looks like:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>hosts:          files mdns4_minimal [NOTFOUND=return] dns
+</pre></div>
+</div>
+<p>change it into:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>hosts:          files mdns4_minimal [NOTFOUND=return] wins dns
+</pre></div>
+</div>
+<p>Run below terminal command so that your Ubuntu can resolve Windows computer name on a DHCP network.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo apt-get install libnss-winbind winbind
+</pre></div>
+</div>
+<p>Reboot Ubuntu</p>
+<p>Enter your username and credentials into a text file <code class="docutils literal notranslate"><span class="pre">.smbcredentials</span></code> using gedit with terminal command <code class="docutils literal notranslate"><span class="pre">gedit</span> <span class="pre">~/.smbcredentials</span></code> as follows:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>username=enter_your_networkdrive_username_here
+password=enter_your_networkdrive_password_here
+</pre></div>
+</div>
+<p>Now get values for your <strong>gid</strong> and <strong>uid</strong> by typing into terminal <code class="docutils literal notranslate"><span class="pre">id</span> <span class="pre">enter_your_pc_username_here</span></code>. Use these values to edit <code class="docutils literal notranslate"><span class="pre">fstab</span></code> file by typing into terminal:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo cp /etc/fstab /etc/fstab_old
+sudo gedit /etc/fstab
+</pre></div>
+</div>
+<p>Add to the end of this file as a single line the following after modifying it to your configuration:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>//192.168.1.5/share /media/QNAP cifs credentials=/home/enter_your_pc_username_here/.smbcredentials,iocharset=utf8,gid=1000,uid=1000,file_mode=0777,dir_mode=0777 0 0
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>192.168.1.5/data - should be replaced by the IP of your server and the shared folder if applicable.</p></li>
+<li><p>/media/QNAP - should be replaced by the folder you created in the beginning of the network mapping tutorial.</p></li>
+<li><p>credentials=/home/enter_your_pc_username_here/.smbcredentials - should be modified to include your username.</p></li>
+<li><p><strong>gid</strong> and <strong>uid</strong> values as you found using <code class="docutils literal notranslate"><span class="pre">id</span> <span class="pre">enter_your_username_here</span></code>.</p></li>
+</ul>
+<p>Save the file.</p>
+<p>You can now mount the drive with terminal command:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo mount -a
+</pre></div>
+</div>
+<p>This may need to be run each time you reboot.</p>
+</div>
+<div class="section" id="install-google-chrome">
+<h3>Install Google Chrome<a class="headerlink" href="#install-google-chrome" title="Permalink to this headline">¶</a></h3>
+<p>Download Chrome for Ubuntu from official website. Install by just double-clicking on the file and selecting install in the new window. This may not work, in which case you need to use an alternative Debian package manager, called GDebi. Install this with terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">apt-get</span> <span class="pre">install</span> <span class="pre">gdebi</span></code>. Now right click on the file -&gt; Open With -&gt; GDebi Package Installer. Click on Install button.</p>
+<p>You can open Google Chrome from the Dash. It can also be dragged to the side-bar.</p>
+</div>
+<div class="section" id="install-sublime-text-3-for-editing-scripts">
+<h3>Install Sublime Text 3 for editing scripts<a class="headerlink" href="#install-sublime-text-3-for-editing-scripts" title="Permalink to this headline">¶</a></h3>
+<p>Download the latest Ubuntu 64 bit version from <a class="reference external" href="https://www.sublimetext.com/3">Sublime Text website</a>. Install by just double-clicking on the file and selecting install in the new window. This may not work, in which case you need to use an alternative Debian package manager, called GDebi. Install this with terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">apt-get</span> <span class="pre">install</span> <span class="pre">gdebi</span></code>. Now right click on the file -&gt; Open With -&gt; GDebi Package Installer. Click on Install button.</p>
+</div>
+<div class="section" id="install-sphinx-for-editing-readthedocs-files">
+<h3>Install Sphinx for editing ReadTheDocs files<a class="headerlink" href="#install-sphinx-for-editing-readthedocs-files" title="Permalink to this headline">¶</a></h3>
+<p>Instructions are on <a class="reference external" href="http://www.sphinx-doc.org/en/stable/install.html">Sphinx website</a>.</p>
+<p>Install using terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">apt-get</span> <span class="pre">install</span> <span class="pre">python-sphinx</span></code>.</p>
+<ul class="simple">
+<li><p>If you have already existing source files for documents you would like to edit, such as this one, you can simply copy the root directory to your PC and skip using <code class="docutils literal notranslate"><span class="pre">sphinx-quickstart</span></code>.</p></li>
+<li><p>If you’d like to start creating brand new documents, then navigate to a folder where you would like to store the documents and run <code class="docutils literal notranslate"><span class="pre">sphinx-quickstart</span></code> in terminal. Answer questions with default answers. (Be sure to say yes to the “autodoc” extension.)</p></li>
+</ul>
+<p>In the root directory of your document scripts, run terminal command <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">html</span></code> to update files in Build folder, where you can see the results by opening the <code class="docutils literal notranslate"><span class="pre">index.html</span></code>.</p>
+<p>To use the Sphinx RTD Theme as in these docs, you may need to install it with the following terminal command <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">sphinx_rtd_theme</span></code>.</p>
+</div>
+<div class="section" id="install-qt-designer-for-editing-guis">
+<h3>Install QT Designer for editing GUIs<a class="headerlink" href="#install-qt-designer-for-editing-guis" title="Permalink to this headline">¶</a></h3>
+<p>Install Qt4 and Qt4 Designer with the following terminal command:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo apt-get install python-qt4 pyqt4-dev-tools qt4-designer
+</pre></div>
+</div>
+<p>Now you can edit the <em>.ui</em> files with QtDesigner by opening it from Dash, as you search for <code class="docutils literal notranslate"><span class="pre">designer</span></code>. Within the application you can open existing <em>.ui</em> files, edit and save them. You will then have to compile the <em>.ui</em> file to a python script using pyuic4. For example, if you had saved your design as <code class="docutils literal notranslate"><span class="pre">design.ui</span></code>, then you can use the following terminal command in the directory where your file is:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>pyuic4 design.ui -o design.py
+</pre></div>
+</div>
+<p>With the existing scripts, such as RecordingManager.py, the naming convention for the <em>.ui</em> and <em>.py</em> files is as in this example.</p>
+</div>
+<div class="section" id="turn-off-screen-lock">
+<h3>Turn off screen lock<a class="headerlink" href="#turn-off-screen-lock" title="Permalink to this headline">¶</a></h3>
+<p>To avoid interference with recordings, you might want to stop Ubuntu from automatically turning off the screen and locking it during periods of inactivity.</p>
+<p>Open Dash and type <code class="docutils literal notranslate"><span class="pre">Brightness</span> <span class="pre">&amp;</span> <span class="pre">Lock</span></code> and press Enter. Choose desired settings: e.g. Set “Turn screen off… ” setting to Never and un-select “Lock” settings.</p>
+</div>
+<div class="section" id="install-convenient-brightness-controller">
+<h3>Install convenient brightness controller<a class="headerlink" href="#install-convenient-brightness-controller" title="Permalink to this headline">¶</a></h3>
+<p>During experiments you may wish to reduce any excess illumination coming from the computer screen(s). Install <a class="reference external" href="http://lordamit.github.io/Brightness/">Brightness Controller</a> to tune screen brightness from inside Ubuntu, instead of using the monitor controls. To do this, use the following terminal commands:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo add-apt-repository ppa:apandada1/brightness-controller
+sudo apt-get update
+sudo apt-get install brightness-controller
+</pre></div>
+</div>
+<p>Now you can open Dash and search for Brightness Controller. Click to open the application. To make it easily accessible, right click on it in the Launcher (windows taskbar equivalent) and select <em>Lock to Launcher</em>.</p>
+</div>
+</div>
+<div class="section" id="install-open-ephys-gui">
+<h2>Install Open Ephys GUI<a class="headerlink" href="#install-open-ephys-gui" title="Permalink to this headline">¶</a></h2>
+<p>Instructions are also on the <a class="reference external" href="https://open-ephys.atlassian.net/wiki/display/OEW/Linux">Open Ephys website</a>. The exact steps I made are as follows:</p>
+<div class="section" id="install-dependencies">
+<h3>Install Dependencies<a class="headerlink" href="#install-dependencies" title="Permalink to this headline">¶</a></h3>
+<p>OpenEphys plugin-GUI is being developed rapidly, and the latest developmental version maybe better than the used at the time of writing this ReadMe. <a class="reference external" href="https://github.com/open-ephys/plugin-GUI/commit/8d9b08e424f743649ff01e0660a4add817e1f4f1">This page</a> is for the specific commit used and on which the instructions are based. The instructions should mostly work for later releases as well.</p>
+<p>To install the latest version of <strong>plugin-GUI</strong> from <a class="reference external" href="https://github.com/open-ephys">OpenEphys github</a> run the required scripts in your home folder:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>mkdir Programs
+cd Programs
+mkdir OpenEphysGUI
+cd OpenEphysGUI
+# The below line should give you the latest developmental version
+git clone -b development --single-branch https://github.com/open-ephys/plugin-GUI
+cd plugin-GUI/Resources/Scripts
+sudo ./install_linux_dependencies.sh
+sudo cp 40-open-ephys.rules /etc/udev/rules.d
+sudo service udev restart
+cd ~/
+</pre></div>
+</div>
+<p>Install More dependencies with terminal commands:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo apt-get install libtool pkg-config build-essential autoconf automake libudev0:i386
+</pre></div>
+</div>
+<p>Install libsodium with terminal commands:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>git clone git://github.com/jedisct1/libsodium.git
+cd libsodium
+./autogen.sh
+./configure &amp;&amp; make check
+sudo make install
+sudo ldconfig
+cd ~/
+</pre></div>
+</div>
+<p>Install More dependencies with terminal commands:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo apt-get install libxrandr-dev # To fix a compilation error in JUCE library
+sudo apt-get install libzmq3-dev # ZeroMQ version 3 is required
+sudo apt-get install libhdf5-serial-dev # HDF version 1.8.12, or higher, is required
+</pre></div>
+</div>
+<p>Add the necessary <a class="reference external" href="https://open-ephys.atlassian.net/wiki/spaces/OEW/pages/47841283/Third-party+plugin+repositories">third-party plugins</a> to the <code class="docutils literal notranslate"><span class="pre">~/Programs/OpenEphysGUI/plugin-GUI/Source/Plugins</span></code> folder. The necessary plugins are:</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://github.com/arnefmeyer/VirtualReferencePlugin">VirtualRef</a> (<a class="reference external" href="https://github.com/arnefmeyer/VirtualReferencePlugin/commit/a8e20cd1df8e0d8003a757391293c75a1089ad7a">commit used</a>)</p></li>
+<li><p><a class="reference external" href="https://github.com/tne-lab/crossing-detector">CrossingDetector</a> (<a class="reference external" href="https://github.com/tne-lab/crossing-detector/commit/b402d5785d502c2b1cd7ff394d2c93377500cdc6">commit used</a>)</p></li>
+<li><p><a class="reference external" href="https://github.com/arnefmeyer/EventPublisherPlugin">EventPublisher</a> (<a class="reference external" href="https://github.com/arnefmeyer/EventPublisherPlugin/commit/7d195c9ed3ca75e34885ce3e3e7fdf90a7f24dfa">commit used</a>)</p></li>
+</ul>
+<p>Each of the plugins github code contains a folder with the plugin name, e.g. <code class="docutils literal notranslate"><span class="pre">VirtualRef</span></code> and files with <code class="docutils literal notranslate"><span class="pre">.cpp</span></code> and <code class="docutils literal notranslate"><span class="pre">.h</span></code> endings in that folder. Copy that entire folder to plugin-GUI Plugin directory <code class="docutils literal notranslate"><span class="pre">~/Programs/OpenEphysGUI/plugin-GUI/Source/Plugins</span></code>. As you compile the Open Ephys GUI Plugins following instructions below, these plugins will also be compiled and made accessible in the GUI.</p>
+</div>
+<div class="section" id="install-open-ephys">
+<h3>Install Open Ephys<a class="headerlink" href="#install-open-ephys" title="Permalink to this headline">¶</a></h3>
+<p>First you need to add some text to the code that compiles the main GUI  and also the one that compiles the plug-ins. Open the first file with the terminal command <code class="docutils literal notranslate"><span class="pre">gedit</span> <span class="pre">~/Programs/OpenEphysGUI/plugin-GUI/Builds/Linux/Makefile</span></code>. Find the place in the file, where CPPFLAGS are defined, such as:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>CPPFLAGS := $(DEPFLAGS) -D &quot;LINUX=1&quot; -D &quot;DEBUG=1&quot; -D &quot;_DEBUG=1&quot; -D &quot;JUCER_LINUX_MAKE_7346DA2A=1&quot; -D &quot;JUCE_APP_VERSION=0.4.1&quot; -D
+</pre></div>
+</div>
+<p>There should be 2 such occurances. They might not be exactly identical to this example, but <code class="docutils literal notranslate"><span class="pre">CPPFLAGS</span> <span class="pre">:=</span></code> should definitely be there. Add <code class="docutils literal notranslate"><span class="pre">-D</span> <span class="pre">&quot;JUCE_DISABLE_NATIVE_FILECHOOSERS=1&quot;</span></code> to the list of CPPFLAGS. See the below for an example how the above code was changed:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>CPPFLAGS := $(DEPFLAGS) -D &quot;LINUX=1&quot; -D &quot;JUCE_DISABLE_NATIVE_FILECHOOSERS=1&quot; -D &quot;DEBUG=1&quot; -D &quot;_DEBUG=1&quot; -D &quot;JUCER_LINUX_MAKE_7346DA2A=1&quot; -D &quot;JUCE_APP_VERSION=0.4.1&quot; -D
+</pre></div>
+</div>
+<p>Save the edited Makefile and then also edit the Makefile.plugins file which you can open with the terminal command <code class="docutils literal notranslate"><span class="pre">gedit</span> <span class="pre">~/Programs/OpenEphysGUI/plugin-GUI/Builds/Linux/Makefile.plugins</span></code>. Make the same changes.</p>
+<p>You are now ready to compile Open Ephys. Do this with the following terminal commands:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>cd ~/Programs/OpenEphysGUI/plugin-GUI/Builds/Linux/
+make
+make -f Makefile.plugins
+</pre></div>
+</div>
+<p>Create a shortcut for OpenEphys application in the home folder. Use terminal command <code class="docutils literal notranslate"><span class="pre">gedit</span> <span class="pre">~/OpenEphysGUI</span></code> to create the file and add these lines to the file to link it to the compiled application:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>#!/bin/bash
+cd ~/Programs/OpenEphysGUI/plugin-GUI/Builds/Linux/build
+./open-ephys
+</pre></div>
+</div>
+<p>Run this terminal command to make the file executable</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>chmod +x ~/OpenEphysGUI
+</pre></div>
+</div>
+<p>You can now run Open Ephys GUI by opening the terminal (by default it starts in your home folder) and typing in command <code class="docutils literal notranslate"><span class="pre">./OpenEphysGUI</span></code>.</p>
+</div>
+</div>
+<div class="section" id="intan-headstage-setup">
+<h2>Intan Headstage setup<a class="headerlink" href="#intan-headstage-setup" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="reference-and-ground">
+<h3>Reference and Ground<a class="headerlink" href="#reference-and-ground" title="Permalink to this headline">¶</a></h3>
+<p>By default, at least on the 64-channel headstage, the Ground and Reference are not shorted. This can be done manually by soldering a wire between the REF and GND pins on the headstage. This can also be achieved by connecting the two pins on the drive connector.</p>
+<p>In case of two headstages connected with an adapter, they also share a Ground and a Reference. Therefore, there is no need to reference both headstages.</p>
+</div>
+<div class="section" id="install-leds-on-intan-headstage-for-tracking">
+<h3>Install LEDs on Intan Headstage for tracking<a class="headerlink" href="#install-leds-on-intan-headstage-for-tracking" title="Permalink to this headline">¶</a></h3>
+<p>The image below shows an Intan Headstage with an LED bar attached to it. The RED wire is connected to the Ground (note, this should be shorted to Reference), while the YELLOW wire is connected to VDD pin. In case of a 64-channel headstage the VDD can be accessed by soldering the wire to <a class="reference external" href="http://intantech.com/images/RHD2164_amp_board_labeled.jpg">left side of C1 capacitor</a>. The YELLOW wire leads through a 130 Ohm capacitor to a infrared LED. This is in turn connected to another infrared LED with lower luminance, which is then connected to the RED wire. The tracking and processing programs assume the LED with lower luminance rests on the animals head. This is because that one is more likely to be occluded by wires.</p>
+<img alt="_images/HeadStageWithLEDs.jpg" src="_images/HeadStageWithLEDs.jpg" />
+<p>The following image show the same LED setup, where an additional wire has been added to the connection between RED wire (Ground-Reference). This can be used to connect Reference channel on the headstage to a Reference Pin on the animal’s implant. This is not necessary if the implanted drive’s reference is wired to a reference screw in the animal’s skull.</p>
+<img alt="_images/HeadStageWithLEDsRef.jpg" src="_images/HeadStageWithLEDsRef.jpg" />
+</div>
+</div>
+<div class="section" id="setup-recording-pc-for-using-recording-manager">
+<span id="recordingmanagersetup"></span><h2>Setup Recording PC for using Recording Manager<a class="headerlink" href="#setup-recording-pc-for-using-recording-manager" title="Permalink to this headline">¶</a></h2>
+<p>This part describes how to set up the Recording PC to use the custom Python scripts and GUI that interfaces with the Raspberry Pis and handles the Open Ephys data.</p>
+<div class="section" id="install-the-dependencies-for-the-scripts">
+<h3>Install the dependencies for the scripts<a class="headerlink" href="#install-the-dependencies-for-the-scripts" title="Permalink to this headline">¶</a></h3>
+<p>Install the necessary packages with the following terminal commands:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo apt-get install python-qt4 python-dev python-pip python-scipy python-pygame python-psutil
+sudo apt-get install python-opencv # Alternatively install from source, but not necessary
+sudo pip install paramiko
+sudo pip install pyzmq # This assumes you have already installed ZMQ for OpenEphys GUI
+pip install h5py # This assumes you have already installed libhdf5-serial-dev for OpenEphys GUI
+</pre></div>
+</div>
+<p>Additionally install <code class="docutils literal notranslate"><span class="pre">pyqtgraph</span></code> latest version from their website (Here 0.10.0-1 was used). Go to their <a class="reference external" href="www.pyqtgraph.org">website</a> and download the latest version of Debian/Ubuntu package. Install it by right click on the downloaded <em>.deb</em> file -&gt; Open With -&gt; GDebi Package Installer. Click on Install button.</p>
+<p>Create folder structure in the home folder with the following terminal commands:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>cd ~/
+mkdir RecordingData
+cd RecordingData
+mkdir RecordingManagerData
+</pre></div>
+</div>
+<p>Obtain Barry-lab repository <code class="docutils literal notranslate"><span class="pre">openEPhys_DACQ</span></code> manually and place them it in your home folder in a folder of the same name, or run the following terminal command:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>cd ~/
+git clone https://github.com/Barry-lab/openEPhys_DACQ
+</pre></div>
+</div>
+<p>You will need a github.com username and password that has access to the repository.</p>
+</div>
+<div class="section" id="make-changes-in-the-scripts-to-suit-your-pc">
+<h3>Make changes in the scripts to suit your PC<a class="headerlink" href="#make-changes-in-the-scripts-to-suit-your-pc" title="Permalink to this headline">¶</a></h3>
+<p>Open <code class="docutils literal notranslate"><span class="pre">~/openEPhys_DACQ/RecordingManager.py</span></code> with text editor like SublimeText and edit the following lines in the <em>RecordingManager</em> class <em>__init__</em> function:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span># Set GUI environment
+self.scripts_root = os.path.expanduser(&#39;~&#39;) + &#39;/openEPhys_DACQ&#39;
+self.pt_root_folder.setPlainText(os.path.expanduser(&#39;~&#39;) + &#39;/RecordingData&#39;)
+self.file_server_path = &#39;/media/qnap/room418&#39;
+</pre></div>
+</div>
+<p>, such that they would reflect the folder structure on your Recording PC. Note that <code class="docutils literal notranslate"><span class="pre">os.path.expanduser('~')</span></code> refers to your Home folder. If you set everything up as instructed in the documentation, nothing but file server path should need changing.</p>
+<p>Similarly as you did for the OpenEphysGUI, you can create a shortcut for RecordingManager.py application in the home folder. Use terminal command <code class="docutils literal notranslate"><span class="pre">gedit</span> <span class="pre">~/RecordingManager</span></code> to create the file and add these lines to the file:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>#!/bin/bash
+cd ~/openEPhys_DACQ
+python RecordingManager.py
+</pre></div>
+</div>
+<p>Run this terminal command to make the file executable</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>chmod +x ~/RecordingManager
+</pre></div>
+</div>
+<p>You can now run RecordingManager.py by opening the terminal (by default it starts in your home folder) and typing in command <code class="docutils literal notranslate"><span class="pre">./RecordingManager</span></code>.</p>
+<p>Now the Recording PC is ready to use the Python scripts for managing Open Ephys recordings and Raspberry Pis, if the networking and Raspberry Pis are set up as well. To do this, follow this guide : <a class="reference internal" href="trackingRPiSetup.html#trackingrpisetup"><span class="std std-ref">Camera and GlobalClock Raspberry Pi setup</span></a>.</p>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="trackingRPiSetup.html" class="btn btn-neutral float-right" title="Camera and GlobalClock Raspberry Pi setup" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="index.html" class="btn btn-neutral float-left" title="Setup for Open Ephys Recordings and Analysis" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019, Barry-lab
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
