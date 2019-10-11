@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Setup for Open Ephys Recordings and Analysis &mdash; openEPhys_DACQ 0.75 documentation</title>
+  <title>Welcome to openEPhys_DACQ repository &mdash; openEPhys_DACQ 0.75 documentation</title>
   
 
   
@@ -85,10 +85,10 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="recordingPCandOpenEphysGUI.html">Recording PC setup for Data Acquisition</a></li>
-<li class="toctree-l1"><a class="reference internal" href="trackingRPiSetup.html">Camera and GlobalClock Raspberry Pi setup</a></li>
-<li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howToUseTheseScripts.html">Tutorial for using Open Ephys Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cameraRPiSetup.html">Camera and GlobalClock Raspberry Pi setup</a></li>
 <li class="toctree-l1"><a class="reference internal" href="wirelessRewardSetup.html">FEEDER setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="userManual.html">Tutorial for using Open Ephys Scripts</a></li>
 </ul>
 
             
@@ -134,7 +134,7 @@
     
       <li><a href="#">Docs</a> &raquo;</li>
         
-      <li>Setup for Open Ephys Recordings and Analysis</li>
+      <li>Welcome to openEPhys_DACQ repository</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -153,75 +153,202 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="setup-for-open-ephys-recordings-and-analysis">
-<h1>Setup for Open Ephys Recordings and Analysis<a class="headerlink" href="#setup-for-open-ephys-recordings-and-analysis" title="Permalink to this headline">¶</a></h1>
-<p>This document details every step required for setting up a PC for electrophysiological data collection using Open Ephys Acquisition Board and separate tracking system using Raspberry Pis.</p>
-<p>To allow recreating this setup, this document is an attempt to detail every single step, every line of code required to get things running. Therefore, it is definitely painfully long to work through for an advanced user, if not amusing at times. But the hope is that based on this, anyone could set it up.</p>
+  <div class="section" id="welcome-to-openephys-dacq-repository">
+<h1>Welcome to openEPhys_DACQ repository<a class="headerlink" href="#welcome-to-openephys-dacq-repository" title="Permalink to this headline">¶</a></h1>
+<p>This is a system for automated experiments acquiring neural data using <a class="reference external" href="https://github.com/open-ephys/plugin-GUI">OpenEhysGUI</a>. It combines online tracking from any number of cameras with a behavioural task program and peripherals for interacting with the subject. The package comes with an easy to use graphical interface.</p>
+<p>The original purpose for this system was to collect neural data from rodents performing a navigational task in a large environment.</p>
+<div class="section" id="features">
+<h2>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><dl class="simple">
+<dt>Data synchronisation with <cite>OpenEhysGUI &lt;https://github.com/open-ephys/plugin-GUI&gt;</cite></dt><dd><ul>
+<li><p>Global clock TTL signal for precision synchrony</p></li>
+<li><p>Logging messages with recording timestamps (e.g. pellet dropped)</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Real-time tracking and 1080p video recording</dt><dd><ul>
+<li><dl class="simple">
+<dt>Any number of cameras</dt><dd><ul>
+<li><p>Built-in calibration to same reference frame</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Multiple tracking methods</dt><dd><ul>
+<li><p>Motion</p></li>
+<li><p>1 LED (brightest spot)</p></li>
+<li><p>2 LED (different luminance)</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Reward devices</dt><dd><ul>
+<li><dl class="simple">
+<dt>Pellet Feeder</dt><dd><ul>
+<li><p>Releases specified number of pellets on command</p></li>
+<li><p>Activation automated based on animal behaviour</p></li>
+<li><p>WiFi controlled</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Milk Feeder</dt><dd><ul>
+<li><p>Releases milk or other liquid with pinch valve</p></li>
+<li><p>Animal friendly - can be placed in the enviornment</p></li>
+<li><p>Battery powered</p></li>
+<li><p>WiFi controlled</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Automated behavioural task</dt><dd><ul>
+<li><p>New task programs can be integrated independently</p></li>
+<li><p>Has messaging ability with OpenEphysGUI</p></li>
+<li><p>Has real-time tracking information</p></li>
+<li><p>Controls reward devices</p></li>
+<li><dl class="simple">
+<dt>Navigational task available</dt><dd><ul>
+<li><p>Fully configurable flexible task program</p></li>
+<li><p>Milk feeder reward based navigational task</p></li>
+<li><p>Audio and/or light signals for trials</p></li>
+<li><p>Concurrent foraging task with intelligent pellet scattering</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</div>
+<div class="section" id="system-overview">
+<h2>System overview<a class="headerlink" href="#system-overview" title="Permalink to this headline">¶</a></h2>
+<p>The system can be described in two distinctive states: setting up the experiment and active recording state.</p>
+<div class="section" id="setting-up-the-experiment">
+<h3>Setting up the experiment<a class="headerlink" href="#setting-up-the-experiment" title="Permalink to this headline">¶</a></h3>
+<p>When setting up the experiment, <code class="docutils literal notranslate"><span class="pre">RecordingManager</span></code> uses modules <code class="docutils literal notranslate"><span class="pre">CameraSettings</span></code> and <code class="docutils literal notranslate"><span class="pre">TaskSettings</span></code> to calibrate the cameras and set recording parameters.</p>
+<p>Both <code class="docutils literal notranslate"><span class="pre">CameraSettings</span></code> and <code class="docutils literal notranslate"><span class="pre">TaskSettings</span></code> use <code class="docutils literal notranslate"><span class="pre">ZMQcomms</span></code> module to control any number of peripheral devices:</p>
+<ul class="simple">
+<li><p>Camera Raspbery Pis running <code class="docutils literal notranslate"><span class="pre">CameraRPiController</span></code></p></li>
+<li><p>Pellet Feeder Raspberry Pis running <code class="docutils literal notranslate"><span class="pre">pelletFeederController</span></code></p></li>
+<li><p>Milk Feeder Raspberry Pis running <code class="docutils literal notranslate"><span class="pre">milkFeederController</span></code></p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">ZMQcomms</span></code> utilizes <a class="reference external" href="https://pyzmq.readthedocs.io/en/latest/">PyZMQ</a> to allow sharing data and direct control over Python processes operating on the peripheral devices over ethernet or WiFi connection.</p>
+<p><code class="docutils literal notranslate"><span class="pre">CameraSettings</span></code> is used to configure the Camera Raspberry Pis and setting video recording and tracking parameters. Most importantly, <code class="docutils literal notranslate"><span class="pre">CameraSettings</span></code> calibrates all the cameras to the same reference frame, allowing online tracking with multiple cameras with non-overlapping fields of view. It does this using <code class="docutils literal notranslate"><span class="pre">RPiInterface.CameraControl</span></code>, which gives it full control of Python process running on each Camera Raspbery Pi. <code class="docutils literal notranslate"><span class="pre">CameraSettings</span></code> can also display a live feed from each camera, making camera view adjustment and calibration very convenient.</p>
+<p><code class="docutils literal notranslate"><span class="pre">TaskSettings</span></code> is used to choose a task program and to adjust parameters. The further functionality of this module depends on the specific task program. For example, the available <code class="docutils literal notranslate"><span class="pre">Pellets_and_Rep_Milk</span></code> task module can use <code class="docutils literal notranslate"><span class="pre">RPiInterface.RewardControl</span></code> to test functionality of reward devices.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">RecordingManager</span>
+<span class="o">|</span>
+<span class="o">|</span>
+<span class="o">|----</span>   <span class="n">CameraSettings</span>  <span class="o">----</span>    <span class="n">RPiInterface</span><span class="o">.</span><span class="n">CameraControl</span>    <span class="o">----</span>    <span class="n">ZMQcomms</span>
+<span class="o">|</span>                                                                         <span class="o">|</span>
+<span class="o">|</span>                                                                         <span class="o">|</span>
+<span class="o">|</span>                                        <span class="n">CameraRPiController</span> <span class="mi">1</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+<span class="o">|</span>                                        <span class="n">CameraRPiController</span> <span class="mi">2</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+<span class="o">|</span>                                        <span class="n">CameraRPiController</span> <span class="mi">3</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+<span class="o">|</span>                                                <span class="o">....</span>             <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+<span class="o">|</span>
+<span class="o">|</span>
+<span class="o">|</span>
+<span class="o">|----</span>   <span class="n">TaskSettings</span>    <span class="o">----</span>    <span class="n">TaskModule</span>      <span class="o">----</span>    <span class="n">RPiInterface</span><span class="o">.</span><span class="n">RewardControl</span>
+                                                                          <span class="o">|</span>
+                                                                      <span class="n">ZMQcomms</span>
+                                                                          <span class="o">|</span>
+                                                                          <span class="o">|</span>
+                                      <span class="n">pelletFeederController</span> <span class="mi">1</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+                                      <span class="n">pelletFeederController</span> <span class="mi">2</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+                                                <span class="o">....</span>              <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+                                                                          <span class="o">|</span>
+                                                                          <span class="o">|</span>
+                                        <span class="n">milkFeederController</span> <span class="mi">1</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+                                        <span class="n">milkFeederController</span> <span class="mi">2</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+                                                 <span class="o">....</span>             <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="druing-recording">
+<h3>Druing recording<a class="headerlink" href="#druing-recording" title="Permalink to this headline">¶</a></h3>
+<p>The recording is controlled by <code class="docutils literal notranslate"><span class="pre">RecordingManager</span></code>. <code class="docutils literal notranslate"><span class="pre">OpenEphysGUI</span></code> must be initialized indpendently with a functioning signal chain that contains the <a class="reference external" href="https://open-ephys.atlassian.net/wiki/spaces/OEW/pages/23265310/Network+Events">Network Events module</a>. <code class="docutils literal notranslate"><span class="pre">RecordingManager</span></code> uses <code class="docutils literal notranslate"><span class="pre">ZMQcomms</span></code> to send start and stop messages to the <code class="docutils literal notranslate"><span class="pre">OpenEphysGUI</span></code>.</p>
+<p>As the recording starts, <code class="docutils literal notranslate"><span class="pre">RecordingManager</span></code> uses <code class="docutils literal notranslate"><span class="pre">RPiInterface.TrackingControl</span></code> to initialize and start cameras and <code class="docutils literal notranslate"><span class="pre">RPiInterface.onlineTrackingData</span></code> for combining incoming tracking information from cameras in real time. The online tracking data in <code class="docutils literal notranslate"><span class="pre">RPiInterface.onlineTrackingData</span></code> is also made available to the task module.</p>
+<p>The function of <code class="docutils literal notranslate"><span class="pre">TaskModule</span></code> again depends on the specific task program that was chosen in the settings. In the case of <code class="docutils literal notranslate"><span class="pre">Pellets_and_Rep_Milk</span></code> task program it will be integrating information from <code class="docutils literal notranslate"><span class="pre">RPiInterface.onlineTrackingData</span></code> to monitor animal behaviour and using <code class="docutils literal notranslate"><span class="pre">RPiInterface.RewardControl</span></code> to activate reward devices as required. <code class="docutils literal notranslate"><span class="pre">Pellets_and_Rep_Milk</span></code> task program can also use the Milk Feeders as well as speakers connected to the PC for delivering light and audio signals. <code class="docutils literal notranslate"><span class="pre">TaskModule</span></code> is also provided with a messaging pipe to <code class="docutils literal notranslate"><span class="pre">OpenEphysGUI</span></code> via <code class="docutils literal notranslate"><span class="pre">ZMQcomms</span></code> module. This allows it to monitor any messages sent by the <code class="docutils literal notranslate"><span class="pre">OpenEphysGUI</span></code> (such as chewing artifact detection) as well as sending it messages about events in the task, which will be stored with a timestamp with alongside the neural data.</p>
+<p>Finally, <code class="docutils literal notranslate"><span class="pre">RPiInterface.GlobalClockControl</span></code> is controlled by <code class="docutils literal notranslate"><span class="pre">RecordingManager</span></code> and it has a very simple function. It is started right after <code class="docutils literal notranslate"><span class="pre">OpenEphysGUI</span></code> and it deliveres simultaneous TTL pulses to <code class="docutils literal notranslate"><span class="pre">OpenEphysGUI</span></code> and <code class="docutils literal notranslate"><span class="pre">CameraRPiController</span></code> running on Camera Raspberry Pis. This allows very accurate synchronisation of neural data with position data from all the cameras.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">RecordingManager</span>    <span class="o">--------------------</span>    <span class="n">ZMQcomms</span>    <span class="o">-----------------</span>    <span class="n">OpenEphysGUI</span>
+<span class="o">|</span>
+<span class="o">|</span>
+<span class="o">|</span>
+<span class="o">|</span>
+<span class="o">|----</span>   <span class="n">RPiInterface</span><span class="o">.</span><span class="n">TrackingControl</span>    <span class="o">----------</span>    <span class="n">RPiInterface</span><span class="o">.</span><span class="n">CameraControl</span>
+<span class="o">|</span>                                                                        <span class="o">|</span>
+<span class="o">|</span>                                                                        <span class="o">|</span>
+<span class="o">|----</span>   <span class="n">RPiInterface</span><span class="o">.</span><span class="n">onlineTrackingData</span>                                  <span class="o">|</span>
+<span class="o">|</span>                      <span class="o">/</span>      <span class="o">|</span>                                          <span class="o">|</span>
+<span class="o">|</span>                     <span class="o">/</span>   <span class="n">ZMQcomms</span>                                   <span class="n">ZMQcomms</span>
+<span class="o">|</span>                    <span class="o">/</span>        <span class="o">|</span>                                          <span class="o">|</span>
+<span class="o">|</span>                   <span class="o">/</span>         <span class="o">|</span> <span class="o">&lt;---</span>    <span class="n">CameraRPiController</span> <span class="mi">3</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+<span class="o">|</span>                  <span class="o">/</span>          <span class="o">|</span> <span class="o">&lt;---</span>            <span class="o">....</span>             <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+<span class="o">|</span>                 <span class="o">/</span>
+<span class="o">|</span>                <span class="o">/</span>
+<span class="o">|</span>               <span class="o">/</span>
+<span class="o">|</span>              <span class="o">/</span>
+<span class="o">|</span>             <span class="o">/</span>
+<span class="o">|----</span>   <span class="n">TaskModule</span>  <span class="o">----</span>    <span class="n">RPiInterface</span><span class="o">.</span><span class="n">RewardControl</span>    <span class="o">----</span>    <span class="n">ZMQcomms</span>
+<span class="o">|</span>                                                                     <span class="o">|</span>
+<span class="o">|</span>                                 <span class="n">pelletFeederController</span> <span class="mi">1</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+<span class="o">|</span>                                           <span class="o">....</span>              <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+<span class="o">|</span>                                                                     <span class="o">|</span>
+<span class="o">|</span>                                   <span class="n">milkFeederController</span> <span class="mi">1</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+<span class="o">|</span>                                            <span class="o">....</span>             <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
+<span class="o">|</span>
+<span class="o">|</span>
+<span class="o">|----</span>   <span class="n">RPiInterface</span><span class="o">.</span><span class="n">GlobalClockControl</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
+<p>This document details every step required for setting up an Ubuntu PC for electrophysiological data collection using <a class="reference external" href="https://github.com/open-ephys/plugin-GUI">OpenEhysGUI</a>, separate tracking system using Raspberry Pis and two different Rasperry Pi based reward modules. The instructions detail every single step, every line of code required to get things running. Therefore, it is definitely painfully long to work through for an advanced user, if not amusing at times. The reason for such detail is that anyone could set it up.</p>
 <p>Occasionally the document includes instructions in double brackets, where the steps may not me necessary but were made by me during the setup process. E.g. <em>((Do this, in case otherwise something will not work later on))</em>.</p>
 <p>All terminal commands written here should be run while in home directory, unless instructed to call on a specific file. This ensures a sensible folder structure is created.</p>
 <p>The instructions can be worked through in the order they are presented in the below table to set up the system from ground up.</p>
 <div class="toctree-wrapper compound">
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="recordingPCandOpenEphysGUI.html">Recording PC setup for Data Acquisition</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#setting-up-the-operating-system">Setting up the Operating System</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-ubuntu">Install Ubuntu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#fix-slow-shutdown-issue">Fix slow shutdown issue</a></li>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#connect-to-the-local-network">Connect to the local network</a></li>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#update-the-system">Update the system</a></li>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-additional-drivers">Install additional drivers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#setting-up-the-operating-system">Setting up the Operating System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#other-useful-steps">Other useful steps</a></li>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-open-ephys-gui">Install Open Ephys GUI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#intan-headstage-setup">Intan Headstage setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#setup-recording-pc-for-using-recording-manager">Setup Recording PC for using Recording Manager</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#other-useful-steps">Other useful steps</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-git-for-using-github">Install git for using github</a></li>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#connect-to-a-network-drive">Connect to a network drive</a></li>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-google-chrome">Install Google Chrome</a></li>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-sublime-text-3-for-editing-scripts">Install Sublime Text 3 for editing scripts</a></li>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-sphinx-for-editing-readthedocs-files">Install Sphinx for editing ReadTheDocs files</a></li>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-qt-designer-for-editing-guis">Install QT Designer for editing GUIs</a></li>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#turn-off-screen-lock">Turn off screen lock</a></li>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-convenient-brightness-controller">Install convenient brightness controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cameraRPiSetup.html">Camera and GlobalClock Raspberry Pi setup</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="cameraRPiSetup.html#hardware-setup">Hardware setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cameraRPiSetup.html#software-setup">Software setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cameraRPiSetup.html#setting-up-raspberry-pi-networking-with-recording-pc">Setting up Raspberry Pi networking with recording PC</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cameraRPiSetup.html#making-copies-of-raspberry-pis">Making copies of Raspberry Pis</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-open-ephys-gui">Install Open Ephys GUI</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-dependencies">Install Dependencies</a></li>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-open-ephys">Install Open Ephys</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#intan-headstage-setup">Intan Headstage setup</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#reference-and-ground">Reference and Ground</a></li>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-leds-on-intan-headstage-for-tracking">Install LEDs on Intan Headstage for tracking</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#setup-recording-pc-for-using-recording-manager">Setup Recording PC for using Recording Manager</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#install-the-dependencies-for-the-scripts">Install the dependencies for the scripts</a></li>
-<li class="toctree-l3"><a class="reference internal" href="recordingPCandOpenEphysGUI.html#make-changes-in-the-scripts-to-suit-your-pc">Make changes in the scripts to suit your PC</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="trackingRPiSetup.html">Camera and GlobalClock Raspberry Pi setup</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="trackingRPiSetup.html#hardware-setup">Hardware setup</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="trackingRPiSetup.html#assembling-raspberry-pi-camera-module">Assembling Raspberry Pi Camera Module</a></li>
-<li class="toctree-l3"><a class="reference internal" href="trackingRPiSetup.html#wiring-for-globalclock-ttl-pulses">Wiring for GlobalClock TTL pulses</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="trackingRPiSetup.html#software-setup">Software setup</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="trackingRPiSetup.html#installing-raspberry-pi-os-raspbian">Installing Raspberry Pi OS: Raspbian</a></li>
-<li class="toctree-l3"><a class="reference internal" href="trackingRPiSetup.html#connect-raspberry-pi-to-the-internet">Connect Raspberry Pi to the internet</a></li>
-<li class="toctree-l3"><a class="reference internal" href="trackingRPiSetup.html#update-all-software">Update all software</a></li>
-<li class="toctree-l3"><a class="reference internal" href="trackingRPiSetup.html#install-simple-to-install-packages">Install simple to install packages</a></li>
-<li class="toctree-l3"><a class="reference internal" href="trackingRPiSetup.html#enable-camera-module">Enable camera module</a></li>
-<li class="toctree-l3"><a class="reference internal" href="trackingRPiSetup.html#install-opencv">Install OpenCV</a></li>
-<li class="toctree-l3"><a class="reference internal" href="trackingRPiSetup.html#install-zeromq">Install ZeroMQ</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="trackingRPiSetup.html#setting-up-raspberry-pi-networking-with-recording-pc">Setting up Raspberry Pi networking with recording PC</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="trackingRPiSetup.html#configuring-raspberry-pi">Configuring Raspberry Pi</a></li>
-<li class="toctree-l3"><a class="reference internal" href="trackingRPiSetup.html#configuring-the-recording-pc">Configuring the Recording PC</a></li>
-<li class="toctree-l3"><a class="reference internal" href="trackingRPiSetup.html#configure-ssh-keys-to-avoid-password-requests">Configure SSH keys to avoid Password requests</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="trackingRPiSetup.html#making-copies-of-raspberry-pis">Making copies of Raspberry Pis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="wirelessRewardSetup.html">FEEDER setup</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="wirelessRewardSetup.html#setting-up-raspberry-pi-zero-software">Setting up Raspberry Pi Zero software</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wirelessRewardSetup.html#setting-up-raspberry-pi-zero-networking-with-recording-pc">Setting up Raspberry Pi Zero networking with Recording PC</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wirelessRewardSetup.html#production-and-assembly-of-pellet-feeder">Production and assembly of Pellet FEEDER</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wirelessRewardSetup.html#use-and-maintenance-of-pellet-feeder">Use and Maintenance of Pellet FEEDER</a></li>
+<li class="toctree-l2"><a class="reference internal" href="wirelessRewardSetup.html#production-and-assembly-of-milk-feeder">Production and assembly of Milk FEEDER</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a><ul>
@@ -231,42 +358,15 @@
 <li class="toctree-l2"><a class="reference internal" href="recordingPCforDataProcessing.html#install-google-chrome-to-use-waveform-gui">Install Google Chrome to use Waveform GUI</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="howToUseTheseScripts.html">Tutorial for using Open Ephys Scripts</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="howToUseTheseScripts.html#using-openephysgui">Using OpenEphysGUI</a></li>
-<li class="toctree-l2"><a class="reference internal" href="howToUseTheseScripts.html#using-recording-manager">Using Recording Manager</a></li>
-<li class="toctree-l2"><a class="reference internal" href="howToUseTheseScripts.html#camera-settings-and-calibration">Camera Settings and Calibration</a></li>
-<li class="toctree-l2"><a class="reference internal" href="howToUseTheseScripts.html#processing">Processing</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="wirelessRewardSetup.html">FEEDER setup</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="wirelessRewardSetup.html#setting-up-raspberry-pi-zero-software">Setting up Raspberry Pi Zero software</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="wirelessRewardSetup.html#installing-raspberry-pi-os-raspbian">Installing Raspberry Pi OS: Raspbian</a></li>
-<li class="toctree-l3"><a class="reference internal" href="wirelessRewardSetup.html#install-necessary-software-on-rpi-zero">Install necessary software on RPi Zero</a></li>
-<li class="toctree-l3"><a class="reference internal" href="wirelessRewardSetup.html#setting-up-raspberry-pi-zero-interface-with-picon-zero-on-milk-feeder-only">Setting up Raspberry Pi Zero interface with Picon Zero on Milk FEEDER only</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="wirelessRewardSetup.html#setting-up-raspberry-pi-zero-networking-with-recording-pc">Setting up Raspberry Pi Zero networking with Recording PC</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="wirelessRewardSetup.html#setting-up-the-wireless-router">Setting up the wireless router</a></li>
-<li class="toctree-l3"><a class="reference internal" href="wirelessRewardSetup.html#setting-up-networking-with-rpi-zero-and-recording-pc">Setting up Networking with RPi Zero and Recording PC</a></li>
-<li class="toctree-l3"><a class="reference internal" href="wirelessRewardSetup.html#setting-a-static-ip-address-on-the-rpi-zero">Setting a static IP address on the RPi Zero</a></li>
-<li class="toctree-l3"><a class="reference internal" href="wirelessRewardSetup.html#configuring-ssh-on-rpi-zero">Configuring SSH on RPi Zero</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="wirelessRewardSetup.html#production-and-assembly-of-pellet-feeder">Production and assembly of Pellet FEEDER</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="wirelessRewardSetup.html#commerically-available-materials-needed">Commerically available materials needed</a></li>
-<li class="toctree-l3"><a class="reference internal" href="wirelessRewardSetup.html#d-printed-elements-to-produce">3D printed elements to produce</a></li>
-<li class="toctree-l3"><a class="reference internal" href="wirelessRewardSetup.html#assembly-of-pellet-feeder">Assembly of Pellet FEEDER</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="wirelessRewardSetup.html#use-and-maintenance-of-pellet-feeder">Use and Maintenance of Pellet FEEDER</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="wirelessRewardSetup.html#use-of-pellet-feeder">Use of Pellet FEEDER</a></li>
-<li class="toctree-l3"><a class="reference internal" href="wirelessRewardSetup.html#maintenance-of-pellet-feeder">Maintenance of Pellet FEEDER</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="wirelessRewardSetup.html#production-and-assembly-of-milk-feeder">Production and assembly of Milk FEEDER</a></li>
+<li class="toctree-l1"><a class="reference internal" href="userManual.html">Tutorial for using Open Ephys Scripts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="userManual.html#using-openephysgui">Using OpenEphysGUI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="userManual.html#using-recording-manager">Using Recording Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="userManual.html#camera-settings-and-calibration">Camera Settings and Calibration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="userManual.html#processing">Processing</a></li>
 </ul>
 </li>
 </ul>
+</div>
 </div>
 </div>
 

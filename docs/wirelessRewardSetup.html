@@ -35,7 +35,8 @@
   <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="prev" title="Tutorial for using Open Ephys Scripts" href="howToUseTheseScripts.html" /> 
+    <link rel="next" title="Recording PC setup for Data Processing" href="recordingPCforDataProcessing.html" />
+    <link rel="prev" title="Camera and GlobalClock Raspberry Pi setup" href="cameraRPiSetup.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -85,9 +86,7 @@
             
               <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="recordingPCandOpenEphysGUI.html">Recording PC setup for Data Acquisition</a></li>
-<li class="toctree-l1"><a class="reference internal" href="trackingRPiSetup.html">Camera and GlobalClock Raspberry Pi setup</a></li>
-<li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howToUseTheseScripts.html">Tutorial for using Open Ephys Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cameraRPiSetup.html">Camera and GlobalClock Raspberry Pi setup</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">FEEDER setup</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#setting-up-raspberry-pi-zero-software">Setting up Raspberry Pi Zero software</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#installing-raspberry-pi-os-raspbian">Installing Raspberry Pi OS: Raspbian</a></li>
@@ -116,6 +115,8 @@
 <li class="toctree-l2"><a class="reference internal" href="#production-and-assembly-of-milk-feeder">Production and assembly of Milk FEEDER</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="userManual.html">Tutorial for using Open Ephys Scripts</a></li>
 </ul>
 
             
@@ -189,7 +190,7 @@ or Wireless Reward Module.</p>
 <p>The software and networking setup described below is identical for Milk FEEDER and Pellet FEEDER, except for sections where said otherwise.</p>
 <p>It is advisable to follow through this part first, before assembling the FEEDER. This way it is more convenient to plug the RPi Zero to the power socket, keyboard, mouse and monitor for working through the following steps.</p>
 <p>This tutorial is based on setting up <a class="reference external" href="https://www.raspberrypi.org/products/raspberry-pi-zero-w/">Raspberry Pi Zero W</a> with Recording PC that is connected to the same WiFi router as the FEEDERs.</p>
-<p>If you are setting up multiple Pi Zeros, you can make copies after you have set up the software and networking on the first one. To make copies of a configured RPi Zero, use this guide: <a class="reference internal" href="trackingRPiSetup.html#duplicatingrpis"><span class="std std-ref">Making copies of Raspberry Pis</span></a>. Ensure to change the static IP information on each new copy and test the SSH connection for each one, as instructed in the guide.</p>
+<p>If you are setting up multiple Pi Zeros, you can make copies after you have set up the software and networking on the first one. To make copies of a configured RPi Zero, use this guide: <a class="reference internal" href="cameraRPiSetup.html#duplicatingrpis"><span class="std std-ref">Making copies of Raspberry Pis</span></a>. Ensure to change the static IP information on each new copy and test the SSH connection for each one, as instructed in the guide.</p>
 <div class="section" id="installing-raspberry-pi-os-raspbian">
 <h3>Installing Raspberry Pi OS: Raspbian<a class="headerlink" href="#installing-raspberry-pi-os-raspbian" title="Permalink to this headline">¶</a></h3>
 <p>Download <strong>Raspbian Stretch Lite</strong> (Here used version 4.9) from <a class="reference external" href="https://www.raspberrypi.org/downloads/raspbian/">Raspberry website</a>. Unpack the downloaded <em>.zip</em> file with <code class="docutils literal notranslate"><span class="pre">Archive</span> <span class="pre">Manager</span></code> to get access to the <em>.img</em> file.</p>
@@ -283,7 +284,7 @@ dtparam=i2c_arm=on
 </div>
 <div class="section" id="setting-up-raspberry-pi-zero-networking-with-recording-pc">
 <h2>Setting up Raspberry Pi Zero networking with Recording PC<a class="headerlink" href="#setting-up-raspberry-pi-zero-networking-with-recording-pc" title="Permalink to this headline">¶</a></h2>
-<p>To connect the Recording PC wirelessly to the FEEDERs, use a wireless router. The Recording PC networking for external network is set up using the guide <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span class="std std-ref">Connect to the local network</span></a> and the internal networking necessary for tracking Raspberry Pis is set up using the guide  <a class="reference internal" href="trackingRPiSetup.html#recpcnetworkinterfacesforinternalnetwork"><span class="std std-ref">Configuring the Recording PC</span></a>. We add a standard WiFi router (<a class="reference external" href="http://www.tp-link.com/uk/products/details/cat-9_TL-WR841N.html">TL-WR841N</a>) with ethernet LAN ports to the network by connecting the network switch between Recording PC and tracking RPis to one of the ethernet LAN ports on the wireless router.</p>
+<p>To connect the Recording PC wirelessly to the FEEDERs, use a wireless router. The Recording PC networking for external network is set up using the guide <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span class="std std-ref">Connect to the local network</span></a> and the internal networking necessary for tracking Raspberry Pis is set up using the guide  <a class="reference internal" href="cameraRPiSetup.html#recpcnetworkinterfacesforinternalnetwork"><span class="std std-ref">Configuring the Recording PC</span></a>. We add a standard WiFi router (<a class="reference external" href="http://www.tp-link.com/uk/products/details/cat-9_TL-WR841N.html">TL-WR841N</a>) with ethernet LAN ports to the network by connecting the network switch between Recording PC and tracking RPis to one of the ethernet LAN ports on the wireless router.</p>
 <p>Note that for the devices to see each other, the IP addresses added to the devices in the internal network must all have the same values, apart from the last digits after the last separator, e.g. <code class="docutils literal notranslate"><span class="pre">192.168.0.1</span></code> and <code class="docutils literal notranslate"><span class="pre">192.168.0.22</span></code>. We chose the <code class="docutils literal notranslate"><span class="pre">192.168.0.xx</span></code> address as it did not match the external network IP and made it easiest to work with a WiFi router, for which the default IP address was <code class="docutils literal notranslate"><span class="pre">192.168.0.1</span></code>.</p>
 <div class="section" id="setting-up-the-wireless-router">
 <h3>Setting up the wireless router<a class="headerlink" href="#setting-up-the-wireless-router" title="Permalink to this headline">¶</a></h3>
@@ -485,8 +486,10 @@ Solenoid Pinch Valve</p>
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
+        <a href="recordingPCforDataProcessing.html" class="btn btn-neutral float-right" title="Recording PC setup for Data Processing" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
-        <a href="howToUseTheseScripts.html" class="btn btn-neutral float-left" title="Tutorial for using Open Ephys Scripts" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+        <a href="cameraRPiSetup.html" class="btn btn-neutral float-left" title="Camera and GlobalClock Raspberry Pi setup" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

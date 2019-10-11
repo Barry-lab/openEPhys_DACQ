@@ -1,4 +1,4 @@
-.. _howToUseTheseScripts:
+.. _userManual:
 
 =====================================
 Tutorial for using Open Ephys Scripts

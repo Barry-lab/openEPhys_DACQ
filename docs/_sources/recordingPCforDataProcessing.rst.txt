@@ -70,4 +70,4 @@ Go to Google Chrome `website <https://www.google.com/chrome/>`_ and download 64 
 
 You are now ready to use the Open Ephys Data Processing scripts to detect spike, cluster them with Klustakwik and view the result with spatial correlograms in `Waveform GUI <http://d1manson.github.io/waveform/>`_.
 
-See :ref:`howToUseTheseScripts`.
+See :ref:`userManual`.

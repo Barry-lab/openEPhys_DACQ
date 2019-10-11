@@ -1,0 +1,6 @@
+rm -r build/html/*
+shopt -s extglob
+rm -r !("build"|"source"|"Makefile"|"make_and_move")
+make html
+mv build/html/* .
+

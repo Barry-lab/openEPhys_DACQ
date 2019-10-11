@@ -1,4 +1,4 @@
-.. _trackingRPiSetup:
+.. _cameraRPiSetup:
 
 =========================================
 Camera and GlobalClock Raspberry Pi setup

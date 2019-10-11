@@ -35,8 +35,8 @@
   <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Camera and GlobalClock Raspberry Pi setup" href="trackingRPiSetup.html" />
-    <link rel="prev" title="Setup for Open Ephys Recordings and Analysis" href="index.html" /> 
+    <link rel="next" title="Camera and GlobalClock Raspberry Pi setup" href="cameraRPiSetup.html" />
+    <link rel="prev" title="Welcome to openEPhys_DACQ repository" href="index.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -122,10 +122,10 @@
 </li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="trackingRPiSetup.html">Camera and GlobalClock Raspberry Pi setup</a></li>
-<li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howToUseTheseScripts.html">Tutorial for using Open Ephys Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cameraRPiSetup.html">Camera and GlobalClock Raspberry Pi setup</a></li>
 <li class="toctree-l1"><a class="reference internal" href="wirelessRewardSetup.html">FEEDER setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="userManual.html">Tutorial for using Open Ephys Scripts</a></li>
 </ul>
 
             
@@ -196,18 +196,18 @@
 <span id="settinguptheoperatingsystem"></span><h2>Setting up the Operating System<a class="headerlink" href="#setting-up-the-operating-system" title="Permalink to this headline">¶</a></h2>
 <div class="section" id="install-ubuntu">
 <h3>Install Ubuntu<a class="headerlink" href="#install-ubuntu" title="Permalink to this headline">¶</a></h3>
-<p>This document is based on Ubuntu 16.04 LTS installation. Instructions can be found on Ubuntu  <a class="reference external" href="https://www.ubuntu.com/download/desktop/install-ubuntu-desktop">website</a>.</p>
+<p>This document is based on Ubuntu 16.04 LTS installation. Instructions can be found on <a class="reference external" href="https://www.ubuntu.com/download/desktop/install-ubuntu-desktop">Ubuntu  website</a>.</p>
 <p><em>((During installation agree to using 3rd party repositories))</em></p>
 <p><em>((Make sure you keep the option the ask for password on startup))</em></p>
 <p>If the PC has multiple hard drives, then Ubuntu may put the boot loader (the thing that starts the Operating System) on a different hard drive than the one where Ubuntu files will be. To have control over this, you will need to use the option that also requires you to set up partitions manually. Preferably you would want to have the boot loader on the same drive as your Ubuntu installation. See below.</p>
-<p>During installation you can also manually edit the partition sizes and have a separate partition for the Home folder. To do this, use the <em>Something else</em> option when the installation prompt asks how to set up the Disks. Use <a class="reference external" href="https://askubuntu.com/questions/343268/how-to-use-manual-partitioning-during-installation">this guide</a> for setting up the paritions. Here Primary Type option was used for all partitions and Swap was placed to the end of the drive.</p>
+<p>During installation you can also manually edit the partition sizes and have a separate partition for the Home folder. To do this, use the <em>Something else</em> option when the installation prompt asks how to set up the Disks. Use <a class="reference external" href="https://askubuntu.com/questions/343268/how-to-use-manual-partitioning-during-installation">this guide manual partitioning</a> for setting up the paritions. Here Primary Type option was used for all partitions and Swap was placed to the end of the drive.</p>
 </div>
 <div class="section" id="fix-slow-shutdown-issue">
 <h3>Fix slow shutdown issue<a class="headerlink" href="#fix-slow-shutdown-issue" title="Permalink to this headline">¶</a></h3>
 <p>This is an optional step, if this issue occurs with your PC setup. It may happen that after installation shutdown process is very slow, which you would notice as you restart your PC. In this case during shutdown, when you see Ubuntu loading logo, hit F12 on the keyboard. If over the next few minutes check if you see similar error messages to the following:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>ata2.00: exception Emask 0x0 SAct 0x0 SErr 0x0 action 0x6 frozen
-ata2.00: status: { DRDY}
-ata2.00: revalidation failed (errno=-5)
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ata2</span><span class="o">.</span><span class="mi">00</span><span class="p">:</span> <span class="n">exception</span> <span class="n">Emask</span> <span class="mh">0x0</span> <span class="n">SAct</span> <span class="mh">0x0</span> <span class="n">SErr</span> <span class="mh">0x0</span> <span class="n">action</span> <span class="mh">0x6</span> <span class="n">frozen</span>
+<span class="n">ata2</span><span class="o">.</span><span class="mi">00</span><span class="p">:</span> <span class="n">status</span><span class="p">:</span> <span class="p">{</span> <span class="n">DRDY</span><span class="p">}</span>
+<span class="n">ata2</span><span class="o">.</span><span class="mi">00</span><span class="p">:</span> <span class="n">revalidation</span> <span class="n">failed</span> <span class="p">(</span><span class="n">errno</span><span class="o">=-</span><span class="mi">5</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>If you see similar error messages, do the following to fix it (It is based on the 2nd solution in <a class="reference external" href="https://askubuntu.com/questions/764568/ubuntu-16-04-hangs-on-shutdown-restart/769972#769972">this post</a>)</p>
@@ -258,7 +258,7 @@ sudo apt-get dist-upgrade  # Installs updates (new ones)
 </div>
 <div class="section" id="connect-to-a-network-drive">
 <h3>Connect to a network drive<a class="headerlink" href="#connect-to-a-network-drive" title="Permalink to this headline">¶</a></h3>
-<p>Use <a class="reference external" href="http://ubuntuhandbook.org/index.php/2014/08/map-network-drive-onto-ubuntu-14-04/">this guide</a> to map a network drive permanently.</p>
+<p>Use <a class="reference external" href="http://ubuntuhandbook.org/index.php/2014/08/map-network-drive-onto-ubuntu-14-04/">this guide to mapping a network drive</a> to map a network drive permanently.</p>
 <p>Here are the steps using as an example a server named QNAP:</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo apt-get install cifs-utils
 sudo mkdir /media/QNAP
@@ -395,9 +395,9 @@ sudo apt-get install libhdf5-serial-dev # HDF version 1.8.12, or higher, is requ
 </div>
 <p>Add the necessary <a class="reference external" href="https://open-ephys.atlassian.net/wiki/spaces/OEW/pages/47841283/Third-party+plugin+repositories">third-party plugins</a> to the <code class="docutils literal notranslate"><span class="pre">~/Programs/OpenEphysGUI/plugin-GUI/Source/Plugins</span></code> folder. The necessary plugins are:</p>
 <ul class="simple">
-<li><p><a class="reference external" href="https://github.com/arnefmeyer/VirtualReferencePlugin">VirtualRef</a> (<a class="reference external" href="https://github.com/arnefmeyer/VirtualReferencePlugin/commit/a8e20cd1df8e0d8003a757391293c75a1089ad7a">commit used</a>)</p></li>
-<li><p><a class="reference external" href="https://github.com/tne-lab/crossing-detector">CrossingDetector</a> (<a class="reference external" href="https://github.com/tne-lab/crossing-detector/commit/b402d5785d502c2b1cd7ff394d2c93377500cdc6">commit used</a>)</p></li>
-<li><p><a class="reference external" href="https://github.com/arnefmeyer/EventPublisherPlugin">EventPublisher</a> (<a class="reference external" href="https://github.com/arnefmeyer/EventPublisherPlugin/commit/7d195c9ed3ca75e34885ce3e3e7fdf90a7f24dfa">commit used</a>)</p></li>
+<li><p><a class="reference external" href="https://github.com/arnefmeyer/VirtualReferencePlugin">VirtualRef</a> (<a class="reference external" href="https://github.com/arnefmeyer/VirtualReferencePlugin/commit/a8e20cd1df8e0d8003a757391293c75a1089ad7a">commit used for VirtualRef</a>)</p></li>
+<li><p><a class="reference external" href="https://github.com/tne-lab/crossing-detector">CrossingDetector</a> (<a class="reference external" href="https://github.com/tne-lab/crossing-detector/commit/b402d5785d502c2b1cd7ff394d2c93377500cdc6">commit used for CrossingDetector</a>)</p></li>
+<li><p><a class="reference external" href="https://github.com/arnefmeyer/EventPublisherPlugin">EventPublisher</a> (<a class="reference external" href="https://github.com/arnefmeyer/EventPublisherPlugin/commit/7d195c9ed3ca75e34885ce3e3e7fdf90a7f24dfa">commit used for EventPublisher</a>)</p></li>
 </ul>
 <p>Each of the plugins github code contains a folder with the plugin name, e.g. <code class="docutils literal notranslate"><span class="pre">VirtualRef</span></code> and files with <code class="docutils literal notranslate"><span class="pre">.cpp</span></code> and <code class="docutils literal notranslate"><span class="pre">.h</span></code> endings in that folder. Copy that entire folder to plugin-GUI Plugin directory <code class="docutils literal notranslate"><span class="pre">~/Programs/OpenEphysGUI/plugin-GUI/Source/Plugins</span></code>. As you compile the Open Ephys GUI Plugins following instructions below, these plugins will also be compiled and made accessible in the GUI.</p>
 </div>
@@ -459,7 +459,7 @@ sudo pip install pyzmq # This assumes you have already installed ZMQ for OpenEph
 pip install h5py # This assumes you have already installed libhdf5-serial-dev for OpenEphys GUI
 </pre></div>
 </div>
-<p>Additionally install <code class="docutils literal notranslate"><span class="pre">pyqtgraph</span></code> latest version from their website (Here 0.10.0-1 was used). Go to their <a class="reference external" href="www.pyqtgraph.org">website</a> and download the latest version of Debian/Ubuntu package. Install it by right click on the downloaded <em>.deb</em> file -&gt; Open With -&gt; GDebi Package Installer. Click on Install button.</p>
+<p>Additionally install <code class="docutils literal notranslate"><span class="pre">pyqtgraph</span></code> latest version from their website (Here 0.10.0-1 was used). Go to <a class="reference external" href="www.pyqtgraph.org">pyqtgraph website</a> and download the latest version of Debian/Ubuntu package. Install it by right click on the downloaded <em>.deb</em> file -&gt; Open With -&gt; GDebi Package Installer. Click on Install button.</p>
 <p>Create folder structure in the home folder with the following terminal commands:</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>cd ~/
 mkdir RecordingData
@@ -495,7 +495,7 @@ python RecordingManager.py
 </pre></div>
 </div>
 <p>You can now run RecordingManager.py by opening the terminal (by default it starts in your home folder) and typing in command <code class="docutils literal notranslate"><span class="pre">./RecordingManager</span></code>.</p>
-<p>Now the Recording PC is ready to use the Python scripts for managing Open Ephys recordings and Raspberry Pis, if the networking and Raspberry Pis are set up as well. To do this, follow this guide : <a class="reference internal" href="trackingRPiSetup.html#trackingrpisetup"><span class="std std-ref">Camera and GlobalClock Raspberry Pi setup</span></a>.</p>
+<p>Now the Recording PC is ready to use the Python scripts for managing Open Ephys recordings and Raspberry Pis, if the networking and Raspberry Pis are set up as well. To do this, follow this guide : <a class="reference internal" href="cameraRPiSetup.html#camerarpisetup"><span class="std std-ref">Camera and GlobalClock Raspberry Pi setup</span></a>.</p>
 </div>
 </div>
 </div>
@@ -508,10 +508,10 @@ python RecordingManager.py
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="trackingRPiSetup.html" class="btn btn-neutral float-right" title="Camera and GlobalClock Raspberry Pi setup" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="cameraRPiSetup.html" class="btn btn-neutral float-right" title="Camera and GlobalClock Raspberry Pi setup" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="index.html" class="btn btn-neutral float-left" title="Setup for Open Ephys Recordings and Analysis" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="index.html" class="btn btn-neutral float-left" title="Welcome to openEPhys_DACQ repository" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
