@@ -20,11 +20,11 @@ from openEPhys_DACQ.HelperFunctions import test_pinging_address, time_string
 
 
 def write_files_to_RPi(files, address, username='pi', verbose=False):
-    '''
+    """
     files - list or tuple of files to copy to home directory on the RPi
     address - RPi address
     username - RPi username to use for access
-    '''
+    """
     if verbose:
         qflag = ''
     else:
@@ -45,12 +45,12 @@ def read_file_from_RPi(source_filename, target_filename, address, username='pi',
     _ = os.system(callstr)
 
 def read_files_from_RPi(files, target_path, address, username='pi', verbose=False):
-    '''
+    """
     files - list or tuple of files to copy from home directory of the RPi
     target_path - folder to which the files will be copied to
     address - RPi address
     username - RPi username to use for access
-    '''
+    """
     for file in files:
         target_filename = os.path.join(target_path, file)
         read_file_from_RPi(file, target_filename, address, username, verbose)
@@ -95,12 +95,12 @@ class Camera_RPi_file_manager(object):
         print(['DEBUG', time_string(), 'Retrieving timestamps from ' + self.address + ' complete.'])
 
     def retrieve_OnlineTrackerData(self):
-        '''
+        """
         Retrieves OnlineTrackerData. The data transfer failes sometimes, 
         in which case an informing message is printed and retrieval is attempted again.
 
         Note! OnlineTrackerData_timestamps must be obtained first using retrieve_timestamps() method. 
-        '''
+        """
         print(['DEBUG', time_string(), 'Retrieving tracking data from ' + self.address])
         if hasattr(self, 'OnlineTrackerData_timestamps'):
             temp_folder = mkdtemp('RPiTempFolder')
@@ -119,16 +119,16 @@ class Camera_RPi_file_manager(object):
         print(['DEBUG', time_string(), 'Retrieving tracking data from ' + self.address + ' complete.'])
 
     def retrieve_timestamps_and_OnlineTrackerData(self):
-        '''
+        """
         Must be called before get_timestamps_and_OnlineTrackerData()
-        '''
+        """
         self.retrieve_timestamps()
         self.retrieve_OnlineTrackerData()
 
     def get_timestamps_and_OnlineTrackerData(self, cameraID='0'):
-        '''
+        """
         Must be called after retrieve_timestamps_and_OnlineTrackerData()
-        '''
+        """
         return {'ColumnLabels': ['X1', 'Y1', 'X2', 'Y2', 'Luminance_1', 'Luminance_2'], 
                 'OnlineTrackerData': self.OnlineTrackerData,
                 'OnlineTrackerData_timestamps': self.OnlineTrackerData_timestamps,
@@ -137,9 +137,9 @@ class Camera_RPi_file_manager(object):
                 'VideoFile': Camera_RPi_file_manager.video_file_name_on_RecordingPC(cameraID)}
 
     def copy_over_video_data(self, folder_path, cameraID='0'):
-        '''
+        """
         Copies over video data to folder_path with cameraID included in the filename.
-        '''
+        """
         print(['DEBUG', time_string(), 'Retrieving video data from ' + self.address])
         read_file_from_RPi(Camera_RPi_file_manager.video_file_name_on_RPi(), 
                            os.path.join(folder_path, Camera_RPi_file_manager.video_file_name_on_RecordingPC(cameraID)), 
@@ -203,9 +203,9 @@ class CameraControl(object):
             self.RPiSSH.sendCommand_threading(command) # TO DO: This seems to kill the ssh instance if command fails.
 
     def calibrate(self, calibration_parameters):
-        '''
+        """
         calibration_parameters - dict - output from CameraControl.enter_calibration_parameters
-        '''
+        """
         return self.RemoteControl.sendCommand('calibrate', True, calibration_parameters)
 
     def start_streaming(self, address, port):
@@ -231,9 +231,9 @@ class CameraControl(object):
     def dict_OnlineTrackerParams(calibrationTmatrix, tracking_mode, smoothing_box, 
                                  motion_threshold, motion_size, 
                                  OnlineTracker_port, RPiIP, LED_separation):
-        '''
+        """
         Returns camera_parameters in a dictionary.
-        '''
+        """
         return {'calibrationTmatrix': calibrationTmatrix, # (3 x 3 numpy array)
                 'tracking_mode': str(tracking_mode), # str
                 'smoothing_box': int(smoothing_box), # int - number of pixels
@@ -245,27 +245,27 @@ class CameraControl(object):
 
     @staticmethod
     def dict_calibration_parameters(ndots_xy, spacing, offset_xy):
-        '''
+        """
         Returns calibration_parameters in a dictionary.
-        '''
+        """
         return {'ndots_xy': ndots_xy, 
                 'spacing': spacing, 
                 'offset_xy': offset_xy}
 
     @staticmethod
     def CameraControl_unpackPool(kwargs):
-        '''
+        """
         Helper function to allow using pool with argument list.
         kwargs - dict - key value pairs for input arguments to CameraControl
-        '''
+        """
         return CameraControl(**kwargs)
 
     @staticmethod
     def init_CameraControls_with_CameraSettings(CameraSettings):
-        '''
+        """
         Returns a dictionary where each CameraSettings['use_RPi_nrs'] element is a key
         to corresponding initialized CameraControl object. 
-        '''
+        """
         kwargs_list = []
         cameraID_list = []
         for cameraID in CameraSettings['CameraSpecific'].keys():
@@ -374,10 +374,10 @@ class onlineTrackingData(object):
 
     @staticmethod
     def setupSocket_unpackPool(kwargs):
-        '''
+        """
         Helper function to allow using pool with argument list.
         kwargs - dict - key value pairs for input arguments to setupSocket
-        '''
+        """
         return onlineTrackingData.setupSocket(**kwargs)
 
     @staticmethod
@@ -590,9 +590,9 @@ class RewardControl(object):
         return command
 
     def init_Controller_and_wait_for_feedback(self, max_init_wait_time=25):
-        '''
+        """
         Attempts to initialize the Controller class on the FEEDER
-        '''
+        """
         self.Controller_init_successful = False
         # Acquire the correct command for the FEEDER type
         if self.FEEDER_type == 'milk':
@@ -611,9 +611,9 @@ class RewardControl(object):
         return self.Controller_init_successful
 
     def init_Controller_until_positive_feedback(self, max_attempts=4, max_init_wait_time=25):
-        '''
+        """
         Attempts to initialize Controller class on the FEEDER multiple times
-        '''
+        """
         for n in range(max_attempts):
             Controller_init_successful = self.init_Controller_and_wait_for_feedback(max_init_wait_time=25)
             if Controller_init_successful:
@@ -627,10 +627,10 @@ class RewardControl(object):
         return Controller_init_successful
 
     def release(self, quantity=1, max_attempts=10):
-        '''
+        """
         Releases the specified quantity of reward.
         Returns True or False, depending if action was successful.
-        '''
+        """
         # Reset feedback message detector
         self.release_feedback_message_received = False
         self.release_pellets_in_progress = False
@@ -684,9 +684,9 @@ class RewardControl(object):
         self.Controller_messenger.sendMessage('stopAllSignals')
 
     def close(self):
-        '''
+        """
         Closes all opened processes correctly.
-        '''
+        """
         try:
             self.Controller_messenger.sendMessage('close')
             self.T_Controller.join()
