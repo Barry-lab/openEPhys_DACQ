@@ -6,10 +6,12 @@ This is a system for automated experiments acquiring neural data using `OpenEhys
 
 The original purpose for this system was to collect neural data from rodents performing a navigational task in a large environment.
 
+The github page for this repository: https://github.com/Barry-lab/openEPhys_DACQ
+
 Features
 ========
 
-* Data synchronisation with `OpenEhysGUI <https://github.com/open-ephys/plugin-GUI>`
+* Data synchronisation with `OpenEhysGUI <https://github.com/open-ephys/plugin-GUI>`_
     - Global clock TTL signal for precision synchrony
     - Logging messages with recording timestamps (e.g. pellet dropped)
 * Real-time tracking and 1080p video recording
