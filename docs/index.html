@@ -88,7 +88,7 @@
 <li class="toctree-l1"><a class="reference internal" href="cameraRPiSetup.html">Camera and GlobalClock Raspberry Pi setup</a></li>
 <li class="toctree-l1"><a class="reference internal" href="wirelessRewardSetup.html">FEEDER setup</a></li>
 <li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="userManual.html">Tutorial for using Open Ephys Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="userManual.html">User Manual</a></li>
 </ul>
 
             
@@ -236,90 +236,26 @@
 </dd>
 </dl>
 </li>
+<li><dl class="simple">
+<dt>Processing pipeline for tetrode recordings</dt><dd><ul>
+<li><dl class="simple">
+<dt>Parallel implementation of 3 spike sorting methods</dt><dd><ul>
+<li><p>Kilosort</p></li>
+<li><p>Klustakwik - offline detected spikes</p></li>
+<li><p>Klustakwik - on OpenEphysGUI detected spikes</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
 </ul>
 </div>
-<div class="section" id="system-overview">
-<h2>System overview<a class="headerlink" href="#system-overview" title="Permalink to this headline">¶</a></h2>
-<p>The system can be described in two distinctive states: setting up the experiment and active recording state.</p>
-<div class="section" id="setting-up-the-experiment">
-<h3>Setting up the experiment<a class="headerlink" href="#setting-up-the-experiment" title="Permalink to this headline">¶</a></h3>
-<p>When setting up the experiment, <code class="docutils literal notranslate"><span class="pre">RecordingManager</span></code> uses modules <code class="docutils literal notranslate"><span class="pre">CameraSettings</span></code> and <code class="docutils literal notranslate"><span class="pre">TaskSettings</span></code> to calibrate the cameras and set recording parameters.</p>
-<p>Both <code class="docutils literal notranslate"><span class="pre">CameraSettings</span></code> and <code class="docutils literal notranslate"><span class="pre">TaskSettings</span></code> use <code class="docutils literal notranslate"><span class="pre">ZMQcomms</span></code> module to control any number of peripheral devices:</p>
-<ul class="simple">
-<li><p>Camera Raspbery Pis running <code class="docutils literal notranslate"><span class="pre">CameraRPiController</span></code></p></li>
-<li><p>Pellet Feeder Raspberry Pis running <code class="docutils literal notranslate"><span class="pre">pelletFeederController</span></code></p></li>
-<li><p>Milk Feeder Raspberry Pis running <code class="docutils literal notranslate"><span class="pre">milkFeederController</span></code></p></li>
-</ul>
-<p><code class="docutils literal notranslate"><span class="pre">ZMQcomms</span></code> utilizes <a class="reference external" href="https://pyzmq.readthedocs.io/en/latest/">PyZMQ</a> to allow sharing data and direct control over Python processes operating on the peripheral devices over ethernet or WiFi connection.</p>
-<p><code class="docutils literal notranslate"><span class="pre">CameraSettings</span></code> is used to configure the Camera Raspberry Pis and setting video recording and tracking parameters. Most importantly, <code class="docutils literal notranslate"><span class="pre">CameraSettings</span></code> calibrates all the cameras to the same reference frame, allowing online tracking with multiple cameras with non-overlapping fields of view. It does this using <code class="docutils literal notranslate"><span class="pre">RPiInterface.CameraControl</span></code>, which gives it full control of Python process running on each Camera Raspbery Pi. <code class="docutils literal notranslate"><span class="pre">CameraSettings</span></code> can also display a live feed from each camera, making camera view adjustment and calibration very convenient.</p>
-<p><code class="docutils literal notranslate"><span class="pre">TaskSettings</span></code> is used to choose a task program and to adjust parameters. The further functionality of this module depends on the specific task program. For example, the available <code class="docutils literal notranslate"><span class="pre">Pellets_and_Rep_Milk</span></code> task module can use <code class="docutils literal notranslate"><span class="pre">RPiInterface.RewardControl</span></code> to test functionality of reward devices.</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">RecordingManager</span>
-<span class="o">|</span>
-<span class="o">|</span>
-<span class="o">|----</span>   <span class="n">CameraSettings</span>  <span class="o">----</span>    <span class="n">RPiInterface</span><span class="o">.</span><span class="n">CameraControl</span>    <span class="o">----</span>    <span class="n">ZMQcomms</span>
-<span class="o">|</span>                                                                         <span class="o">|</span>
-<span class="o">|</span>                                                                         <span class="o">|</span>
-<span class="o">|</span>                                        <span class="n">CameraRPiController</span> <span class="mi">1</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-<span class="o">|</span>                                        <span class="n">CameraRPiController</span> <span class="mi">2</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-<span class="o">|</span>                                        <span class="n">CameraRPiController</span> <span class="mi">3</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-<span class="o">|</span>                                                <span class="o">....</span>             <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-<span class="o">|</span>
-<span class="o">|</span>
-<span class="o">|</span>
-<span class="o">|----</span>   <span class="n">TaskSettings</span>    <span class="o">----</span>    <span class="n">TaskModule</span>      <span class="o">----</span>    <span class="n">RPiInterface</span><span class="o">.</span><span class="n">RewardControl</span>
-                                                                          <span class="o">|</span>
-                                                                      <span class="n">ZMQcomms</span>
-                                                                          <span class="o">|</span>
-                                                                          <span class="o">|</span>
-                                      <span class="n">pelletFeederController</span> <span class="mi">1</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-                                      <span class="n">pelletFeederController</span> <span class="mi">2</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-                                                <span class="o">....</span>              <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-                                                                          <span class="o">|</span>
-                                                                          <span class="o">|</span>
-                                        <span class="n">milkFeederController</span> <span class="mi">1</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-                                        <span class="n">milkFeederController</span> <span class="mi">2</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-                                                 <span class="o">....</span>             <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-</pre></div>
-</div>
-</div>
-<div class="section" id="druing-recording">
-<h3>Druing recording<a class="headerlink" href="#druing-recording" title="Permalink to this headline">¶</a></h3>
-<p>The recording is controlled by <code class="docutils literal notranslate"><span class="pre">RecordingManager</span></code>. <code class="docutils literal notranslate"><span class="pre">OpenEphysGUI</span></code> must be initialized indpendently with a functioning signal chain that contains the <a class="reference external" href="https://open-ephys.atlassian.net/wiki/spaces/OEW/pages/23265310/Network+Events">Network Events module</a>. <code class="docutils literal notranslate"><span class="pre">RecordingManager</span></code> uses <code class="docutils literal notranslate"><span class="pre">ZMQcomms</span></code> to send start and stop messages to the <code class="docutils literal notranslate"><span class="pre">OpenEphysGUI</span></code>.</p>
-<p>As the recording starts, <code class="docutils literal notranslate"><span class="pre">RecordingManager</span></code> uses <code class="docutils literal notranslate"><span class="pre">RPiInterface.TrackingControl</span></code> to initialize and start cameras and <code class="docutils literal notranslate"><span class="pre">RPiInterface.onlineTrackingData</span></code> for combining incoming tracking information from cameras in real time. The online tracking data in <code class="docutils literal notranslate"><span class="pre">RPiInterface.onlineTrackingData</span></code> is also made available to the task module.</p>
-<p>The function of <code class="docutils literal notranslate"><span class="pre">TaskModule</span></code> again depends on the specific task program that was chosen in the settings. In the case of <code class="docutils literal notranslate"><span class="pre">Pellets_and_Rep_Milk</span></code> task program it will be integrating information from <code class="docutils literal notranslate"><span class="pre">RPiInterface.onlineTrackingData</span></code> to monitor animal behaviour and using <code class="docutils literal notranslate"><span class="pre">RPiInterface.RewardControl</span></code> to activate reward devices as required. <code class="docutils literal notranslate"><span class="pre">Pellets_and_Rep_Milk</span></code> task program can also use the Milk Feeders as well as speakers connected to the PC for delivering light and audio signals. <code class="docutils literal notranslate"><span class="pre">TaskModule</span></code> is also provided with a messaging pipe to <code class="docutils literal notranslate"><span class="pre">OpenEphysGUI</span></code> via <code class="docutils literal notranslate"><span class="pre">ZMQcomms</span></code> module. This allows it to monitor any messages sent by the <code class="docutils literal notranslate"><span class="pre">OpenEphysGUI</span></code> (such as chewing artifact detection) as well as sending it messages about events in the task, which will be stored with a timestamp with alongside the neural data.</p>
-<p>Finally, <code class="docutils literal notranslate"><span class="pre">RPiInterface.GlobalClockControl</span></code> is controlled by <code class="docutils literal notranslate"><span class="pre">RecordingManager</span></code> and it has a very simple function. It is started right after <code class="docutils literal notranslate"><span class="pre">OpenEphysGUI</span></code> and it deliveres simultaneous TTL pulses to <code class="docutils literal notranslate"><span class="pre">OpenEphysGUI</span></code> and <code class="docutils literal notranslate"><span class="pre">CameraRPiController</span></code> running on Camera Raspberry Pis. This allows very accurate synchronisation of neural data with position data from all the cameras.</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">RecordingManager</span>    <span class="o">--------------------</span>    <span class="n">ZMQcomms</span>    <span class="o">-----------------</span>    <span class="n">OpenEphysGUI</span>
-<span class="o">|</span>
-<span class="o">|</span>
-<span class="o">|</span>
-<span class="o">|</span>
-<span class="o">|----</span>   <span class="n">RPiInterface</span><span class="o">.</span><span class="n">TrackingControl</span>    <span class="o">----------</span>    <span class="n">RPiInterface</span><span class="o">.</span><span class="n">CameraControl</span>
-<span class="o">|</span>                                                                        <span class="o">|</span>
-<span class="o">|</span>                                                                        <span class="o">|</span>
-<span class="o">|----</span>   <span class="n">RPiInterface</span><span class="o">.</span><span class="n">onlineTrackingData</span>                                  <span class="o">|</span>
-<span class="o">|</span>                      <span class="o">/</span>      <span class="o">|</span>                                          <span class="o">|</span>
-<span class="o">|</span>                     <span class="o">/</span>   <span class="n">ZMQcomms</span>                                   <span class="n">ZMQcomms</span>
-<span class="o">|</span>                    <span class="o">/</span>        <span class="o">|</span>                                          <span class="o">|</span>
-<span class="o">|</span>                   <span class="o">/</span>         <span class="o">|</span> <span class="o">&lt;---</span>    <span class="n">CameraRPiController</span> <span class="mi">3</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-<span class="o">|</span>                  <span class="o">/</span>          <span class="o">|</span> <span class="o">&lt;---</span>            <span class="o">....</span>             <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-<span class="o">|</span>                 <span class="o">/</span>
-<span class="o">|</span>                <span class="o">/</span>
-<span class="o">|</span>               <span class="o">/</span>
-<span class="o">|</span>              <span class="o">/</span>
-<span class="o">|</span>             <span class="o">/</span>
-<span class="o">|----</span>   <span class="n">TaskModule</span>  <span class="o">----</span>    <span class="n">RPiInterface</span><span class="o">.</span><span class="n">RewardControl</span>    <span class="o">----</span>    <span class="n">ZMQcomms</span>
-<span class="o">|</span>                                                                     <span class="o">|</span>
-<span class="o">|</span>                                 <span class="n">pelletFeederController</span> <span class="mi">1</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-<span class="o">|</span>                                           <span class="o">....</span>              <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-<span class="o">|</span>                                                                     <span class="o">|</span>
-<span class="o">|</span>                                   <span class="n">milkFeederController</span> <span class="mi">1</span>    <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-<span class="o">|</span>                                            <span class="o">....</span>             <span class="o">&lt;--&gt;</span>    <span class="o">|</span>
-<span class="o">|</span>
-<span class="o">|</span>
-<span class="o">|----</span>   <span class="n">RPiInterface</span><span class="o">.</span><span class="n">GlobalClockControl</span>
-</pre></div>
-</div>
-</div>
+<div class="section" id="system-overview-and-the-user-manual">
+<h2>System overview and the user manual<a class="headerlink" href="#system-overview-and-the-user-manual" title="Permalink to this headline">¶</a></h2>
+<p>In depth description of the system is in the <a class="reference internal" href="userManual.html#usermanual-systemoverview"><span class="std std-ref">System overview</span></a> section of the <a class="reference internal" href="userManual.html#usermanual"><span class="std std-ref">User Manual</span></a></p>
 </div>
 <div class="section" id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
@@ -359,11 +295,8 @@
 <li class="toctree-l2"><a class="reference internal" href="recordingPCforDataProcessing.html#install-google-chrome-to-use-waveform-gui">Install Google Chrome to use Waveform GUI</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="userManual.html">Tutorial for using Open Ephys Scripts</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="userManual.html#using-openephysgui">Using OpenEphysGUI</a></li>
-<li class="toctree-l2"><a class="reference internal" href="userManual.html#using-recording-manager">Using Recording Manager</a></li>
-<li class="toctree-l2"><a class="reference internal" href="userManual.html#camera-settings-and-calibration">Camera Settings and Calibration</a></li>
-<li class="toctree-l2"><a class="reference internal" href="userManual.html#processing">Processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="userManual.html">User Manual</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="userManual.html#system-overview">System overview</a></li>
 </ul>
 </li>
 </ul>
