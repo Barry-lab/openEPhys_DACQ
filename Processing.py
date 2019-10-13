@@ -11,6 +11,7 @@ import os
 import tempfile
 import shutil
 import copy
+from multiprocessing import Process
 
 import numpy as np
 
@@ -18,7 +19,76 @@ from openEPhys_DACQ import NWBio
 from openEPhys_DACQ.createAxonaData import createAxonaData_for_NWBfile
 from openEPhys_DACQ import HelperFunctions as hfunct
 from openEPhys_DACQ.KlustaKwikWrapper import applyKlustaKwik_on_spike_data_tet
-from openEPhys_DACQ.TrackingDataProcessing import use_binary_pos, process_tracking_data
+from openEPhys_DACQ.TrackingDataProcessing import (remove_tracking_data_jumps,
+                                                   iteratively_combine_multicamera_data_for_recording)
+
+def use_binary_pos(filename, postprocess=False, maxjump=25):
+    """
+    Copies binary position data into tracking data
+    Apply postprocessing with postprocess=True
+    """
+    recordingKey = NWBio.get_recordingKey(filename)
+    # Load timestamps and position data
+    with h5py.File(filename, 'r+') as h5file:
+        timestamps = np.array(h5file['acquisition']['timeseries'][recordingKey]['events']['binary1']['timestamps'])
+        xy = np.array(h5file['acquisition']['timeseries'][recordingKey]['events']['binary1']['data'][:,:2])
+    data = {'xy': xy, 'timestamps': timestamps}
+    # Construct data into repository familiar posdata format (single array with times in first column)
+    posdata = np.append(data['timestamps'][:,None], data['xy'].astype(np.float64), axis=1)
+    # Add NaNs for second LED if missing
+    if posdata.shape[1] < 5:
+        nanarray = np.zeros(data['xy'].shape, dtype=np.float64)
+        nanarray[:] = np.nan
+        posdata = np.append(posdata, nanarray, axis=1)
+    # Postprocess the data if requested
+    if postprocess:
+        posdata = remove_tracking_data_jumps(posdata, maxjump)
+    # Save data to ProcessedPos position in NWB file
+    NWBio.save_tracking_data(filename, posdata, ProcessedPos=True, overwrite=True)
+
+
+def process_tracking_data(filename, save_to_file=False, verbose=False):
+    if verbose:
+        print('Processing tracking data for {}'.format(filename))
+
+    # Get CameraSettings
+    try:
+        CameraSettings = NWBio.load_settings(filename, '/CameraSettings/')
+    except KeyError as e:
+        raise Exception('Could not load CameraSettings for {}'.format(filename)
+                        + '\nLikely older version on file format.')
+    cameraIDs = sorted(CameraSettings['CameraSpecific'].keys())
+    # Get global clock timestamps
+    OE_GC_times = NWBio.load_GlobalClock_timestamps(filename)
+    # Get arena_size
+    arena_size = NWBio.load_settings(filename, '/General/arena_size/')
+    # Load position data for all cameras
+    posdatas = []
+    for cameraID in cameraIDs:
+        posdatas.append(NWBio.load_raw_tracking_data(filename, cameraID))
+    ProcessedPos = iteratively_combine_multicamera_data_for_recording(
+        CameraSettings, arena_size, posdatas, OE_GC_times, verbose=verbose)
+    if save_to_file:
+        # Save corrected data to file
+        NWBio.save_tracking_data(filename, ProcessedPos, ProcessedPos=True, overwrite=True)
+
+    return ProcessedPos
+
+
+def recompute_tracking_data_for_all_files_in_directory_tree(root_path, verbose=False):
+
+    # Commence directory walk
+    processeses = []
+    for dir_name, subdirList, fileList in os.walk(root_path):
+        for fname in fileList:
+            fpath = os.path.join(dir_name, fname)
+            if fname == 'experiment_1.nwb':
+                p = Process(target=process_tracking_data, args=(fpath,),
+                            kwargs={'save_to_file': True, 'verbose': verbose})
+                p.start()
+                processeses.append(p)
+    for p in processeses:
+        p.join()
 
 
 def lowpass_and_downsample_channel(
@@ -659,6 +729,7 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
 
     return spike_datas
 
+
 def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, 
          noise_cut_off=1000, threshold=50, make_AxonaData=False, 
          axonaDataArgs=(None, False), max_clusters=31, 
@@ -786,7 +857,11 @@ if __name__ == '__main__':
     parser.add_argument('--force_position_processing', action='store_true',
                         help='instruct reprocessing position data and overwrite previous data')
     parser.add_argument('--position_postprocessing', action='store_true',
-                        help='instruct position data postprocessing (default is no postprocessing)')
+                        help='instruct position data postprocessing. Only applicable to binary position data.\n'
+                             + '(default is no postprocessing)')
+    parser.add_argument('--reprocess_tracking_in_directory', action='store_true',
+                        help=('Re-process tracking data with default settings in all.\n'
+                              + 'files named experiment_1.nwb in all sub-folders from input directory.'))
     parser.add_argument('--position_maxjump', type=float, nargs = 1, 
                         help='enter maximum allowed jump in position data values for position data postprocessing')
     parser.add_argument('--max_clusters', type=int, nargs = 1, 
@@ -802,9 +877,17 @@ if __name__ == '__main__':
                         help='to downsample a whole data tree after processing. Only available with datatree option.')
     parser.add_argument('--delete_raw', action='store_true',
                         help='to delete raw data after downsampling. Only available with datatree and downsample option.')
+    parser.add_argument('--verbose', action='store_true',
+                        help='Verbosity of progress and warnings. Default is False (off).')
     args = parser.parse_args()
     # Get paths to recording files
     OpenEphysDataPaths = args.paths
+    # If reprocessing tracking in directory is requested, just do that
+    if args.reprocess_tracking_in_directory:
+        if len(OpenEphysDataPaths) > 1:
+            raise Exception('Only one root path should be specified if reprocess_tracking_in_directory is set.')
+        recompute_tracking_data_for_all_files_in_directory_tree(OpenEphysDataPaths[0],
+                                                                verbose=args.verbose[0])
     # If datatree processing requested, use process_data_tree method
     if args.datatree:
         if args.only_keep_processor:

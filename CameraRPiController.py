@@ -13,7 +13,7 @@ import os
 from scipy.spatial.distance import euclidean
 from multiprocessing import Manager, Process, RawArray, Value
 from threading import Thread
-from copy import copy, deepcopy
+from copy import copy
 from ZMQcomms import remote_controlled_class
 import argparse
 from ctypes import c_uint8, c_uint16, c_bool
@@ -380,7 +380,8 @@ class OnlineTracker(object):
         '''
         Publishes data with ZMQ.
         '''
-        message = json.dumps(linedata) # Convert data to string format
+        message = json.dumps(linedata)  # Convert data to string format
+        message = message.encode()  # Convert data into bytes format
         self.ZMQpublisher.send(message) # Send the message using ZeroMQ
 
     def write_to_logfile(self, linedata):
@@ -970,7 +971,7 @@ class Controller(object):
             os.remove('video.h264')
 
     def _get_resolution(self, setting):
-        return self.resolutions[setting] if setting in self.resolutions.keys() else self.resolutions['low']
+        return self.resolutions[setting] if setting in list(self.resolutions.keys()) else self.resolutions['low']
 
     def init_processing(self, OnlineTrackerParams=None):
         if not (OnlineTrackerParams is None):
@@ -1041,7 +1042,7 @@ class Controller(object):
             calibrator = Calibrator(frames[key], calibration_parameters)
             calibration[key] = calibrator.get_calibration_data()
         # Return calibration if successful, otherwise None
-        if not (None in calibration.viewvalues()):
+        if not (None in calibration.values()):
             # Remove unwanted frames
             for key in calibration:
                 if not (key in keep_frames and keep_frames[key] == True):
@@ -1121,9 +1122,9 @@ class Controller(object):
 
 def StartStop_Controller():
     with Controller() as controller:
-        _ = raw_input('Press enter to start video acquisition: ')
+        _ = input('Press enter to start video acquisition: ')
         controller.start_recording_video()
-        _ = raw_input('Press enter to stop video acquisition: ')
+        _ = input('Press enter to stop video acquisition: ')
         controller.stop()
 
 

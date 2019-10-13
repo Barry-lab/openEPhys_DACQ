@@ -140,7 +140,7 @@ class paired_messenger(object):
             sleep(.01)
 
     def _verification_check(self, msg):
-        if msg in self.verification_dict.keys():
+        if msg in list(self.verification_dict.keys()):
             self.verification_dict[msg] = True
 
 
@@ -334,7 +334,9 @@ class remote_object_controller(paired_messenger):
         """
         self.wait_for_init_confirmation = True
         encoded_input_arguments = remote_object_controller.encode_input_arguments(args, kwargs)
-        self.sendMessage('__init__'.encode() + ' '.encode() + 'True'.encode() + ' '.encode() + encoded_input_arguments)
+        self.sendMessage('__init__'.encode() + ' '.encode()
+                         + 'True'.encode() + ' '.encode()
+                         + encoded_input_arguments)
         wait_start_time = time()
         while self.wait_for_init_confirmation:
             sleep(0.1)
@@ -353,7 +355,9 @@ class remote_object_controller(paired_messenger):
         and uncompressed, unpickled on the paired device.
         """
         encoded_input_arguments = remote_object_controller.encode_input_arguments(args, kwargs)
-        self.sendMessage(command.encode() + ' ' + str(return_value).encode() + ' ' + encoded_input_arguments)
+        self.sendMessage(command.encode() + ' '.encode()
+                         + str(return_value).encode() + ' '.encode()
+                         + encoded_input_arguments)
         if return_value:
             return self._wait_for_return_value()
 

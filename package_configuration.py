@@ -6,6 +6,8 @@ import json
 
 package_name = 'openEPhys_DACQ'
 
+package_path = os.path.dirname(os.path.realpath(__file__))
+
 
 class PackageConfiguration(object):
 
@@ -48,10 +50,11 @@ class PackageConfiguration(object):
         print('This program requires a working directory [root_folder] for:\n'
               + ' - Storing recorded data\n'
               + ' - Storing past settings of Recording Manager\n\n'
-              + 'All existing data in the chosen working directory [root_folder] path will be deleted.\n'
+              + 'All existing data in the chosen working directory [root_folder]\n'
+              + 'path will be deleted.\n'
               + 'The default path for working directory [root_folder] is {}'.format(self.config['root_folder']))
 
-        decision = input('Would you like to use the default path for working directory [root_folder]? [y/N] ')
+        decision = input('Use the default path for working directory [root_folder]? [y/N] ')
 
         if decision.lower() != 'y' and decision.lower() != 'yes':
 

@@ -251,7 +251,7 @@ class CameraSettingsApp(object):
             if key in general_settings.keys():
                 new_general_settings[key]['value'] = general_settings[key]
         new_camera_specific_settings = {}
-        for cameraID in camera_specific_settings.keys():
+        for cameraID in list(camera_specific_settings.keys()):
             if 'CalibrationData' in camera_specific_settings[cameraID].keys():
                 self.CalibrationData[cameraID] = camera_specific_settings[cameraID].pop('CalibrationData')
             new_camera_specific_settings[cameraID] = self.default_single_camera_specific_settings()
@@ -330,7 +330,7 @@ class CameraSettingsApp(object):
         Closes all camera controllers.
         """
         t_close_camera = []
-        for key in self.CameraControllers.keys():
+        for key in list(self.CameraControllers.keys()):
             t = Thread(target=self._close_camera, args=(key,))
             t.start()
             t_close_camera.append(t)
@@ -365,7 +365,7 @@ class CameraSettingsApp(object):
         """
         Stops CameraStreamCapture of all cameras.
         """
-        for key in copy(self.CameraStreamCaptures.keys()):
+        for key in list(self.CameraStreamCaptures.keys()):
             controller = self.CameraStreamCaptures.pop(key)
             controller.close()
 
@@ -396,7 +396,7 @@ class CameraSettingsApp(object):
 
         cameraID - specifies which camera to calibrate.
         """
-        if cameraID in self.CalibrationData.keys():
+        if cameraID in list(self.CalibrationData.keys()):
             _ = self.CalibrationData.pop(cameraID)
         if cameraID in self.CameraControllers.keys():
             calibration_parameters = {'ndots_xy': self.camera_specific_settings[cameraID]['ndots_xy']['value'], 

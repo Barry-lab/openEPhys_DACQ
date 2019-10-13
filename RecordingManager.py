@@ -210,6 +210,9 @@ def format_channel_map(channel_map):
 
 
 class RecordingManager(object):
+    """
+    Central recording controller. Provides interface to specify settings and start/stop the recording.
+    """
 
     general_settings = {
         'experimenter': '',
@@ -1057,6 +1060,7 @@ class RecordingManagerGUI(QtWidgets.QMainWindow):
     def load_last_settings_button_callback(self):
         try:
             self.recording_manager.load_last_settings()
+            self.restart()
         except ValueError as e:
             HFunc.show_message(str(e))
 

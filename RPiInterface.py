@@ -17,6 +17,7 @@ from tempfile import mkdtemp
 from shutil import rmtree
 import os
 from openEPhys_DACQ.HelperFunctions import test_pinging_address, time_string
+from openEPhys_DACQ.package_configuration import package_path
 
 
 def write_files_to_RPi(files, address, username='pi', verbose=False):
@@ -64,8 +65,8 @@ class Camera_RPi_file_manager(object):
 
     @staticmethod
     def Camera_RPi_files():
-        return ('ZMQcomms.py',
-                'CameraRPiController.py')
+        return (os.path.join(package_path, 'ZMQcomms.py'),
+                os.path.join(package_path, 'CameraRPiController.py'))
 
     @staticmethod
     def video_file_name_on_RPi():
@@ -199,7 +200,8 @@ class CameraControl(object):
             self._init_RPiSSH(address, port, username, password, reboot=False)
         else:
             self.RPiSSH.sendCommand('sudo pkill python') # Ensure any past processes have closed
-            command = 'python CameraRPiController.py --remote --port ' + str(port)
+            command = 'source /home/pi/.virtualenvs/python3/bin/activate && '
+            command += 'python CameraRPiController.py --remote --port ' + str(port)
             self.RPiSSH.sendCommand_threading(command) # TO DO: This seems to kill the ssh instance if command fails.
 
     def calibrate(self, calibration_parameters):
@@ -367,7 +369,7 @@ class onlineTrackingData(object):
         context = zmq.Context()
         sockSUB = context.socket(zmq.SUB)
         sockSUB.setsockopt(zmq.SUBSCRIBE, '')
-        sockSUB.RCVTIMEO = 150 # maximum duration to wait for data (in milliseconds)
+        sockSUB.RCVTIMEO = 10 # maximum duration to wait for data (in milliseconds)
         sockSUB.connect('tcp://' + address + ':' + str(port))
 
         return sockSUB
@@ -398,12 +400,13 @@ class onlineTrackingData(object):
         while self.KeepGettingData:
             # Wait for position data update
             try:
-                message = self.sockSUBs[nRPi].recv() # Receive message
+                message = self.sockSUBs[nRPi].recv()  # Receive message
+                message = message.decode()  # Decode bytes into string
             except:
                 message = 'no message'
             if message != 'no message':
-                posData = json.loads(message) # Convert from string to original format
-                # Ignore messages where all elemenets are None
+                posData = json.loads(message)  # Convert from string to original format
+                # Ignore messages where all elements are None
                 if any(posData):
                     # Update posData for the correct position in the list
                     with self.posDatasLock:
@@ -725,18 +728,18 @@ class GlobalClockControl(object):
         self.RPiSSH.sendCommand(command)
 
     def Controller_message_parser(self, message):
-        if message == 'init_successful':
+        if message == 'init_successful'.encode():
             self.RPi_init_Successful = True
 
     def start(self):
-        self.Controller_messenger.sendMessage('start')
+        self.Controller_messenger.sendMessage('start'.encode())
 
     def stop(self):
-        self.Controller_messenger.sendMessage('stop')
+        self.Controller_messenger.sendMessage('stop'.encode())
 
     def close(self):
         self.stop()
-        self.Controller_messenger.sendMessage('close')
+        self.Controller_messenger.sendMessage('close'.encode())
         # Close SSH connections
         self.RPiSSH.disconnect()
         self.T_initRPiController.join()
