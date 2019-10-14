@@ -350,6 +350,10 @@ class RecordingManager(object):
 
         return filepath
 
+    def list_general_setting_options(self, setting_key):
+        general_settings_history, _ = list_general_settings_history(self.RecordingManagerSettingsFolder)
+        return sorted(list(set(general_settings_history[setting_key])))
+
     def load_last_settings(self):
         # Hard-code which settings to use for searching the latest settings
         settings = {}
@@ -755,7 +759,7 @@ def add_x_y_setting_to_widget(label, x_val, y_val, value_change_callback, parent
     widget_layout.setStretch(1, 2)
 
 
-def add_text_setting_to_widget(label, text, value_change_callback, parent, layout):
+def add_text_setting_to_widget(label, text, value_change_callback, parent, layout, button_kwargs=None):
 
     widget = QtWidgets.QWidget(parent)
     layout.addWidget(widget)
@@ -764,15 +768,28 @@ def add_text_setting_to_widget(label, text, value_change_callback, parent, layou
     textbox = QtWidgets.QTextEdit(text, widget)
     textbox.textChanged.connect(lambda: value_change_callback(textbox.toPlainText()))
 
+    button = None
+    if not (button_kwargs is None):
+        button = QtWidgets.QPushButton(button_kwargs['label'], widget)
+        button.setFixedSize(55, 25)
+        button.clicked.connect(lambda: button_kwargs['connect'](textbox))
+
     textbox.setFixedHeight(25)
     widget_layout = QtWidgets.QHBoxLayout(widget)
     widget_layout.setContentsMargins(2, 2, 2, 2)
     widget_layout.setSpacing(2)
     widget_layout.addWidget(label)
     widget_layout.addWidget(textbox)
+    if not (button_kwargs is None):
+        widget_layout.addWidget(button)
 
-    widget_layout.setStretch(0, 1)
-    widget_layout.setStretch(1, 2)
+    if not (button_kwargs is None):
+        widget_layout.setStretch(0, 2)
+        widget_layout.setStretch(1, 3)
+        widget_layout.setStretch(2, 1)
+    else:
+        widget_layout.setStretch(0, 1)
+        widget_layout.setStretch(1, 2)
 
 
 class ItemDictionaryWidget(QtWidgets.QFrame):
@@ -1035,22 +1052,34 @@ class RecordingManagerGUI(QtWidgets.QMainWindow):
         add_text_setting_to_widget(
             'Experimenter', self.recording_manager.general_settings['experimenter'],
             lambda text: self.recording_manager.update_general_settings('experimenter', text),
-            self.general_settings_widget, self.general_settings_layout
+            self.general_settings_widget, self.general_settings_layout,
+            button_kwargs={'label': 'options',
+                           'connect': lambda text_box: self.pick_setting_from_options('experimenter',
+                                                                                      text_box)}
         )
         add_text_setting_to_widget(
             'Experiment ID', self.recording_manager.general_settings['experiment_id'],
             lambda text: self.recording_manager.update_general_settings('experiment_id', text),
-            self.general_settings_widget, self.general_settings_layout
+            self.general_settings_widget, self.general_settings_layout,
+            button_kwargs={'label': 'options',
+                           'connect': lambda text_box: self.pick_setting_from_options('experiment_id',
+                                                                                      text_box)}
         )
         add_text_setting_to_widget(
             'Animal ID', self.recording_manager.general_settings['animal'],
             lambda text: self.recording_manager.update_general_settings('animal', text),
-            self.general_settings_widget, self.general_settings_layout
+            self.general_settings_widget, self.general_settings_layout,
+            button_kwargs={'label': 'options',
+                           'connect': lambda text_box: self.pick_setting_from_options('animal',
+                                                                                      text_box)}
         )
         add_text_setting_to_widget(
             'Bad channel list', self.recording_manager.general_settings['badChan'],
             lambda text: self.recording_manager.update_general_settings('badChan', text),
-            self.general_settings_widget, self.general_settings_layout
+            self.general_settings_widget, self.general_settings_layout,
+            button_kwargs={'label': 'options',
+                           'connect': lambda text_box: self.pick_setting_from_options('badChan',
+                                                                                      text_box)}
         )
 
         channel_map_widget = ItemDictionaryWidget(
@@ -1064,6 +1093,12 @@ class RecordingManagerGUI(QtWidgets.QMainWindow):
             self.general_settings_widget
         )
         self.general_settings_layout.addWidget(channel_map_widget)
+
+    def pick_setting_from_options(self, setting_key, setting_text_box):
+        setting_options = self.recording_manager.list_general_setting_options(setting_key)
+        selected_item = list_window(setting_options)
+        if not (selected_item is None):
+            setting_text_box.setPlainText(selected_item)
 
     def save_settings_button_callback(self):
         fpath = HFunc.openSingleFileDialog('save', suffix='nwb', caption='Save file name and location')

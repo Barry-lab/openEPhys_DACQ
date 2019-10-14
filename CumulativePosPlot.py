@@ -11,6 +11,7 @@ import time
 from scipy import ndimage
 from copy import copy
 
+
 def angle_clockwise(p1, p2, invertedY=True):
     # Takes two numpy 2D vectors and computes the angle of their difference
     # In other words, computes the angle of a vector from p1 to p2
@@ -24,20 +25,17 @@ def angle_clockwise(p1, p2, invertedY=True):
 
     return angle_deg
 
+
 class PosPlot(object):
-    def __init__(self, RPIPos, LED_angle=None):
-        self.RPIpos = RPIPos
-        self.histogramParameters = copy(self.RPIpos.HistogramParameters)
+    def __init__(self, online_tracking_processor, LED_angle=None):
+        self.online_tracking_processor = online_tracking_processor
+        self.histogramParameters = copy(self.online_tracking_processor.position_histogram_dict['parameters'])
         self.LED_angle = LED_angle
         # Only continue once first two position datas are obtained
-        combPosHistory = []
-        while len(combPosHistory) < 2:
+        while len(self.online_tracking_processor.combPosHistory) < 2:
             time.sleep(0.1)
-            with self.RPIpos.combPosHistoryLock:
-                combPosHistory = self.RPIpos.combPosHistory
         # Initialize plot window
         self.PlotGraphicsWidget = pg.GraphicsLayoutWidget()
-        XandYratio = np.float32(self.RPIpos.arena_size[0]) / np.float32(self.RPIpos.arena_size[1])
         self.plotBox = self.PlotGraphicsWidget.addViewBox(enableMouse=False)
         self.plotBox.setAspectLocked(True)
         self.imageItem = pg.ImageItem()
@@ -71,7 +69,8 @@ class PosPlot(object):
         # Put all plots into main window and display
         self.mainWindow = QtWidgets.QWidget()
         self.mainWindow.setWindowTitle('Cumulative Position Plot')
-        XandYratio = float(self.RPIpos.arena_size[0]) / float(self.RPIpos.arena_size[1])
+        XandYratio = (float(self.online_tracking_processor.arena_size[0])
+                      / float(self.online_tracking_processor.arena_size[1]))
         self.mainWindow.resize(int(700 * XandYratio) + 200, 700)
         vboxWidget = QtWidgets.QWidget()
         vboxWidget.setFixedWidth(100)
@@ -119,8 +118,8 @@ class PosPlot(object):
     def updatePlotAxes(self):
         binSize = self.histogramParameters['binSize']
         margins = self.histogramParameters['margins']
-        xRange = (0, (self.RPIpos.arena_size[0] + 2 * margins) / binSize)
-        yRange = (0, (self.RPIpos.arena_size[1] + 2 * margins) / binSize)
+        xRange = (0, (self.online_tracking_processor.arena_size[0] + 2 * margins) / binSize)
+        yRange = (0, (self.online_tracking_processor.arena_size[1] + 2 * margins) / binSize)
         self.plotBox.setRange(xRange=xRange, yRange=yRange)
 
     def prepareColormap(self):
@@ -145,7 +144,9 @@ class PosPlot(object):
             for ncolor in range(colorval.shape[1]):
                 cval1 = colorval[cstep][ncolor]
                 cval2 = colorval[cstep + 1][ncolor]
-                tmpcolorval[:,ncolor] = np.interp(tmpcolorpos, np.array([cpos1, cpos2], dtype=np.float32), np.array([cval1, cval2], dtype=np.float32))
+                tmpcolorval[:, ncolor] = np.interp(tmpcolorpos,
+                                                   np.array([cpos1, cpos2], dtype=np.float32),
+                                                   np.array([cval1, cval2], dtype=np.float32))
             colorvalFull = np.concatenate((colorvalFull, tmpcolorval.astype(np.uint8)), axis=0)
         # Form colormap lookup table for plotting
         CMap = pg.ColorMap(colorposFull, colorvalFull)
@@ -157,10 +158,11 @@ class PosPlot(object):
 
     def draw_arena_boundaries(self):
         # Draw boundaries of the arena to the plot
-        boundaries = np.array([[0, 0], \
-                               [self.RPIpos.arena_size[0], 0], \
-                               [self.RPIpos.arena_size[0], self.RPIpos.arena_size[1]], \
-                               [0, self.RPIpos.arena_size[1]], \
+        boundaries = np.array([[0, 0],
+                               [self.online_tracking_processor.arena_size[0], 0],
+                               [self.online_tracking_processor.arena_size[0],
+                                self.online_tracking_processor.arena_size[1]],
+                               [0, self.online_tracking_processor.arena_size[1]],
                                [0, 0]])
         boundaries = boundaries + self.histogramParameters['margins']
         boundaries = boundaries / float(self.histogramParameters['binSize'])
@@ -182,16 +184,15 @@ class PosPlot(object):
                                'binSize': binSize, 
                                'speedLimit': speedLimit}
         # Initiate update function
-        self.RPIpos.initializePosHistogram(histogramParameters, update=True)
-        self.histogramParameters = histogramParameters
+        self.online_tracking_processor.initializePosHistogram(histogramParameters, update=True)
+        self.histogramParameters = copy(self.online_tracking_processor.position_histogram_dict['parameters'])
         self.updatePlotAxes()
         self.plotBox.removeItem(self.boundaryBox)
         self.draw_arena_boundaries()
 
     def showPath(self):
         if self.showPathButton.isChecked():
-            with self.RPIpos.combPosHistoryLock:
-                posHistory = self.RPIpos.combPosHistory
+            posHistory = copy(self.online_tracking_processor.combPosHistory[0:])
             posHistory = [i for i in posHistory if i is not None]
             posHistory = np.array(posHistory)[:, :2]
             posHistory = posHistory + self.histogramParameters['margins']
@@ -208,11 +209,10 @@ class PosPlot(object):
             binSize = self.histogramParameters['binSize']
             margins = self.histogramParameters['margins']
             # Get latest position data
-            with self.RPIpos.combPosHistoryLock:
-                pastPos = self.RPIpos.combPosHistory[-2]
-                currPos = self.RPIpos.combPosHistory[-1]
-            with self.RPIpos.histogramLock:
-                positionHistogram = self.RPIpos.positionHistogram
+            combPosHistory = copy(self.online_tracking_processor.combPosHistory[:-2])
+            pastPos = combPosHistory[-2]
+            currPos = combPosHistory[-1]
+            positionHistogram = self.online_tracking_processor.position_histogram_dict['data']
             # Smooth histogram
             smoothGaussStd = self.smoothingValue / float(binSize)
             image = ndimage.gaussian_filter(positionHistogram.T, sigma=(smoothGaussStd, smoothGaussStd), order=0)
