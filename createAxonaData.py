@@ -313,7 +313,7 @@ def create_DACQ_eeg_or_egf_data(eeg_or_egf, data, data_time_edges, target_range=
     elif eeg_or_egf == 'egf':
         dacq_eeg_dtype = [('eeg', np.int16)]
         dacq_eeg_data_dtype = np.int16
-    eeg_data_dacq = range(len(data_in_processing))
+    eeg_data_dacq = [None] * len(data_in_processing)
     for n_chan in range(len(data_in_processing)):
         dacq_eeg = data_in_processing[n_chan].astype(dtype=dacq_eeg_data_dtype)
         eeg_data_dacq[n_chan] = np.zeros(dacq_eeg.size, dtype=dacq_eeg_dtype)
@@ -628,7 +628,7 @@ def concatenate_posdata_across_recordings(posdata, data_time_edges, recording_ed
     return posdata
 
 def concatenate_spike_data_across_recordings(spike_data, data_time_edges, recording_edges):
-    new_spike_data = range(len(spike_data[0]))
+    new_spike_data = [None] * len(spike_data[0])
     for n_tet in range(len(new_spike_data)):
         print([hfunct.time_string(), 'DEBUG: concatenating data for tetrode ', n_tet])
         waveforms = [data[n_tet]['waveforms'] for data in spike_data]
@@ -906,7 +906,7 @@ if __name__ == "__main__":
         if np.mod(chan[1] - chan[0], 4) != 0:
             raise ValueError('Channel range must cover full tetrodes')
         area_name = 'Chan' + str(args.chan[0]) + '-' + str(args.chan[1])
-        channel_map = {area_name: {'list': range(chan[0], chan[1], 1)}}
+        channel_map = {area_name: {'list': list(range(chan[0], chan[1], 1))}}
     else:
         channel_map = None
     # Get eegChans variable
