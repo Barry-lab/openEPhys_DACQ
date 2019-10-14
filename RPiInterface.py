@@ -368,7 +368,7 @@ class onlineTrackingData(object):
         # Set ZeroMQ socket to listen on incoming position data from all RPis
         context = zmq.Context()
         sockSUB = context.socket(zmq.SUB)
-        sockSUB.setsockopt(zmq.SUBSCRIBE, '')
+        sockSUB.setsockopt(zmq.SUBSCRIBE, ''.encode())
         sockSUB.RCVTIMEO = 10 # maximum duration to wait for data (in milliseconds)
         sockSUB.connect('tcp://' + address + ':' + str(port))
 
@@ -466,7 +466,7 @@ class onlineTrackingData(object):
             self.T_updatePosDatas.append(T)
         # Continue once data is received from each RPi
         RPi_data_available = np.zeros(len(self.cameraIDs), dtype=bool)
-        while not np.all(RPi_data_available):
+        while not np.all(RPi_data_available) and self.KeepGettingData:
             sleep(0.05)
             for nRPi in range(len(self.posDatas)):
                 if not (self.posDatas[nRPi] is None):
@@ -477,7 +477,7 @@ class onlineTrackingData(object):
         self.lastSecondDistance = 0 # vector distance from position 1 second in past
         # Check data is available before proceeding
         lastCombPos = None
-        while lastCombPos is None:
+        while lastCombPos is None and self.KeepGettingData:
             lastCombPos = self.combineCurrentLineData(None)
         self.combPosHistory.append(list(lastCombPos))
         time_of_last_datapoint = time()
@@ -549,26 +549,26 @@ class RewardControl(object):
     @staticmethod
     def update_files_on_RPi(FEEDER_type, address, username, verbose=False):
         if FEEDER_type == 'milk':
-            files = ('milkFeederController.py',)
+            files = (os.path.join(package_path, 'milkFeederController.py'),)
         elif FEEDER_type == 'pellet':
-            files = ('pelletFeederController.py',)
+            files = (os.path.join(package_path, 'pelletFeederController.py'),)
         else:
             raise ValueError('Unexpected FEEDER_type argument.')
         write_files_to_RPi(files, address, username=username, verbose=verbose)
 
     def Controller_message_parser(self, message):
-        if message == 'init_successful':
+        if message == 'init_successful'.encode():
             self.Controller_init_successful = True
-        if message == 'releaseMilk successful':
+        if message == 'releaseMilk successful'.encode():
             self.release_feedback_message_received = True
             self.releaseMilk_successful = True
-        if message == 'release_pellets successful':
+        if message == 'release_pellets successful'.encode():
             self.release_feedback_message_received = True
             self.release_pellets_successful = True
-        if message == 'release_pellets failed':
+        if message == 'release_pellets failed'.encode():
             self.release_feedback_message_received = True
             self.release_pellets_successful = False
-        if message == 'release_pellets in_progress':
+        if message == 'release_pellets in_progress'.encode():
             self.release_pellets_in_progress = True
 
     def milkFeederController_init_command(self):
@@ -602,10 +602,11 @@ class RewardControl(object):
             command = self.milkFeederController_init_command()
         elif self.FEEDER_type == 'pellet':
             command = self.pelletFeederController_init_command()
+        else:
+            raise Exception('Unknown FEEDER_type {}'.format(self.FEEDER_type))
         # Initiate process on the RPi over SSH
-        self.T_Controller = Thread(target=self.ssh_Controller_connection.sendCommand, 
-                                             args=(command, max_init_wait_time, False)) # Set timeout to max_init_wait_time and verbosity to False
-        self.T_Controller.start()
+        # Set timeout to max_init_wait_time and verbosity to False
+        self.ssh_Controller_connection.sendCommand(command, max_init_wait_time, False)
         # Wait until positive initialization feedback or timer runs out
         start_time = time()
         while not self.Controller_init_successful and (time() - start_time) < max_init_wait_time:
@@ -617,17 +618,18 @@ class RewardControl(object):
         """
         Attempts to initialize Controller class on the FEEDER multiple times
         """
+        controller_init_successful = False
         for n in range(max_attempts):
-            Controller_init_successful = self.init_Controller_and_wait_for_feedback(max_init_wait_time=25)
-            if Controller_init_successful:
+            controller_init_successful = \
+                self.init_Controller_and_wait_for_feedback(max_init_wait_time=max_init_wait_time)
+            if controller_init_successful:
                 break
             else:
                 print('Controller activation failed at ' + self.RPiIP + ' Re-initializing ...')
                 # If initiation is unsuccessful, start again after killing existing processes
                 self.ssh_connection.sendCommand('sudo pkill python') # Ensure any past processes have closed
-                self.T_Controller.join()
 
-        return Controller_init_successful
+        return controller_init_successful
 
     def release(self, quantity=1, max_attempts=10):
         """
@@ -642,12 +644,16 @@ class RewardControl(object):
             max_wait_time = quantity + 4
         elif self.FEEDER_type == 'pellet':
             max_wait_time = 5 * max_attempts
+        else:
+            raise Exception('Unknown FEEDER_type {}'.format(self.FEEDER_type))
         # Send ZMQ command depending on FEEDER type
         if self.FEEDER_type == 'milk':
             command = 'releaseMilk ' + str(quantity) + ' True'
         elif self.FEEDER_type == 'pellet':
             command = 'release_pellets ' + str(quantity) + ' True'
-        self.Controller_messenger.sendMessage(command)
+        else:
+            raise Exception('Unknown FEEDER_type {}'.format(self.FEEDER_type))
+        self.Controller_messenger.sendMessage(command.encode())
         # Wait for feedback message
         start_time = time()
         while not self.release_feedback_message_received and (time() - start_time) < max_wait_time:
@@ -666,33 +672,32 @@ class RewardControl(object):
             return False
 
     def startTrialAudioSignal(self):
-        self.Controller_messenger.sendMessage('startTrialAudioSignal')
+        self.Controller_messenger.sendMessage('startTrialAudioSignal'.encode())
 
     def stopTrialAudioSignal(self):
-        self.Controller_messenger.sendMessage('stopTrialAudioSignal')
+        self.Controller_messenger.sendMessage('stopTrialAudioSignal'.encode())
 
     def playNegativeAudioSignal(self):
-        self.Controller_messenger.sendMessage('playNegativeAudioSignal')
+        self.Controller_messenger.sendMessage('playNegativeAudioSignal'.encode())
 
     def startLightSignal(self):
-        self.Controller_messenger.sendMessage('startLightSignal')
+        self.Controller_messenger.sendMessage('startLightSignal'.encode())
 
     def stopLightSignal(self):
-        self.Controller_messenger.sendMessage('stopLightSignal')
+        self.Controller_messenger.sendMessage('stopLightSignal'.encode())
 
     def startAllSignals(self):
-        self.Controller_messenger.sendMessage('startAllSignals')
+        self.Controller_messenger.sendMessage('startAllSignals'.encode())
 
     def stopAllSignals(self):
-        self.Controller_messenger.sendMessage('stopAllSignals')
+        self.Controller_messenger.sendMessage('stopAllSignals'.encode())
 
     def close(self):
         """
         Closes all opened processes correctly.
         """
         try:
-            self.Controller_messenger.sendMessage('close')
-            self.T_Controller.join()
+            self.Controller_messenger.sendMessage('close'.encode())
             self.Controller_messenger.close()
             self.ssh_Controller_connection.disconnect()
             self.ssh_connection.disconnect()
@@ -723,7 +728,7 @@ class GlobalClockControl(object):
 
     def initRPiController(self, address, port, username, password):
         self.RPiSSH = ssh(address, username, password)
-        self.RPiSSH.sendCommand('sudo pkill python') # Ensure any past processes have closed
+        self.RPiSSH.sendCommand('sudo pkill python')  # Ensure any past processes have closed
         command = 'python GlobalClock.py --remote --port ' + str(port)
         self.RPiSSH.sendCommand(command)
 

@@ -90,6 +90,7 @@ class GlobalClock_TTL_emitter(object):
             self.ZMQmessenger.close()
             self.keep_waiting_for_ZMQ_commands = False
 
+
 if __name__ == '__main__':
     # Input argument handling and help info.
     parser = argparse.ArgumentParser(description='Running this script initates GlobalClock_TTL_emitter class\n' + 

@@ -433,7 +433,7 @@ class SubscribeToOpenEphys(object):
     """
 
     def __init__(self, address='localhost', port=5557, timeout=2,
-                 message_filter="", verbose=True, save_messages=False):
+                 message_filter=''.encode(), verbose=True, save_messages=False):
 
         self.address = address
         self.port = port
