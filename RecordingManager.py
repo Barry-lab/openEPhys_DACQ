@@ -6,7 +6,7 @@ import numpy as np
 from PyQt5 import QtCore, QtGui, QtWidgets
 from uuid import uuid4
 from datetime import datetime
-import time
+from time import sleep
 import threading
 from importlib import import_module
 import multiprocessing
@@ -62,7 +62,7 @@ def check_if_nwb_recording(fpath):
     if os.path.isfile(fpath):
         # Check for file size at intervals to see if it is changing in size. Stop checking if constant.
         previous_size = os.stat(fpath).st_size
-        time.sleep(0.1)
+        sleep(0.1)
         current_size = os.stat(fpath).st_size
         file_recording = previous_size != current_size
     else:
@@ -567,10 +567,10 @@ class RecordingManager(object):
         # Make sure OpenEphys is recording
         recording_file = get_recording_file_path(recording_folder_root)
         while not recording_file:
-            time.sleep(0.1)
+            sleep(0.1)
             recording_file = get_recording_file_path(recording_folder_root)
         while not check_if_nwb_recording(recording_file):
-            time.sleep(0.1)
+            sleep(0.1)
         self.general_settings['rec_file_path'] = recording_file
         print('Starting Open Ephys GUI Recording Successful')
 
@@ -655,7 +655,7 @@ class RecordingManager(object):
         while check_if_nwb_recording(self.general_settings['rec_file_path']):
             print('Stopping Open Ephys GUI Recording...')
             self.open_ephys_messenger.send_message_to_open_ephys('StopRecord')
-            time.sleep(0.1)
+            sleep(0.1)
         print('Stopping Open Ephys GUI Recording Successful')
 
         self.compile_recording_data()
@@ -679,7 +679,7 @@ class RecordingManager(object):
             self.stop_rec()
         elif self.recording_closing:
             while self.recording_closing:
-                time.sleep(1)
+                sleep(1)
         else:
             pass
 
@@ -910,11 +910,26 @@ def convert_item_list_string_values_to_channel_map(item_dict):
     return channel_map
 
 
+class QOneShotThread(QtCore.QThread):
+
+    def __init__(self, target):
+        self._target = target
+        super().__init__()
+
+    def run(self) -> None:
+        self._target()
+
+
 class RecordingManagerGUI(QtWidgets.QMainWindow):
 
     exit_code_to_reboot = -123
 
     geometry = None
+
+    test_devices_thread = None
+    initialize_devices_thread = None
+    start_recording_thread = None
+    stop_recording_thread = None
 
     def __init__(self, recording_manager, geometry=None):
         """
@@ -965,8 +980,12 @@ class RecordingManagerGUI(QtWidgets.QMainWindow):
         self.initialize_devices_button.clicked.connect(self.initialize_devices_button_callback)
         self.start_recording_button = QtWidgets.QPushButton('Start Recording', self.button_widget)
         self.start_recording_button.clicked.connect(self.start_recording_button_callback)
+        self.start_recording_button.setEnabled(False)
         self.stop_recording_button = QtWidgets.QPushButton('Stop Recording', self.button_widget)
         self.stop_recording_button.clicked.connect(self.stop_recording_button_callback)
+        self.stop_recording_button.setEnabled(False)
+
+        self.default_button_style = self.stop_recording_button.styleSheet()
 
         self.stop_recording_button.clicked.connect(lambda: print({'general': self.recording_manager.general_settings,
                                                                   'camera': self.recording_manager.camera_settings,
@@ -1072,16 +1091,8 @@ class RecordingManagerGUI(QtWidgets.QMainWindow):
         task_settings_app = self.recording_manager.task_settings_app()
         TaskSettingsGUI(task_settings_app, parent=self)
 
-    def test_devices_button_callback(self):
-
-        try:
-
-            device_status = self.recording_manager.test_devices()
-
-        except RecordingManagerException as e:
-
-            HFunc.show_message(str(e))
-            return
+    @staticmethod
+    def display_device_status_message(device_status):
 
         n_unavailable = sum([not device['available'] for device in device_status])
 
@@ -1099,31 +1110,98 @@ class RecordingManagerGUI(QtWidgets.QMainWindow):
 
         HFunc.show_message(message, message_more=message_more)
 
-    # def initialize_devices_thread(self):
-    #
-    #     # This should send signal to gui main thread to change button color to red
-    #
-    #     try:
-    #
-    #         self.recording_manager.init_devices()
-    #
-    #         # Here there should be a signal to main thread changing button colors and states as init was successful
-    #
-    #     except RecordingManagerException as e:
-    #
-    #         # Here should be a signal to main thread to reset button color to original as init failed
-    #
-    #         HFunc.show_message(str(e))
+    def test_devices(self):
+        try:
+            device_status = self.recording_manager.test_devices()
+            self.display_device_status_message(device_status)
+        except RecordingManagerException as e:
+            HFunc.show_message(str(e))
+
+    def test_devices_finished(self):
+        self.test_devices_button.setStyleSheet(self.default_button_style)
+        while self.test_devices_thread.isRunning():
+            sleep(0.01)
+        self.test_devices_thread = None
+
+    def test_devices_button_callback(self):
+        self.test_devices_button.setStyleSheet('background-color: red')
+        self.test_devices_thread = QOneShotThread(self.test_devices)
+        self.test_devices_thread.finished.connect(self.test_devices_finished)
+        self.test_devices_thread.start()
+
+    def initialize_devices(self):
+        try:
+            self.recording_manager.init_devices()
+        except RecordingManagerException as e:
+            print(e)
+            HFunc.show_message(str(e))
+
+    def initialize_devices_finished(self):
+        if self.recording_manager.recording_initialized:
+            self.initialize_devices_button.setStyleSheet('background-color: green')
+            self.initialize_devices_button.setEnabled(False)
+            self.start_recording_button.setEnabled(True)
+        else:
+            self.initialize_devices_button.setStyleSheet(self.default_button_style)
+        while self.initialize_devices_thread.isRunning():
+            sleep(0.01)
+        self.initialize_devices_thread = None
 
     def initialize_devices_button_callback(self):
-        # This should call initialize_devices_thread in a separate thread
-        self.recording_manager.init_devices()
+        self.initialize_devices_button.setStyleSheet('background-color: red')
+        self.initialize_devices_thread = QOneShotThread(self.initialize_devices)
+        self.initialize_devices_thread.finished.connect(self.initialize_devices_finished)
+        self.initialize_devices_thread.start()
+
+    def start_recording(self):
+        try:
+            self.recording_manager.start_rec()
+        except RecordingManagerException as e:
+            print(e)
+            HFunc.show_message(str(e))
+
+    def start_recording_finished(self):
+        if self.recording_manager.recording_active:
+            self.start_recording_button.setStyleSheet('background-color: green')
+            self.start_recording_button.setEnabled(False)
+            self.stop_recording_button.setEnabled(True)
+        else:
+            self.start_recording_button.setStyleSheet(self.default_button_style)
+        while self.start_recording_thread.isRunning():
+            sleep(0.01)
+        self.start_recording_thread = None
 
     def start_recording_button_callback(self):
-        self.recording_manager.start_rec()
+        self.start_recording_button.setStyleSheet('background-color: red')
+        self.start_recording_thread = QOneShotThread(self.start_recording)
+        self.start_recording_thread.finished.connect(self.start_recording_finished)
+        self.start_recording_thread.start()
+
+    def stop_recording(self):
+        try:
+            self.recording_manager.stop_rec()
+        except RecordingManagerException as e:
+            print(e)
+            HFunc.show_message(str(e))
+
+    def stop_recording_finished(self):
+        if not self.recording_manager.recording_active:
+            self.stop_recording_button.setStyleSheet(self.default_button_style)
+            self.stop_recording_button.setEnabled(False)
+            self.initialize_devices_button.setEnabled(True)
+            HFunc.show_message('Recording Completed Successfully.')
+        else:
+            self.stop_recording_button.setStyleSheet(self.default_button_style)
+        while self.stop_recording_thread.isRunning():
+            sleep(0.01)
+        self.stop_recording_thread = None
 
     def stop_recording_button_callback(self):
-        self.recording_manager.stop_rec()
+        self.stop_recording_button.setStyleSheet('background-color: red')
+        self.start_recording_button.setStyleSheet(self.default_button_style)
+        self.stop_recording_thread = QOneShotThread(self.stop_recording)
+        self.stop_recording_thread.finished.connect(self.stop_recording_finished)
+        self.stop_recording_thread.start()
 
     def restart(self):
         self.geometry = self.saveGeometry()

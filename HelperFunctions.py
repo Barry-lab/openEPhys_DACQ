@@ -450,7 +450,7 @@ def show_message(message, message_more=None):
         msg.setInformativeText(message_more)
     msg.setWindowTitle('Message')
     msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
-    msg.exec()
+    return msg.exec()
 
 
 class QThread_with_completion_callback(QThread):

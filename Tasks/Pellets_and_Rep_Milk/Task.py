@@ -1,6 +1,5 @@
 # This is a task
 
-import pygame
 import numpy as np
 from threading import Lock, Thread
 from openEPhys_DACQ.RPiInterface import RewardControl
@@ -15,6 +14,10 @@ import multiprocessing
 from openEPhys_DACQ.audioSignalGenerator import createAudioSignal
 from openEPhys_DACQ.sshScripts import ssh
 from openEPhys_DACQ.HelperFunctions import show_message
+
+import contextlib
+with contextlib.redirect_stdout(None):
+    import pygame
 
 
 def init_pygame():
@@ -2979,27 +2982,34 @@ class Core(object):
         print('Closing Task processes ...')
 
         # Stop Display event detection
-        self.UserEventHandler.close()
+        if hasattr(self, 'UserEventHandler'):
+            self.UserEventHandler.close()
 
         # Stop Game State Process
-        self.GameStateOperator.close()
+        if hasattr(self, 'GameStateOperator'):
+            self.GameStateOperator.close()
 
         # Stop updating display
-        self.Display.close()
+        if hasattr(self, 'Display'):
+            self.Display.close()
 
         # Stop updating ingame variables
-        self.Variables.close()
+        if hasattr(self, 'Variables'):
+            self.Variables.close()
+
         print('Closing Task processes successful')
 
         # Close FEEDER connections
-        if hasattr(self.PelletRewardDevices, 'close'):
-            print('Closing Pellet FEEDER connections...')
-            self.PelletRewardDevices.close()
-            print('Closing Pellet FEEDER connections successful.')
-        if hasattr(self.MilkRewardDevices, 'close'):
-            print('Closing Pellet FEEDER connections...')
-            self.MilkRewardDevices.close()
-            print('Closing Pellet FEEDER connections successful.')
+        if hasattr(self, 'PelletRewardDevices'):
+            if hasattr(self.PelletRewardDevices, 'close'):
+                print('Closing Pellet FEEDER connections...')
+                self.PelletRewardDevices.close()
+                print('Closing Pellet FEEDER connections successful.')
+        if hasattr(self, 'MilkRewardDevices'):
+            if hasattr(self.MilkRewardDevices, 'close'):
+                print('Closing Pellet FEEDER connections...')
+                self.MilkRewardDevices.close()
+                print('Closing Pellet FEEDER connections successful.')
 
         # Close pygame engine
         close_pygame()

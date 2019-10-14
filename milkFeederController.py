@@ -3,9 +3,12 @@ import piconzero as pz
 from time import sleep
 from ZMQcomms import paired_messenger
 from threading import Thread
-import pygame
 import os
 from audioSignalGenerator import createAudioSignal
+
+import contextlib
+with contextlib.redirect_stdout(None):
+    import pygame
 
 class piconzero_state_controller(object):
     '''

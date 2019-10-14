@@ -471,6 +471,8 @@ class onlineTrackingData(object):
             for nRPi in range(len(self.posDatas)):
                 if not (self.posDatas[nRPi] is None):
                     RPi_data_available[nRPi] = True
+        if not self.KeepGettingData:
+            return
         print('All RPi data available')
         # Set up speed tracking
         one_second_steps = int(np.round(1 / self.combPos_update_interval))
@@ -479,6 +481,8 @@ class onlineTrackingData(object):
         lastCombPos = None
         while lastCombPos is None and self.KeepGettingData:
             lastCombPos = self.combineCurrentLineData(None)
+        if not self.KeepGettingData:
+            return
         self.combPosHistory.append(list(lastCombPos))
         time_of_last_datapoint = time()
         # Update the data at specific interval

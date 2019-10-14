@@ -1,7 +1,11 @@
-import pygame
+
 import numpy as np
 from random import gauss
 from scipy.signal import butter, lfilter
+
+import contextlib
+with contextlib.redirect_stdout(None):
+    import pygame
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
     nyq = 0.5 * fs
