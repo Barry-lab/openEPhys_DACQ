@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Recording PC setup for Data Processing &mdash; openEPhys_DACQ 0.75 documentation</title>
+  <title>Recording PC setup for Data Processing &mdash; openEPhys_DACQ 0.85 documentation</title>
   
 
   
@@ -60,7 +60,7 @@
             
             
               <div class="version">
-                0.75
+                0.85
               </div>
             
           
@@ -89,10 +89,15 @@
 <li class="toctree-l1"><a class="reference internal" href="cameraRPiSetup.html">Camera and GlobalClock Raspberry Pi setup</a></li>
 <li class="toctree-l1"><a class="reference internal" href="wirelessRewardSetup.html">FEEDER setup</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Recording PC setup for Data Processing</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#install-matlab-for-kilosort">Install MATLAB for KiloSort</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#install-matlab-for-kilosort">Install MATLAB for KiloSort</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#installing-matlab-from-ucl-software-database-website">Installing MATLAB from UCL Software Database website</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#installing-matlab-addons">Installing MATLAB addons</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#install-kilosort">Install KiloSort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#install-klustakwik">Install Klustakwik</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#install-scripts-from-github">Install Scripts from GitHub</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#install-google-chrome-to-use-waveform-gui">Install Google Chrome to use Waveform GUI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#install-openephys-dacq-package">Install openEPhys_DACQ package</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="userManual.html">User Manual</a></li>
@@ -162,21 +167,47 @@
             
   <div class="section" id="recording-pc-setup-for-data-processing">
 <span id="recordingpcfordataprocessing"></span><h1>Recording PC setup for Data Processing<a class="headerlink" href="#recording-pc-setup-for-data-processing" title="Permalink to this headline">¶</a></h1>
-<p>This guide assumes you have already set up a PC with Ubuntu and installed much of the software as instructed in this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recordingpcandopenephysgui"><span class="std std-ref">Recording PC setup for Data Acquisition</span></a>. Possibly the relavant part may be just the instructions in the following parts: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#settinguptheoperatingsystem"><span class="std std-ref">Setting up the Operating System</span></a> and <a class="reference internal" href="recordingPCandOpenEphysGUI.html#otherusefulsteps"><span class="std std-ref">Other useful steps</span></a>.</p>
+<p>This guide assumes you have already set up a PC with Ubuntu and installed much of the software as instructed in this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recordingpcandopenephysgui"><span class="std std-ref">Recording PC setup for Data Acquisition</span></a>. If you are setting up a system for data processing only, then the relavant parts are just the following: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#settinguptheoperatingsystem"><span class="std std-ref">Setting up the Operating System</span></a> and <a class="reference internal" href="recordingPCandOpenEphysGUI.html#otherusefulsteps"><span class="std std-ref">Other useful steps</span></a>.</p>
 <div class="section" id="install-matlab-for-kilosort">
 <h2>Install MATLAB for KiloSort<a class="headerlink" href="#install-matlab-for-kilosort" title="Permalink to this headline">¶</a></h2>
 <p>MATLAB is only required to use KiloSort. If you do not intend to use KiloSort, you can skip this part.</p>
+<p>Depending on the source of the MATLAB license, your setup may vary. The following section only details the setup for those who can access University College London Software Database. If you are installing MATLAB from another source, move to <a class="reference internal" href="#installingmatlabaddons"><span class="std std-ref">Installing MATLAB addons</span></a> after installation is finished.</p>
+<div class="section" id="installing-matlab-from-ucl-software-database-website">
+<h3>Installing MATLAB from UCL Software Database website<a class="headerlink" href="#installing-matlab-from-ucl-software-database-website" title="Permalink to this headline">¶</a></h3>
 <p>Instructions are available at <a class="reference external" href="http://swdb.ucl.ac.uk/">UCL Software Database website</a>. But below is the summary of steps.</p>
 <p>Download the <em>.iso</em> files for MATLAB on Linux from <a class="reference external" href="http://swdb.ucl.ac.uk/">UCL Software Database</a>. Right click on <em>…dvd1.iso</em> and select <em>Open With -&gt; Archive Manager</em>. Click on <em>Extract</em> in the top left corner of Archive Manager. Select the location for the files to be unpacked, preferably the Downloads folder. Create a new folder called <em>MATLAB_INSTALL</em> using the button on the top right of the Archive Manager. Select this folder and choose to <em>Extract All files</em> and to <em>Keep directory structure</em>.</p>
 <p>Unpacked files may be set to read-only mode. To fix this, right click on the <em>MATLAB_INSTALL</em> folder you just created and chose <em>Properties</em>. There go to <em>Permissions</em> tab and make sure all rights are set to <em>Create and delete files</em>. Click on <em>Change Permissions for Enclosed Files…</em> and make the same changes there.</p>
 <p>Now open the <em>…dvd2.iso</em> in the Archive Manager and Extract these files to the same <em>MATLAB_INSTALL</em> folder you previously used. Afterwards, you may have to change the folder permissions again, as instructed in the previous paragraph.</p>
 <p>Now go to the <em>MATLAB_INSTALL</em> folder where you unpacked the files, right click and choose <em>Open in Terminal</em>. Enter the terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">./install</span></code>. Follow through the installation. Refer to the instructions <a class="reference external" href="http://swdb.ucl.ac.uk/">UCL Software Database</a> if necessary. Feel free to delete the <em>MATLAB_INSTALL</em> folder once the installation has finished.</p>
-<p>MATLAB is installed at <code class="docutils literal notranslate"><span class="pre">/usr/local/MATLAB/R2016b/bin</span></code> and can be run by calling the terminal command <code class="docutils literal notranslate"><span class="pre">./matlab</span></code> while in that folder. Alternatively you can install an add-on package with the terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">apt-get</span> <span class="pre">install</span> <span class="pre">matlab-support</span></code>, entering <code class="docutils literal notranslate"><span class="pre">usr/local/MATLAB/R2016b</span></code> as the MATLAB path and leaving the username request empty, but do rename the GCC files as it recommends. Now you can start MATLAB by opening the terminal anywhere and entering command <code class="docutils literal notranslate"><span class="pre">matlab</span></code>. It may also work simply by searching it from Dash and in that case you could also Lock it to the Launcher.</p>
+</div>
+<div class="section" id="installing-matlab-addons">
+<span id="installingmatlabaddons"></span><h3>Installing MATLAB addons<a class="headerlink" href="#installing-matlab-addons" title="Permalink to this headline">¶</a></h3>
+<p>MATLAB is installed at <code class="docutils literal notranslate"><span class="pre">/usr/local/MATLAB/R2017b/bin</span></code> and can be run by calling the terminal command <code class="docutils literal notranslate"><span class="pre">./matlab</span></code> while in that folder. Alternatively you can install an add-on package with the terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">apt-get</span> <span class="pre">install</span> <span class="pre">matlab-support</span></code>, entering <code class="docutils literal notranslate"><span class="pre">usr/local/MATLAB/R2017b</span></code> as the MATLAB path and leaving the username request empty, but do rename the GCC files as it recommends. Now you can start MATLAB by opening the terminal anywhere and entering command <code class="docutils literal notranslate"><span class="pre">matlab</span></code>. It may also work simply by searching it from Dash and in that case you could also Lock it to the Launcher.</p>
 <p>To use similar keyboard shortucts in MATLAB as is used on Windows, such as Ctrl+C for copying, you need to edit some preferences. Start MATLAB, go to Home Tab and select <em>Preferences</em>. In the list on the left, choose <em>Keyboard -&gt; Shortcuts</em> and change the <em>Active settings:</em> to <em>Windows default set</em>.</p>
 <p>When you add Paths to MATLAB and try to save it, you may promted to save <code class="docutils literal notranslate"><span class="pre">pathdef.m</span></code> to a different location. A good place would be the Home folder, so that by opening the terminal with <code class="docutils literal notranslate"><span class="pre">Ctrl+Alt+T</span></code> you can just type in <code class="docutils literal notranslate"><span class="pre">matlab</span></code> and it should load the correct paths.</p>
 </div>
+</div>
+<div class="section" id="install-kilosort">
+<h2>Install KiloSort<a class="headerlink" href="#install-kilosort" title="Permalink to this headline">¶</a></h2>
+<p>If you do not intend to use KiloSort, you can skip this section.</p>
+<p>Download and unpack or <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">clone</span></code> <a class="reference external" href="https://github.com/cortex-lab/KiloSort">KiloSort GitHub repository</a> to a convenient location, for example the Programs folder. You can use the following command:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>cd Programs
+git clone https://github.com/cortex-lab/KiloSort
+cd ~
+</pre></div>
+</div>
+<p>Follow further instructions on <a class="reference external" href="https://github.com/cortex-lab/KiloSort">KiloSort GitHub repository</a> for ensuring MATLAB can use the GPU. In short, MATLAB GPU access via CUDA must be configured first and then you should run the <code class="docutils literal notranslate"><span class="pre">KiloSort/CUDA/mexGPUall.m</span></code> file in the downloaded repository using MATLAB.</p>
+<p>Download and unpack or <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">clone</span></code> <a class="reference external" href="https://github.com/kwikteam/npy-matlab">npy matlab GitHub repository</a> to a convenient location, for example the Programs folder. You can use the following command:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>cd Programs
+git clone https://github.com/kwikteam/npy-matlab
+cd ~
+</pre></div>
+</div>
+<p>The paths to these folders just created should be provided to <code class="docutils literal notranslate"><span class="pre">openEPhys_Configuration</span></code> when promted.</p>
+</div>
 <div class="section" id="install-klustakwik">
 <h2>Install Klustakwik<a class="headerlink" href="#install-klustakwik" title="Permalink to this headline">¶</a></h2>
+<p>If you do not intend to use Klustakwik, you can skip this section.</p>
 <p>Use the following terminal commands to install Klustakwik</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>cd Programs
 git clone https://github.com/klusta-team/klustakwik
@@ -184,28 +215,28 @@ cd klustakwik
 make
 </pre></div>
 </div>
-</div>
-<div class="section" id="install-scripts-from-github">
-<h2>Install Scripts from GitHub<a class="headerlink" href="#install-scripts-from-github" title="Permalink to this headline">¶</a></h2>
-<p>You have likely already downloaded the scripts for processing Open Ephys recording from GitHub, if you worked through this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recordingmanagersetup"><span class="std std-ref">Setup Recording PC for using Recording Manager</span></a>. In that case, you should have in your <em>Home</em> folder a folder called <code class="docutils literal notranslate"><span class="pre">openEPhys_DACQ</span></code> in which there are also scripts for processing recorded data. If not, use the referred guide to download the files into folder structure just described.</p>
-<p>Install the prerequisites. The following packages should already be installed if you have already installed the recording system based on this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recordingpcandopenephysgui"><span class="std std-ref">Recording PC setup for Data Acquisition</span></a>. If you have not, run the following commands:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>pip install h5py --user
-pip install psutil --user
-sudo apt-get install python-qt4
-</pre></div>
-</div>
-<p>In addition, you will need the following packages:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>pip install -U scikit-learn
-</pre></div>
-</div>
-<p>The final step of setting up klustakwik path can be skipped if you installed Klustakwik to the location <code class="docutils literal notranslate"><span class="pre">~/Programs/klustakwik/</span></code> as you would have if you followed the commands above to the letter:</p>
-<p>Edit file <code class="docutils literal notranslate"><span class="pre">ApplyKlustakwikScripts.py</span></code> to specify to location of the <em>Klustakwik</em> install. Open the file with text editor, e.g. with terminal command <code class="docutils literal notranslate"><span class="pre">gedit</span> <span class="pre">~/openEPhys_DACQ/ApplyKlustakwikScripts.py</span></code> and find the line where <code class="docutils literal notranslate"><span class="pre">kk_path</span></code> is specified (probably line 132). It should say something like <code class="docutils literal notranslate"><span class="pre">kk_path</span> <span class="pre">=</span> <span class="pre">os.path.expanduser('~')</span> <span class="pre">+</span> <span class="pre">'/Programs/klustakwik/KlustaKwik'</span></code>. Edit the path to where you installed Klustakwik.</p>
+<p>The paths to the KlustaKwik file in klustakwik folder just created should be provided to <code class="docutils literal notranslate"><span class="pre">openEPhys_Configuration</span></code> when promted.</p>
 </div>
 <div class="section" id="install-google-chrome-to-use-waveform-gui">
 <h2>Install Google Chrome to use Waveform GUI<a class="headerlink" href="#install-google-chrome-to-use-waveform-gui" title="Permalink to this headline">¶</a></h2>
-<p>Go to Google Chrome <a class="reference external" href="https://www.google.com/chrome/">website</a> and download 64 bit <em>.deb</em> package for Ubuntu. Once the download is finished, go to the downloaded file and Right Click -&gt; Open With -&gt; GDebi Package Installer. Click Install Package.</p>
+<p><a class="reference external" href="http://d1manson.github.io/waveform/">Waveform GUI</a> is a browser based method for conveniently viewing clustered unit waveforms and other unit properties (e.g. spatial correlograms) of data in Axona format. The data recorded with this repository can be converted into Axona format using the processing pipeline. See <a class="reference internal" href="userManual.html#usermanual"><span class="std std-ref">User Manual</span></a> for more details.</p>
+<p>To use Waveform GUI you need Google Chrome.</p>
+<p>To install Google Chrome go to <a class="reference external" href="https://www.google.com/chrome/">website</a> and download 64 bit <em>.deb</em> package for Ubuntu. Once the download is finished, go to the downloaded file and Right Click -&gt; Open With -&gt; GDebi Package Installer. Click Install Package.</p>
+</div>
+<div class="section" id="install-openephys-dacq-package">
+<h2>Install openEPhys_DACQ package<a class="headerlink" href="#install-openephys-dacq-package" title="Permalink to this headline">¶</a></h2>
+<p>Installation of the Python package is straightforward:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>pip install openEPhys_DACQ
+
+openEPhys_Configuration  # Starts package configuration script
+</pre></div>
+</div>
+<p>To process data recorded with this package, use terminal command:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>openEPhys_Processing
+</pre></div>
+</div>
 <p>You are now ready to use the Open Ephys Data Processing scripts to detect spike, cluster them with Klustakwik and view the result with spatial correlograms in <a class="reference external" href="http://d1manson.github.io/waveform/">Waveform GUI</a>.</p>
-<p>See <a class="reference internal" href="userManual.html#usermanual"><span class="std std-ref">User Manual</span></a>.</p>
+<p>See <a class="reference internal" href="userManual.html#usermanual"><span class="std std-ref">User Manual</span></a> for more detailed instructions on using the package for data processing.</p>
 </div>
 </div>
 

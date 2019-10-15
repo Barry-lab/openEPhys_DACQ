@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Recording PC setup for Data Acquisition &mdash; openEPhys_DACQ 0.75 documentation</title>
+  <title>Recording PC setup for Data Acquisition &mdash; openEPhys_DACQ 0.85 documentation</title>
   
 
   
@@ -60,7 +60,7 @@
             
             
               <div class="version">
-                0.75
+                0.85
               </div>
             
           
@@ -100,7 +100,6 @@
 <li class="toctree-l3"><a class="reference internal" href="#install-google-chrome">Install Google Chrome</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#install-sublime-text-3-for-editing-scripts">Install Sublime Text 3 for editing scripts</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#install-sphinx-for-editing-readthedocs-files">Install Sphinx for editing ReadTheDocs files</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install-qt-designer-for-editing-guis">Install QT Designer for editing GUIs</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#turn-off-screen-lock">Turn off screen lock</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#install-convenient-brightness-controller">Install convenient brightness controller</a></li>
 </ul>
@@ -320,18 +319,6 @@ sudo gedit /etc/fstab
 </ul>
 <p>In the root directory of your document scripts, run terminal command <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">html</span></code> to update files in Build folder, where you can see the results by opening the <code class="docutils literal notranslate"><span class="pre">index.html</span></code>.</p>
 <p>To use the Sphinx RTD Theme as in these docs, you may need to install it with the following terminal command <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">sphinx_rtd_theme</span></code>.</p>
-</div>
-<div class="section" id="install-qt-designer-for-editing-guis">
-<h3>Install QT Designer for editing GUIs<a class="headerlink" href="#install-qt-designer-for-editing-guis" title="Permalink to this headline">¶</a></h3>
-<p>Install Qt4 and Qt4 Designer with the following terminal command:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo apt-get install python-qt4 pyqt4-dev-tools qt4-designer
-</pre></div>
-</div>
-<p>Now you can edit the <em>.ui</em> files with QtDesigner by opening it from Dash, as you search for <code class="docutils literal notranslate"><span class="pre">designer</span></code>. Within the application you can open existing <em>.ui</em> files, edit and save them. You will then have to compile the <em>.ui</em> file to a python script using pyuic4. For example, if you had saved your design as <code class="docutils literal notranslate"><span class="pre">design.ui</span></code>, then you can use the following terminal command in the directory where your file is:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>pyuic4 design.ui -o design.py
-</pre></div>
-</div>
-<p>With the existing scripts, such as RecordingManager.py, the naming convention for the <em>.ui</em> and <em>.py</em> files is as in this example.</p>
 </div>
 <div class="section" id="turn-off-screen-lock">
 <h3>Turn off screen lock<a class="headerlink" href="#turn-off-screen-lock" title="Permalink to this headline">¶</a></h3>

@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Camera and GlobalClock Raspberry Pi setup &mdash; openEPhys_DACQ 0.75 documentation</title>
+  <title>Camera and GlobalClock Raspberry Pi setup &mdash; openEPhys_DACQ 0.85 documentation</title>
   
 
   
@@ -60,7 +60,7 @@
             
             
               <div class="version">
-                0.75
+                0.85
               </div>
             
           
@@ -133,7 +133,11 @@
 <li class="toctree-l3"><a class="reference internal" href="#configure-ssh-keys-to-avoid-password-requests">Configure SSH keys to avoid Password requests</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#making-copies-of-raspberry-pis">Making copies of Raspberry Pis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#making-copies-of-raspberry-pis">Making copies of Raspberry Pis</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#create-an-image-of-sd-card-of-a-raspberry-pi-that-is-already-set-up">Create an image of SD card of a Raspberry Pi that is already set up</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#write-the-sd-card-image-onto-a-new-sd-card-for-another-raspberry-pi">Write the SD card image onto a new SD card for another Raspberry Pi</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="wirelessRewardSetup.html">FEEDER setup</a></li>
@@ -539,6 +543,8 @@ iptables -w -t filter -A FORWARD -i enx00249b233bda -j ACCEPT
 <div class="section" id="making-copies-of-raspberry-pis">
 <span id="duplicatingrpis"></span><h2>Making copies of Raspberry Pis<a class="headerlink" href="#making-copies-of-raspberry-pis" title="Permalink to this headline">¶</a></h2>
 <p>Once one Raspberry Pi has been set up and configured based on the instructions above, it is best to set the others up as simple copies of the first one. To do this, you can use linux built in method to make a virtual copy of the SD drive on your Recording PC or other computer that has SD card reader and then rewrite it onto a new SD card using <strong>Etcher</strong> as during the initial installation of Raspbian. You will only need to make one change separately for each RPi.</p>
+<div class="section" id="create-an-image-of-sd-card-of-a-raspberry-pi-that-is-already-set-up">
+<h3>Create an image of SD card of a Raspberry Pi that is already set up<a class="headerlink" href="#create-an-image-of-sd-card-of-a-raspberry-pi-that-is-already-set-up" title="Permalink to this headline">¶</a></h3>
 <p>Insert your SD card and find out its identifier in Ubuntu using the terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">fdisk</span> <span class="pre">-l</span></code>. If you are unsure of which device name (something like <code class="docutils literal notranslate"><span class="pre">/dev/mmcblk0</span></code>) is your RPi SD card, you can check be removing and re-inserting to establish which drive/card appears and disapperas. Drive/card identifiers can have endings indicating paritions, in this case you may have <code class="docutils literal notranslate"><span class="pre">/dev/mmcblk0p0</span></code> and <code class="docutils literal notranslate"><span class="pre">/dev/mmcblk0p1</span></code>. When using the drive identifier in the commands, leave out the <code class="docutils literal notranslate"><span class="pre">p0</span></code> or <code class="docutils literal notranslate"><span class="pre">p1</span></code> ending, as you want to copy all partitions on the card.</p>
 <p>Before you continue, make sure you have unmounted all partitions of the SD card. Using your correct drive identifier, use the following terminal commands:</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo umount /dev/mmcblk0p0
@@ -551,9 +557,14 @@ sudo umount /dev/mmcblk0
 </pre></div>
 </div>
 <p>This should put the virtual copy to your home folder and name it <code class="docutils literal notranslate"><span class="pre">RPi-SDcard-Copy.img</span></code>. If you wish to save it elsewhere, you can specify the full path including the file name, instead of the <code class="docutils literal notranslate"><span class="pre">~/RPi-SDcard-Copy.img</span></code> in the above command.</p>
-<p>Now remove the original RPi SD card from the computer and replace it with a new one. You can now proceed to write the newly made copy of the original SD card onto the new SD card using Etcher, as you did at this part of the guide: <a class="reference internal" href="#installingraspbian"><span class="std std-ref">Installing Raspberry Pi OS: Raspbian</span></a>. You just need to choose the newly created <code class="docutils literal notranslate"><span class="pre">RPi-SDcard-Copy.img</span></code> to write instead of the Raspbian OS <em>.img</em> file you used when installing Raspbian originally.</p>
+<p>Remove the SD card from the computer.</p>
+</div>
+<div class="section" id="write-the-sd-card-image-onto-a-new-sd-card-for-another-raspberry-pi">
+<h3>Write the SD card image onto a new SD card for another Raspberry Pi<a class="headerlink" href="#write-the-sd-card-image-onto-a-new-sd-card-for-another-raspberry-pi" title="Permalink to this headline">¶</a></h3>
+<p>Connect a new SD card to the computer. You can now proceed to write the newly made copy of the original SD card onto the new SD card using Etcher, as you did at this part of the guide: <a class="reference internal" href="#installingraspbian"><span class="std std-ref">Installing Raspberry Pi OS: Raspbian</span></a>. You just need to choose the newly created <code class="docutils literal notranslate"><span class="pre">RPi-SDcard-Copy.img</span></code> to write instead of the Raspbian OS <em>.img</em> file you used when installing Raspbian originally.</p>
 <p>Once the writing is done, you need to access the newly created SD card. You may need to re-insert it to remount it (Always use eject option if possible, before removing SD cards). You need to edit the <code class="docutils literal notranslate"><span class="pre">/etc/dhcpcd.conf</span></code> file on the SD card. Navigate to the SD card directory, go to <code class="docutils literal notranslate"><span class="pre">etc</span></code> folder. Open terminal in that folder by right clicking into the folder and choosing <em>Open in Terminal</em>. Use this command to open the file in text editor `` sudo gedit dhcpcd.conf``. You need to change one of the lines you added to the <code class="docutils literal notranslate"><span class="pre">dhcpcd.conf</span></code> file originally when setting up networking for the RPi. Find the line that says <code class="docutils literal notranslate"><span class="pre">static</span> <span class="pre">ip_address=192.168.0.20/24</span></code>. Edit the IP address to what the address you wish the RPi with this SD card would have, e.g. <code class="docutils literal notranslate"><span class="pre">static</span> <span class="pre">ip_address=192.168.0.21/24</span></code>. Save the text file.</p>
 <p>You can now remove the SD card (safely with after ejecting in Ubuntu) and simply plug it into a new Raspberry Pi. It should work perfectly as the one before, only you will need to use the newly set IP address to connect to it. <strong>Make sure you test if the SSH connection can be established</strong>, with terminal command from Recording PC <code class="docutils literal notranslate"><span class="pre">ssh</span> <span class="pre">pi&#64;192.168.0.21</span></code>. At first time of running, it may say <em>The authenticity of host ‘192.168.0.21 (192.168.0.21)’ can’t be established. -//- Are you sure you want to continue connecting (yes/no)?*</em> Type <strong>yes</strong> and hit Enter.</p>
+</div>
 </div>
 </div>
 

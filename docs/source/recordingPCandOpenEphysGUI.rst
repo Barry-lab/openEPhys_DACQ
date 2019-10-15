@@ -194,23 +194,6 @@ In the root directory of your document scripts, run terminal command ``make html
 
 To use the Sphinx RTD Theme as in these docs, you may need to install it with the following terminal command ``pip install sphinx_rtd_theme``.
 
-Install QT Designer for editing GUIs
-------------------------------------
-
-Install Qt4 and Qt4 Designer with the following terminal command:
-
-.. code-block:: none
-    
-    sudo apt-get install python-qt4 pyqt4-dev-tools qt4-designer
-
-Now you can edit the *.ui* files with QtDesigner by opening it from Dash, as you search for ``designer``. Within the application you can open existing *.ui* files, edit and save them. You will then have to compile the *.ui* file to a python script using pyuic4. For example, if you had saved your design as ``design.ui``, then you can use the following terminal command in the directory where your file is:
-
-.. code-block:: none
-    
-    pyuic4 design.ui -o design.py
-
-With the existing scripts, such as RecordingManager.py, the naming convention for the *.ui* and *.py* files is as in this example.
-
 Turn off screen lock
 --------------------
 

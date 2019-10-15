@@ -9,9 +9,6 @@ end
 originalChannels = 4;
 % default options are in parenthesis after the comment
 
-addpath(genpath('/usr/local/MATLAB/R2017a/toolbox/kilosort')) % path to kilosort folder
-addpath(genpath('/usr/local/MATLAB/R2017a/toolbox/npy-matlab')) % path to npy-matlab scripts
-
 run('StandardConfig.m')
 
 tic; % start timer

@@ -4,12 +4,17 @@
 Recording PC setup for Data Processing
 ======================================
 
-This guide assumes you have already set up a PC with Ubuntu and installed much of the software as instructed in this guide: :ref:`recordingPCandOpenEphysGUI`. Possibly the relavant part may be just the instructions in the following parts: :ref:`settingUpTheOperatingSystem` and :ref:`otherUsefulSteps`.
+This guide assumes you have already set up a PC with Ubuntu and installed much of the software as instructed in this guide: :ref:`recordingPCandOpenEphysGUI`. If you are setting up a system for data processing only, then the relavant parts are just the following: :ref:`settingUpTheOperatingSystem` and :ref:`otherUsefulSteps`.
 
 Install MATLAB for KiloSort
 ---------------------------
 
 MATLAB is only required to use KiloSort. If you do not intend to use KiloSort, you can skip this part.
+
+Depending on the source of the MATLAB license, your setup may vary. The following section only details the setup for those who can access University College London Software Database. If you are installing MATLAB from another source, move to :ref:`installingMatlabAddons` after installation is finished.
+
+Installing MATLAB from UCL Software Database website
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Instructions are available at `UCL Software Database website <http://swdb.ucl.ac.uk/>`_. But below is the summary of steps.
 
@@ -21,53 +26,85 @@ Now open the *...dvd2.iso* in the Archive Manager and Extract these files to the
 
 Now go to the *MATLAB_INSTALL* folder where you unpacked the files, right click and choose *Open in Terminal*. Enter the terminal command ``sudo ./install``. Follow through the installation. Refer to the instructions `UCL Software Database <http://swdb.ucl.ac.uk/>`_ if necessary. Feel free to delete the *MATLAB_INSTALL* folder once the installation has finished.
 
-MATLAB is installed at ``/usr/local/MATLAB/R2016b/bin`` and can be run by calling the terminal command ``./matlab`` while in that folder. Alternatively you can install an add-on package with the terminal command ``sudo apt-get install matlab-support``, entering ``usr/local/MATLAB/R2016b`` as the MATLAB path and leaving the username request empty, but do rename the GCC files as it recommends. Now you can start MATLAB by opening the terminal anywhere and entering command ``matlab``. It may also work simply by searching it from Dash and in that case you could also Lock it to the Launcher.
+.. _installingMatlabAddons:
+
+Installing MATLAB addons
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+MATLAB is installed at ``/usr/local/MATLAB/R2017b/bin`` and can be run by calling the terminal command ``./matlab`` while in that folder. Alternatively you can install an add-on package with the terminal command ``sudo apt-get install matlab-support``, entering ``usr/local/MATLAB/R2017b`` as the MATLAB path and leaving the username request empty, but do rename the GCC files as it recommends. Now you can start MATLAB by opening the terminal anywhere and entering command ``matlab``. It may also work simply by searching it from Dash and in that case you could also Lock it to the Launcher.
 
 To use similar keyboard shortucts in MATLAB as is used on Windows, such as Ctrl+C for copying, you need to edit some preferences. Start MATLAB, go to Home Tab and select *Preferences*. In the list on the left, choose *Keyboard -> Shortcuts* and change the *Active settings:* to *Windows default set*.
 
 When you add Paths to MATLAB and try to save it, you may promted to save ``pathdef.m`` to a different location. A good place would be the Home folder, so that by opening the terminal with ``Ctrl+Alt+T`` you can just type in ``matlab`` and it should load the correct paths.
 
+Install KiloSort
+----------------
+
+If you do not intend to use KiloSort, you can skip this section.
+
+Download and unpack or ``git clone`` `KiloSort GitHub repository <https://github.com/cortex-lab/KiloSort>`_ to a convenient location, for example the Programs folder. You can use the following command:
+
+.. code-block:: none
+	
+	cd Programs
+	git clone https://github.com/cortex-lab/KiloSort
+	cd ~
+
+Follow further instructions on `KiloSort GitHub repository <https://github.com/cortex-lab/KiloSort>`_ for ensuring MATLAB can use the GPU. In short, MATLAB GPU access via CUDA must be configured first and then you should run the ``KiloSort/CUDA/mexGPUall.m`` file in the downloaded repository using MATLAB.
+
+Download and unpack or ``git clone`` `npy matlab GitHub repository <https://github.com/kwikteam/npy-matlab>`_ to a convenient location, for example the Programs folder. You can use the following command:
+
+.. code-block:: none
+	
+	cd Programs
+	git clone https://github.com/kwikteam/npy-matlab
+	cd ~
+
+The paths to these folders just created should be provided to ``openEPhys_Configuration`` when promted.
+
 Install Klustakwik
 ------------------
+
+If you do not intend to use Klustakwik, you can skip this section.
 
 Use the following terminal commands to install Klustakwik
 
 .. code-block:: none
-
+	
 	cd Programs
 	git clone https://github.com/klusta-team/klustakwik
 	cd klustakwik
 	make
 
-
-Install Scripts from GitHub
----------------------------
-
-You have likely already downloaded the scripts for processing Open Ephys recording from GitHub, if you worked through this guide: :ref:`RecordingManagerSetup`. In that case, you should have in your *Home* folder a folder called ``openEPhys_DACQ`` in which there are also scripts for processing recorded data. If not, use the referred guide to download the files into folder structure just described.
-
-Install the prerequisites. The following packages should already be installed if you have already installed the recording system based on this guide: :ref:`recordingPCandOpenEphysGUI`. If you have not, run the following commands:
-
-.. code-block:: none
-
-	pip install h5py --user
-	pip install psutil --user
-	sudo apt-get install python-qt4
-
-In addition, you will need the following packages:
-
-.. code-block:: none
-
-	pip install -U scikit-learn
-
-The final step of setting up klustakwik path can be skipped if you installed Klustakwik to the location ``~/Programs/klustakwik/`` as you would have if you followed the commands above to the letter:
-
-Edit file ``ApplyKlustakwikScripts.py`` to specify to location of the *Klustakwik* install. Open the file with text editor, e.g. with terminal command ``gedit ~/openEPhys_DACQ/ApplyKlustakwikScripts.py`` and find the line where ``kk_path`` is specified (probably line 132). It should say something like ``kk_path = os.path.expanduser('~') + '/Programs/klustakwik/KlustaKwik'``. Edit the path to where you installed Klustakwik.
+The paths to the KlustaKwik file in klustakwik folder just created should be provided to ``openEPhys_Configuration`` when promted.
 
 Install Google Chrome to use Waveform GUI
 -----------------------------------------
 
-Go to Google Chrome `website <https://www.google.com/chrome/>`_ and download 64 bit *.deb* package for Ubuntu. Once the download is finished, go to the downloaded file and Right Click -> Open With -> GDebi Package Installer. Click Install Package.
+`Waveform GUI <http://d1manson.github.io/waveform/>`_ is a browser based method for conveniently viewing clustered unit waveforms and other unit properties (e.g. spatial correlograms) of data in Axona format. The data recorded with this repository can be converted into Axona format using the processing pipeline. See :ref:`userManual` for more details.
+
+To use Waveform GUI you need Google Chrome.
+
+To install Google Chrome go to `website <https://www.google.com/chrome/>`_ and download 64 bit *.deb* package for Ubuntu. Once the download is finished, go to the downloaded file and Right Click -> Open With -> GDebi Package Installer. Click Install Package.
+
+Install openEPhys_DACQ package
+------------------------------
+
+Installation of the Python package is straightforward:
+
+.. code-block:: none
+    
+    pip install openEPhys_DACQ
+    
+    openEPhys_Configuration  # Starts package configuration script
+
+To process data recorded with this package, use terminal command:
+
+.. code-block:: none
+    
+    openEPhys_Processing
 
 You are now ready to use the Open Ephys Data Processing scripts to detect spike, cluster them with Klustakwik and view the result with spatial correlograms in `Waveform GUI <http://d1manson.github.io/waveform/>`_.
 
-See :ref:`userManual`.
+See :ref:`userManual` for more detailed instructions on using the package for data processing.

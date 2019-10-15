@@ -425,6 +425,9 @@ Making copies of Raspberry Pis
 
 Once one Raspberry Pi has been set up and configured based on the instructions above, it is best to set the others up as simple copies of the first one. To do this, you can use linux built in method to make a virtual copy of the SD drive on your Recording PC or other computer that has SD card reader and then rewrite it onto a new SD card using **Etcher** as during the initial installation of Raspbian. You will only need to make one change separately for each RPi.
 
+Create an image of SD card of a Raspberry Pi that is already set up
+-------------------------------------------------------------------
+
 Insert your SD card and find out its identifier in Ubuntu using the terminal command ``sudo fdisk -l``. If you are unsure of which device name (something like ``/dev/mmcblk0``) is your RPi SD card, you can check be removing and re-inserting to establish which drive/card appears and disapperas. Drive/card identifiers can have endings indicating paritions, in this case you may have ``/dev/mmcblk0p0`` and ``/dev/mmcblk0p1``. When using the drive identifier in the commands, leave out the ``p0`` or ``p1`` ending, as you want to copy all partitions on the card.
 
 Before you continue, make sure you have unmounted all partitions of the SD card. Using your correct drive identifier, use the following terminal commands:
@@ -443,7 +446,12 @@ Ensure that your PC has as much free space as your SD cards total capacity, then
 
 This should put the virtual copy to your home folder and name it ``RPi-SDcard-Copy.img``. If you wish to save it elsewhere, you can specify the full path including the file name, instead of the ``~/RPi-SDcard-Copy.img`` in the above command.
 
-Now remove the original RPi SD card from the computer and replace it with a new one. You can now proceed to write the newly made copy of the original SD card onto the new SD card using Etcher, as you did at this part of the guide: :ref:`installingRaspbian`. You just need to choose the newly created ``RPi-SDcard-Copy.img`` to write instead of the Raspbian OS *.img* file you used when installing Raspbian originally.
+Remove the SD card from the computer.
+
+Write the SD card image onto a new SD card for another Raspberry Pi
+-------------------------------------------------------------------
+
+Connect a new SD card to the computer. You can now proceed to write the newly made copy of the original SD card onto the new SD card using Etcher, as you did at this part of the guide: :ref:`installingRaspbian`. You just need to choose the newly created ``RPi-SDcard-Copy.img`` to write instead of the Raspbian OS *.img* file you used when installing Raspbian originally.
 
 Once the writing is done, you need to access the newly created SD card. You may need to re-insert it to remount it (Always use eject option if possible, before removing SD cards). You need to edit the ``/etc/dhcpcd.conf`` file on the SD card. Navigate to the SD card directory, go to ``etc`` folder. Open terminal in that folder by right clicking into the folder and choosing *Open in Terminal*. Use this command to open the file in text editor `` sudo gedit dhcpcd.conf``. You need to change one of the lines you added to the ``dhcpcd.conf`` file originally when setting up networking for the RPi. Find the line that says ``static ip_address=192.168.0.20/24``. Edit the IP address to what the address you wish the RPi with this SD card would have, e.g. ``static ip_address=192.168.0.21/24``. Save the text file.
 

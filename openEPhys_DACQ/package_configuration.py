@@ -21,6 +21,8 @@ class PackageConfiguration(object):
         'recording_manager_settings_subfolder': 'RecordingManagerSettings',
         'klustakwik_path': 
             os.path.join(os.path.expanduser('~'), 'Programs', 'klustakwik', 'KlustaKwik')
+        'kilosort_path': '',
+        'npy_matlab_path': ''
     }
 
     def __init__(self, reconfigure=False):
@@ -86,6 +88,11 @@ class PackageConfiguration(object):
         print('Recorded data will be found in directory {}'.format(os.path.join(self.config['root_folder'],
                                                                                 'RecordingData')))
 
+    def create_root_folder_subfolders(self):
+
+        os.mkdir(os.path.join(self.config['root_folder'],
+                              self.config['recording_manager_settings_subfolder']))
+
     def configure_klustakwik_path(self):
         
         print('To use KlustaKwik for processing tetrode recordings,'
@@ -113,10 +120,36 @@ class PackageConfiguration(object):
                 os.path.dirname(klustakwik_path)
             ))
 
-    def create_root_folder_subfolders(self):
+    def configure_kilosort_path(self):
+        
+        print('To use KiloSort for processing tetrode recordings,'
+              + 'paths to KiloSort and npy-matlab repositories are required.')
 
-        os.mkdir(os.path.join(self.config['root_folder'],
-                              self.config['recording_manager_settings_subfolder']))
+        decision = input('Would you like to set up KiloSort by providing paths to said repositories? [y/N] ')
+
+        if decision.lower() != 'y' and decision.lower() != 'yes':
+
+            return
+
+        kilosort_path = input('Please enter full path to KiloSort repository: ')
+
+        if os.path.isdir(kilosort_path):
+
+            self.config['kilosort_path'] = kilosort_path
+
+        else:
+
+            raise ValueError('Provided path {} is not a folder'.format(kilosort_path))
+
+        npy_matlab_path = input('Please enter full path to npy-matlab repository: ')
+
+        if os.path.isdir(npy_matlab_path):
+
+            self.config['npy_matlab_path'] = npy_matlab_path
+
+        else:
+
+            raise ValueError('Provided path {} is not a folder'.format(npy_matlab_path))
 
     def configure_package(self):
 
@@ -125,6 +158,8 @@ class PackageConfiguration(object):
         self.configure_root_folder()
 
         self.configure_klustakwik_path()
+
+        self.configure_kilosort_path()
 
 
 def package_config():

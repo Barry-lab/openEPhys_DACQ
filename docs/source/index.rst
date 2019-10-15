@@ -7,7 +7,7 @@ This is a system for automated experiments acquiring neural data using `OpenEhys
 The original purpose for this system was to collect neural data from rodents performing a navigational task in a large environment.
 
 Installation
-^^^^^^^^^^^^
+============
 
 Installation of the Python package is straightforward:
 
@@ -20,13 +20,15 @@ Installation of the Python package is straightforward:
 For full functionality, the package has dependencies beyond Python repositories:
 
 - OpenEphysGUI for neural data acquisition
-- Kilosort and/or KlustaKwik for spike sorting
 - Raspberry Pis for video recording, tracking and task reward systems
+- Kilosort and/or KlustaKwik for spike sorting
+
+If you're setting up ``openEPhys_DACQ`` for data processing only, then the only setup steps necesary are in :ref:`recordingPCforDataProcessing`.
 
 For detailed instructions on how to set everything up, follow the :ref:`installationInstructions`.
 
 GitHub repository
-^^^^^^^^^^^^^^^^^
+=================
 
 https://github.com/Barry-lab/openEPhys_DACQ
 

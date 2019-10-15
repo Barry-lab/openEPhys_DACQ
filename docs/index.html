@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Welcome to openEPhys_DACQ repository &mdash; openEPhys_DACQ 0.75 documentation</title>
+  <title>Welcome to openEPhys_DACQ repository &mdash; openEPhys_DACQ 0.85 documentation</title>
   
 
   
@@ -59,7 +59,7 @@
             
             
               <div class="version">
-                0.75
+                0.85
               </div>
             
           
@@ -168,16 +168,18 @@ openEPhys_Configuration  # Starts package configuration script
 <p>For full functionality, the package has dependencies beyond Python repositories:</p>
 <ul class="simple">
 <li><p>OpenEphysGUI for neural data acquisition</p></li>
-<li><p>Kilosort and/or KlustaKwik for spike sorting</p></li>
 <li><p>Raspberry Pis for video recording, tracking and task reward systems</p></li>
+<li><p>Kilosort and/or KlustaKwik for spike sorting</p></li>
 </ul>
+<p>If you’re setting up <code class="docutils literal notranslate"><span class="pre">openEPhys_DACQ</span></code> for data processing only, then the only setup steps necesary are in <a class="reference internal" href="recordingPCforDataProcessing.html#recordingpcfordataprocessing"><span class="std std-ref">Recording PC setup for Data Processing</span></a>.</p>
 <p>For detailed instructions on how to set everything up, follow the <a class="reference internal" href="#installationinstructions"><span class="std std-ref">Installation instructions</span></a>.</p>
 </div>
 <div class="section" id="github-repository">
 <h2>GitHub repository<a class="headerlink" href="#github-repository" title="Permalink to this headline">¶</a></h2>
 <p><a class="reference external" href="https://github.com/Barry-lab/openEPhys_DACQ">https://github.com/Barry-lab/openEPhys_DACQ</a></p>
+</div>
 <div class="section" id="features">
-<h3>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h3>
+<h2>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
 <li><dl class="simple">
 <dt>Data synchronisation with <a class="reference external" href="https://github.com/open-ephys/plugin-GUI">OpenEhysGUI</a></dt><dd><ul>
@@ -272,11 +274,11 @@ openEPhys_Configuration  # Starts package configuration script
 </ul>
 </div>
 <div class="section" id="system-overview-and-the-user-manual">
-<h3>System overview and the user manual<a class="headerlink" href="#system-overview-and-the-user-manual" title="Permalink to this headline">¶</a></h3>
+<h2>System overview and the user manual<a class="headerlink" href="#system-overview-and-the-user-manual" title="Permalink to this headline">¶</a></h2>
 <p>In depth description of the system is in the <a class="reference internal" href="userManual.html#usermanual-systemoverview"><span class="std std-ref">System overview</span></a> section of the <a class="reference internal" href="userManual.html#usermanual"><span class="std std-ref">User Manual</span></a></p>
 </div>
 <div class="section" id="installation-instructions">
-<span id="installationinstructions"></span><h3>Installation instructions<a class="headerlink" href="#installation-instructions" title="Permalink to this headline">¶</a></h3>
+<span id="installationinstructions"></span><h2>Installation instructions<a class="headerlink" href="#installation-instructions" title="Permalink to this headline">¶</a></h2>
 <p>This document details every step required for setting up an Ubuntu PC for electrophysiological data collection using <a class="reference external" href="https://github.com/open-ephys/plugin-GUI">OpenEhysGUI</a>, separate tracking system using Raspberry Pis and two different Rasperry Pi based reward modules. The instructions detail every single step, every line of code required to get things running. Such detail is provided so that anyone could set it up, even those who have never used Linux before.</p>
 <p>Occasionally the document includes instructions in double brackets, where it is not entirely clear if the step is important, but best to follow the instructions. E.g. <em>((Do this, in case otherwise something will not work later on))</em>.</p>
 <p>All terminal commands written here should be run while in home directory, unless instructed to call on a specific file. This ensures a sensible folder structure is created.</p>
@@ -308,9 +310,10 @@ openEPhys_Configuration  # Starts package configuration script
 </li>
 <li class="toctree-l1"><a class="reference internal" href="recordingPCforDataProcessing.html">Recording PC setup for Data Processing</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="recordingPCforDataProcessing.html#install-matlab-for-kilosort">Install MATLAB for KiloSort</a></li>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCforDataProcessing.html#install-kilosort">Install KiloSort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="recordingPCforDataProcessing.html#install-klustakwik">Install Klustakwik</a></li>
-<li class="toctree-l2"><a class="reference internal" href="recordingPCforDataProcessing.html#install-scripts-from-github">Install Scripts from GitHub</a></li>
 <li class="toctree-l2"><a class="reference internal" href="recordingPCforDataProcessing.html#install-google-chrome-to-use-waveform-gui">Install Google Chrome to use Waveform GUI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="recordingPCforDataProcessing.html#install-openephys-dacq-package">Install openEPhys_DACQ package</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="userManual.html">User Manual</a><ul>
@@ -318,7 +321,6 @@ openEPhys_Configuration  # Starts package configuration script
 </ul>
 </li>
 </ul>
-</div>
 </div>
 </div>
 </div>

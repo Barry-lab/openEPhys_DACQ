@@ -15,7 +15,7 @@ from multiprocessing import Process
 
 import numpy as np
 
-from openEPhys_DACQ.package_configuration import package_path
+from openEPhys_DACQ.package_configuration import package_config, package_path
 from openEPhys_DACQ import NWBio
 from openEPhys_DACQ.createAxonaData import createAxonaData_for_NWBfile
 from openEPhys_DACQ import HelperFunctions as hfunct
@@ -666,6 +666,7 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
     # Start matlab engine
     eng = matlab.engine.start_matlab()
     eng.cd(os.path.join(package_path, 'Utils', 'KiloSortScripts'))
+    eng.add_kilosort_paths(package_config['kilosort_path'], package_config['npy_matlab_path'])
     # Work through each tetrode
     for n_tet, tetrode_nr in enumerate(tetrode_nrs):
         print('Applying KiloSort to tetrode ' + str(n_tet + 1) + '/' + str(len(tetrode_nrs)))
