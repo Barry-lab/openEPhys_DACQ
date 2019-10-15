@@ -115,11 +115,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#install-leds-on-intan-headstage-for-tracking">Install LEDs on Intan Headstage for tracking</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#setup-recording-pc-for-using-recording-manager">Setup Recording PC for using Recording Manager</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#install-the-dependencies-for-the-scripts">Install the dependencies for the scripts</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#make-changes-in-the-scripts-to-suit-your-pc">Make changes in the scripts to suit your PC</a></li>
-</ul>
-</li>
+<li class="toctree-l2"><a class="reference internal" href="#setup-recording-pc-for-using-recording-manager">Setup Recording PC for using Recording Manager</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="cameraRPiSetup.html">Camera and GlobalClock Raspberry Pi setup</a></li>
@@ -205,9 +201,9 @@
 <div class="section" id="fix-slow-shutdown-issue">
 <h3>Fix slow shutdown issue<a class="headerlink" href="#fix-slow-shutdown-issue" title="Permalink to this headline">¶</a></h3>
 <p>This is an optional step, if this issue occurs with your PC setup. It may happen that after installation shutdown process is very slow, which you would notice as you restart your PC. In this case during shutdown, when you see Ubuntu loading logo, hit F12 on the keyboard. If over the next few minutes check if you see similar error messages to the following:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ata2</span><span class="o">.</span><span class="mi">00</span><span class="p">:</span> <span class="n">exception</span> <span class="n">Emask</span> <span class="mh">0x0</span> <span class="n">SAct</span> <span class="mh">0x0</span> <span class="n">SErr</span> <span class="mh">0x0</span> <span class="n">action</span> <span class="mh">0x6</span> <span class="n">frozen</span>
-<span class="n">ata2</span><span class="o">.</span><span class="mi">00</span><span class="p">:</span> <span class="n">status</span><span class="p">:</span> <span class="p">{</span> <span class="n">DRDY</span><span class="p">}</span>
-<span class="n">ata2</span><span class="o">.</span><span class="mi">00</span><span class="p">:</span> <span class="n">revalidation</span> <span class="n">failed</span> <span class="p">(</span><span class="n">errno</span><span class="o">=-</span><span class="mi">5</span><span class="p">)</span>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>ata2.00: exception Emask 0x0 SAct 0x0 SErr 0x0 action 0x6 frozen
+ata2.00: status: { DRDY}
+ata2.00: revalidation failed (errno=-5)
 </pre></div>
 </div>
 <p>If you see similar error messages, do the following to fix it (It is based on the 2nd solution in <a class="reference external" href="https://askubuntu.com/questions/764568/ubuntu-16-04-hangs-on-shutdown-restart/769972#769972">this post</a>)</p>
@@ -449,53 +445,15 @@ cd ~/Programs/OpenEphysGUI/plugin-GUI/Builds/Linux/build
 <div class="section" id="setup-recording-pc-for-using-recording-manager">
 <span id="recordingmanagersetup"></span><h2>Setup Recording PC for using Recording Manager<a class="headerlink" href="#setup-recording-pc-for-using-recording-manager" title="Permalink to this headline">¶</a></h2>
 <p>This part describes how to set up the Recording PC to use the custom Python scripts and GUI that interfaces with the Raspberry Pis and handles the Open Ephys data.</p>
-<div class="section" id="install-the-dependencies-for-the-scripts">
-<h3>Install the dependencies for the scripts<a class="headerlink" href="#install-the-dependencies-for-the-scripts" title="Permalink to this headline">¶</a></h3>
-<p>Install the necessary packages with the following terminal commands:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo apt-get install python-qt4 python-dev python-pip python-scipy python-pygame python-psutil
-sudo apt-get install python-opencv # Alternatively install from source, but not necessary
-sudo pip install paramiko
-sudo pip install pyzmq # This assumes you have already installed ZMQ for OpenEphys GUI
-pip install h5py # This assumes you have already installed libhdf5-serial-dev for OpenEphys GUI
+<p>Installation of the Python package is straightforward:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>pip install openEPhys_DACQ
+
+openEPhys_Configuration  # Starts package configuration script
 </pre></div>
 </div>
-<p>Additionally install <code class="docutils literal notranslate"><span class="pre">pyqtgraph</span></code> latest version from their website (Here 0.10.0-1 was used). Go to <a class="reference external" href="www.pyqtgraph.org">pyqtgraph website</a> and download the latest version of Debian/Ubuntu package. Install it by right click on the downloaded <em>.deb</em> file -&gt; Open With -&gt; GDebi Package Installer. Click on Install button.</p>
-<p>Create folder structure in the home folder with the following terminal commands:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>cd ~/
-mkdir RecordingData
-cd RecordingData
-mkdir RecordingManagerData
+<p>To start the Recording Manager, use terminal command:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>openEPhys_RecordingManager
 </pre></div>
-</div>
-<p>Obtain Barry-lab repository <code class="docutils literal notranslate"><span class="pre">openEPhys_DACQ</span></code> manually and place them it in your home folder in a folder of the same name, or run the following terminal command:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>cd ~/
-git clone https://github.com/Barry-lab/openEPhys_DACQ
-</pre></div>
-</div>
-<p>You will need a github.com username and password that has access to the repository.</p>
-</div>
-<div class="section" id="make-changes-in-the-scripts-to-suit-your-pc">
-<h3>Make changes in the scripts to suit your PC<a class="headerlink" href="#make-changes-in-the-scripts-to-suit-your-pc" title="Permalink to this headline">¶</a></h3>
-<p>Open <code class="docutils literal notranslate"><span class="pre">~/openEPhys_DACQ/RecordingManager.py</span></code> with text editor like SublimeText and edit the following lines in the <em>RecordingManager</em> class <em>__init__</em> function:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span># Set GUI environment
-self.scripts_root = os.path.expanduser(&#39;~&#39;) + &#39;/openEPhys_DACQ&#39;
-self.pt_root_folder.setPlainText(os.path.expanduser(&#39;~&#39;) + &#39;/RecordingData&#39;)
-self.file_server_path = &#39;/media/qnap/room418&#39;
-</pre></div>
-</div>
-<p>, such that they would reflect the folder structure on your Recording PC. Note that <code class="docutils literal notranslate"><span class="pre">os.path.expanduser('~')</span></code> refers to your Home folder. If you set everything up as instructed in the documentation, nothing but file server path should need changing.</p>
-<p>Similarly as you did for the OpenEphysGUI, you can create a shortcut for RecordingManager.py application in the home folder. Use terminal command <code class="docutils literal notranslate"><span class="pre">gedit</span> <span class="pre">~/RecordingManager</span></code> to create the file and add these lines to the file:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>#!/bin/bash
-cd ~/openEPhys_DACQ
-python RecordingManager.py
-</pre></div>
-</div>
-<p>Run this terminal command to make the file executable</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>chmod +x ~/RecordingManager
-</pre></div>
-</div>
-<p>You can now run RecordingManager.py by opening the terminal (by default it starts in your home folder) and typing in command <code class="docutils literal notranslate"><span class="pre">./RecordingManager</span></code>.</p>
-<p>Now the Recording PC is ready to use the Python scripts for managing Open Ephys recordings and Raspberry Pis, if the networking and Raspberry Pis are set up as well. To do this, follow this guide : <a class="reference internal" href="cameraRPiSetup.html#camerarpisetup"><span class="std std-ref">Camera and GlobalClock Raspberry Pi setup</span></a>.</p>
 </div>
 </div>
 </div>

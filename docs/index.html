@@ -157,9 +157,27 @@
 <h1>Welcome to openEPhys_DACQ repository<a class="headerlink" href="#welcome-to-openephys-dacq-repository" title="Permalink to this headline">¶</a></h1>
 <p>This is a system for automated experiments acquiring neural data using <a class="reference external" href="https://github.com/open-ephys/plugin-GUI">OpenEhysGUI</a>. It combines online tracking from any number of cameras with a behavioural task program and peripherals for interacting with the subject. The package comes with an easy to use graphical interface.</p>
 <p>The original purpose for this system was to collect neural data from rodents performing a navigational task in a large environment.</p>
-<p>The github page for this repository: <a class="reference external" href="https://github.com/Barry-lab/openEPhys_DACQ">https://github.com/Barry-lab/openEPhys_DACQ</a></p>
+<div class="section" id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
+<p>Installation of the Python package is straightforward:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>pip install openEPhys_DACQ
+
+openEPhys_Configuration  # Starts package configuration script
+</pre></div>
+</div>
+<p>For full functionality, the package has dependencies beyond Python repositories:</p>
+<ul class="simple">
+<li><p>OpenEphysGUI for neural data acquisition</p></li>
+<li><p>Kilosort and/or KlustaKwik for spike sorting</p></li>
+<li><p>Raspberry Pis for video recording, tracking and task reward systems</p></li>
+</ul>
+<p>For detailed instructions on how to set everything up, follow the <a class="reference internal" href="#installationinstructions"><span class="std std-ref">Installation instructions</span></a>.</p>
+</div>
+<div class="section" id="github-repository">
+<h2>GitHub repository<a class="headerlink" href="#github-repository" title="Permalink to this headline">¶</a></h2>
+<p><a class="reference external" href="https://github.com/Barry-lab/openEPhys_DACQ">https://github.com/Barry-lab/openEPhys_DACQ</a></p>
 <div class="section" id="features">
-<h2>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h2>
+<h3>Features<a class="headerlink" href="#features" title="Permalink to this headline">¶</a></h3>
 <ul class="simple">
 <li><dl class="simple">
 <dt>Data synchronisation with <a class="reference external" href="https://github.com/open-ephys/plugin-GUI">OpenEhysGUI</a></dt><dd><ul>
@@ -254,13 +272,13 @@
 </ul>
 </div>
 <div class="section" id="system-overview-and-the-user-manual">
-<h2>System overview and the user manual<a class="headerlink" href="#system-overview-and-the-user-manual" title="Permalink to this headline">¶</a></h2>
+<h3>System overview and the user manual<a class="headerlink" href="#system-overview-and-the-user-manual" title="Permalink to this headline">¶</a></h3>
 <p>In depth description of the system is in the <a class="reference internal" href="userManual.html#usermanual-systemoverview"><span class="std std-ref">System overview</span></a> section of the <a class="reference internal" href="userManual.html#usermanual"><span class="std std-ref">User Manual</span></a></p>
 </div>
-<div class="section" id="installation">
-<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
-<p>This document details every step required for setting up an Ubuntu PC for electrophysiological data collection using <a class="reference external" href="https://github.com/open-ephys/plugin-GUI">OpenEhysGUI</a>, separate tracking system using Raspberry Pis and two different Rasperry Pi based reward modules. The instructions detail every single step, every line of code required to get things running. Therefore, it is definitely painfully long to work through for an advanced user, if not amusing at times. The reason for such detail is that anyone could set it up.</p>
-<p>Occasionally the document includes instructions in double brackets, where the steps may not me necessary but were made by me during the setup process. E.g. <em>((Do this, in case otherwise something will not work later on))</em>.</p>
+<div class="section" id="installation-instructions">
+<span id="installationinstructions"></span><h3>Installation instructions<a class="headerlink" href="#installation-instructions" title="Permalink to this headline">¶</a></h3>
+<p>This document details every step required for setting up an Ubuntu PC for electrophysiological data collection using <a class="reference external" href="https://github.com/open-ephys/plugin-GUI">OpenEhysGUI</a>, separate tracking system using Raspberry Pis and two different Rasperry Pi based reward modules. The instructions detail every single step, every line of code required to get things running. Such detail is provided so that anyone could set it up, even those who have never used Linux before.</p>
+<p>Occasionally the document includes instructions in double brackets, where it is not entirely clear if the step is important, but best to follow the instructions. E.g. <em>((Do this, in case otherwise something will not work later on))</em>.</p>
 <p>All terminal commands written here should be run while in home directory, unless instructed to call on a specific file. This ensures a sensible folder structure is created.</p>
 <p>The instructions can be worked through in the order they are presented in the below table to set up the system from ground up.</p>
 <div class="toctree-wrapper compound">
@@ -300,6 +318,7 @@
 </ul>
 </li>
 </ul>
+</div>
 </div>
 </div>
 </div>

@@ -11,6 +11,9 @@ from subprocess import Popen, PIPE, STDOUT
 import tempfile
 import shutil
 
+from openEPhys_DACQ.package_configuration import package_config
+
+
 class Kluster():
     '''
     Runs KlustaKwik (KK) against data recorded on the Axona dacqUSB recording
@@ -135,7 +138,7 @@ class Kluster():
         else:
             taskset_cpu_affinity = 'taskset -c ' + str(int(cpu_core_nr)) + ' '
         # specify path to KlustaKwik exe
-        kk_path = os.path.expanduser('~') + '/Programs/klustakwik/KlustaKwik'
+        kk_path = package_config()['klustakwik_path']
         if not os.path.exists(kk_path):
             print(kk_path)
             raise IOError()

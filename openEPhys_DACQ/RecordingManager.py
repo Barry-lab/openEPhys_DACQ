@@ -11,10 +11,10 @@ import threading
 from importlib import import_module
 import multiprocessing
 
+from openEPhys_DACQ.package_configuration import package_config
 from openEPhys_DACQ import HelperFunctions as HFunc
 from openEPhys_DACQ import RPiInterface
 from openEPhys_DACQ import NWBio
-from openEPhys_DACQ.package_configuration import package_config
 from openEPhys_DACQ.CameraSettings import CameraSettingsApp, CameraSettingsGUI
 from openEPhys_DACQ.TaskSettings import TaskSettingsApp, TaskSettingsGUI
 from openEPhys_DACQ.ZMQcomms import SubscribeToOpenEphys, PublishToOpenEphys
@@ -743,8 +743,8 @@ def add_x_y_setting_to_widget(label, x_val, y_val, value_change_callback, parent
     xy_layout.addWidget(x_textbox)
     xy_layout.addWidget(y_label)
     xy_layout.addWidget(y_textbox)
-    x_textbox.setFixedHeight(25)
-    y_textbox.setFixedHeight(25)
+    x_textbox.setFixedHeight(27)
+    y_textbox.setFixedHeight(27)
 
     x_textbox.textChanged.connect(lambda: value_change_callback([x_textbox.toPlainText(),
                                                                  y_textbox.toPlainText()]))
@@ -771,10 +771,10 @@ def add_text_setting_to_widget(label, text, value_change_callback, parent, layou
     button = None
     if not (button_kwargs is None):
         button = QtWidgets.QPushButton(button_kwargs['label'], widget)
-        button.setFixedSize(55, 25)
+        button.setFixedSize(60, 27)
         button.clicked.connect(lambda: button_kwargs['connect'](textbox))
 
-    textbox.setFixedHeight(25)
+    textbox.setFixedHeight(27)
     widget_layout = QtWidgets.QHBoxLayout(widget)
     widget_layout.setContentsMargins(2, 2, 2, 2)
     widget_layout.setSpacing(2)
@@ -875,16 +875,16 @@ class ItemDictionaryWidget(QtWidgets.QFrame):
 
         col_1_textbox = QtWidgets.QTextEdit(col_1_value, item_widget)
         col_1_textbox.textChanged.connect(self.value_changed_event)
-        col_1_textbox.setFixedHeight(25)
+        col_1_textbox.setFixedHeight(27)
         item_layout.addWidget(col_1_textbox)
 
         col_2_textbox = QtWidgets.QTextEdit(col_2_value, item_widget)
         col_2_textbox.textChanged.connect(self.value_changed_event)
-        col_2_textbox.setFixedHeight(25)
+        col_2_textbox.setFixedHeight(27)
         item_layout.addWidget(col_2_textbox)
 
         remove_button = QtWidgets.QPushButton('X', item_widget)
-        remove_button.setFixedSize(15, 25)
+        remove_button.setFixedSize(15, 27)
         item_layout.addWidget(remove_button)
         remove_button.clicked.connect(lambda: self.remove_item(item_id))
 
@@ -965,7 +965,7 @@ class RecordingManagerGUI(QtWidgets.QMainWindow):
 
         self.central_widget = QtWidgets.QWidget(self)
         self.button_widget = QtWidgets.QWidget(self.central_widget)
-        self.button_widget.setMaximumHeight(190)
+        self.button_widget.setMaximumHeight(220)
         self.general_settings_widget = QtWidgets.QWidget(self.central_widget)
         self.current_recording_file_path = QtWidgets.QLabel('Current recording folder:', self.central_widget)
         self.current_recording_file_path.setFixedHeight(40)
@@ -1020,6 +1020,7 @@ class RecordingManagerGUI(QtWidgets.QMainWindow):
         self.button_layout.addWidget(self.start_recording_button, 2, 1)
         self.button_layout.addWidget(self.stop_recording_button, 3, 1)
         self.button_layout.setHorizontalSpacing(40)
+        self.button_layout.setVerticalSpacing(2)
 
         # Add settings to general settings widget
         self.general_settings_layout = QtWidgets.QVBoxLayout(self.general_settings_widget)

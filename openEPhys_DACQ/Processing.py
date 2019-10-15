@@ -15,6 +15,7 @@ from multiprocessing import Process
 
 import numpy as np
 
+from openEPhys_DACQ.package_configuration import package_path
 from openEPhys_DACQ import NWBio
 from openEPhys_DACQ.createAxonaData import createAxonaData_for_NWBfile
 from openEPhys_DACQ import HelperFunctions as hfunct
@@ -407,7 +408,7 @@ def clarify_OpenEphysDataPaths(OpenEphysDataPaths):
             if os.path.isfile(new_path):
                 OpenEphysDataPaths[ndata] = new_path
             else:
-                raise ValueError('The following path does not lead to a NWB data file:\n' + OpenEphysDataPath)
+                raise ValueError('The following path does not lead to a data file:\n' + OpenEphysDataPath)
 
     return OpenEphysDataPaths
 
@@ -664,7 +665,7 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
         preloaded_datas.append(preloaded_data)
     # Start matlab engine
     eng = matlab.engine.start_matlab()
-    eng.cd('openEPhys_DACQ/KiloSortScripts')
+    eng.cd(os.path.join(package_path, 'Utils', 'KiloSortScripts'))
     # Work through each tetrode
     for n_tet, tetrode_nr in enumerate(tetrode_nrs):
         print('Applying KiloSort to tetrode ' + str(n_tet + 1) + '/' + str(len(tetrode_nrs)))
@@ -730,18 +731,17 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
     return spike_datas
 
 
-def main(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, 
-         noise_cut_off=1000, threshold=50, make_AxonaData=False, 
-         axonaDataArgs=(None, False), max_clusters=31, 
-         force_position_processing=False, pos_data_processing_kwargs={}):
+def processing(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, 
+               noise_cut_off=1000, threshold=50, make_AxonaData=False, 
+               axonaDataArgs=(None, False), max_clusters=31, 
+               force_position_processing=False, pos_data_processing_kwargs={}):
     # Ensure correct format for data paths
-    try: # Python 3 workaround
-        basestring
-    except NameError:
-        basestring = str
-    if isinstance(OpenEphysDataPaths, basestring):
+    if isinstance(OpenEphysDataPaths, str):
         OpenEphysDataPaths = [OpenEphysDataPaths]
     OpenEphysDataPaths = clarify_OpenEphysDataPaths(OpenEphysDataPaths)
+    for fpath in OpenEphysDataPaths:
+        if not NWBio.check_if_open_ephys_nwb_file(fpath):
+            raise ValueError('Specified path {} does not lead to expected filetype.'.format(fpath))
     # Create ProcessedPos if not yet available
     for OpenEphysDataPath in OpenEphysDataPaths:
         if force_position_processing:
@@ -800,9 +800,9 @@ def process_data_tree(root_path, only_keep_processor=None, downsample=False, del
                     AxonaDataExists = any(['AxonaData' in subdir for subdir in subdirList])
                     if not AxonaDataExists:
                         print(hfunct.time_string() + ' Applying KlustaKwik on ' + fpath)
-                        main(fpath, processing_method='klustakwik',
-                             noise_cut_off=1000, threshold=50, make_AxonaData=True,
-                             axonaDataArgs=(None, False), max_clusters=max_clusters)
+                        processing(fpath, processing_method='klustakwik',
+                                   noise_cut_off=1000, threshold=50, make_AxonaData=True,
+                                   axonaDataArgs=(None, False), max_clusters=max_clusters)
                     if not (only_keep_processor is None):
                         # Get all processor paths in this file
                         processor_paths = NWBio.get_all_processor_paths(fpath)
@@ -833,7 +833,7 @@ def process_data_tree(root_path, only_keep_processor=None, downsample=False, del
                             print('Warning', 'No raw data to be deleted in ' + fpath)
 
 
-if __name__ == '__main__':
+def main():
     # Input argument handling and help info
     parser = argparse.ArgumentParser(description='Apply KlustaKwik and export into Axona format.')
     parser.add_argument('paths', type=str, nargs='*', 
@@ -882,6 +882,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # Get paths to recording files
     OpenEphysDataPaths = args.paths
+    if len(OpenEphysDataPaths) == 0:
+        raise ValueError('Paths to file(s) required. Use --help for more info.')
     # If reprocessing tracking in directory is requested, just do that
     if args.reprocess_tracking_in_directory:
         if len(OpenEphysDataPaths) > 1:
@@ -963,6 +965,10 @@ if __name__ == '__main__':
             show_output = False
         axonaDataArgs = (pixels_per_metre, show_output)
         # Run the script
-        main(OpenEphysDataPaths, processing_method, channel_map, noise_cut_off, 
-             threshold, make_AxonaData, axonaDataArgs, max_clusters, 
-             force_position_processing, pos_data_processing_kwargs)
+        processing(OpenEphysDataPaths, processing_method, channel_map, noise_cut_off, 
+                   threshold, make_AxonaData, axonaDataArgs, max_clusters, 
+                   force_position_processing, pos_data_processing_kwargs)
+
+
+if __name__ == '__main__':
+    main()

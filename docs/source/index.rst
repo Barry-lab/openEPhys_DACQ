@@ -6,7 +6,29 @@ This is a system for automated experiments acquiring neural data using `OpenEhys
 
 The original purpose for this system was to collect neural data from rodents performing a navigational task in a large environment.
 
-The github page for this repository: https://github.com/Barry-lab/openEPhys_DACQ
+Installation
+^^^^^^^^^^^^
+
+Installation of the Python package is straightforward:
+
+.. code-block:: none
+    
+    pip install openEPhys_DACQ
+    
+    openEPhys_Configuration  # Starts package configuration script
+
+For full functionality, the package has dependencies beyond Python repositories:
+
+- OpenEphysGUI for neural data acquisition
+- Kilosort and/or KlustaKwik for spike sorting
+- Raspberry Pis for video recording, tracking and task reward systems
+
+For detailed instructions on how to set everything up, follow the :ref:`installationInstructions`.
+
+GitHub repository
+^^^^^^^^^^^^^^^^^
+
+https://github.com/Barry-lab/openEPhys_DACQ
 
 Features
 ========
@@ -52,12 +74,14 @@ System overview and the user manual
 
 In depth description of the system is in the :ref:`userManual_SystemOverview` section of the :ref:`userManual`
 
-Installation
-============
+.. _installationInstructions:
 
-This document details every step required for setting up an Ubuntu PC for electrophysiological data collection using `OpenEhysGUI <https://github.com/open-ephys/plugin-GUI>`_, separate tracking system using Raspberry Pis and two different Rasperry Pi based reward modules. The instructions detail every single step, every line of code required to get things running. Therefore, it is definitely painfully long to work through for an advanced user, if not amusing at times. The reason for such detail is that anyone could set it up.
+Installation instructions
+=========================
 
-Occasionally the document includes instructions in double brackets, where the steps may not me necessary but were made by me during the setup process. E.g. *((Do this, in case otherwise something will not work later on))*.
+This document details every step required for setting up an Ubuntu PC for electrophysiological data collection using `OpenEhysGUI <https://github.com/open-ephys/plugin-GUI>`_, separate tracking system using Raspberry Pis and two different Rasperry Pi based reward modules. The instructions detail every single step, every line of code required to get things running. Such detail is provided so that anyone could set it up, even those who have never used Linux before.
+
+Occasionally the document includes instructions in double brackets, where it is not entirely clear if the step is important, but best to follow the instructions. E.g. *((Do this, in case otherwise something will not work later on))*.
 
 All terminal commands written here should be run while in home directory, unless instructed to call on a specific file. This ensures a sensible folder structure is created.
 

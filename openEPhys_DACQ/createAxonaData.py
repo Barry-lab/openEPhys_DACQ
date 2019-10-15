@@ -14,6 +14,8 @@ import openEPhys_DACQ.HelperFunctions as hfunct
 from datetime import datetime
 import argparse
 
+from openEPhys_DACQ.package_configuration import package_path
+
 
 def AxonaDataEEG_SamplingRate():
     return 250
@@ -523,7 +525,7 @@ def write_clusterIDs_in_CLU_format(clusterIDs, cluFileName):
         file.writelines(lines)
 
 def write_set_file(setFileName, new_values_dict):
-    sourcefile = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'SetFileBase.set')
+    sourcefile = os.path.join(package_path, 'Utils', 'SetFileBase.set')
     # Read in base .set file
     with open(sourcefile, 'rb') as file:
         lines = file.readlines()
@@ -865,8 +867,8 @@ def createAxonaData(AxonaDataPath, spike_data, data_time_edges, posdata=None,
         subprocess.Popen(['xdg-open', AxonaDataPath])
     print('Finished creating AxonaData.')
 
-# The following is the default ending for a QtGui application script
-if __name__ == "__main__":
+
+def main():
     # Input argument handling and help info
     parser = argparse.ArgumentParser(description='Export data into Axona format.')
     parser.add_argument('paths', type=str, nargs='*', 
@@ -892,6 +894,8 @@ if __name__ == "__main__":
     OpenEphysDataPaths = args.paths
     if isinstance(OpenEphysDataPaths, str):
         OpenEphysDataPaths = [OpenEphysDataPaths]
+    if len(OpenEphysDataPaths) == 0:
+        raise ValueError('Paths to folder(s) required. Use --help for more info.')
     # If directories entered as paths, attempt creating path to file by appending experiment_1.nwb
     for ndata, OpenEphysDataPath in enumerate(OpenEphysDataPaths):
         if not os.path.isfile(OpenEphysDataPath):
@@ -956,3 +960,7 @@ if __name__ == "__main__":
                                               spike_name=spike_name, channel_map=channel_map, 
                                               eegChans=eegChans, pixels_per_metre=pixels_per_metre, 
                                               show_output=show_output, clustering_name=clustering_name)
+
+
+if __name__ == '__main__':
+    main()

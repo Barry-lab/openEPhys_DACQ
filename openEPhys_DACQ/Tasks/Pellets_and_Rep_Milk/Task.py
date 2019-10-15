@@ -3007,9 +3007,9 @@ class Core(object):
                 print('Closing Pellet FEEDER connections successful.')
         if hasattr(self, 'MilkRewardDevices'):
             if hasattr(self.MilkRewardDevices, 'close'):
-                print('Closing Pellet FEEDER connections...')
+                print('Closing Milk FEEDER connections...')
                 self.MilkRewardDevices.close()
-                print('Closing Pellet FEEDER connections successful.')
+                print('Closing Milk FEEDER connections successful.')
 
         # Close pygame engine
         close_pygame()

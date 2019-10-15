@@ -27,7 +27,7 @@ Fix slow shutdown issue
 
 This is an optional step, if this issue occurs with your PC setup. It may happen that after installation shutdown process is very slow, which you would notice as you restart your PC. In this case during shutdown, when you see Ubuntu loading logo, hit F12 on the keyboard. If over the next few minutes check if you see similar error messages to the following:
 
-.. code-block::
+.. code-block:: none
     
     ata2.00: exception Emask 0x0 SAct 0x0 SErr 0x0 action 0x6 frozen
     ata2.00: status: { DRDY}
@@ -360,67 +360,17 @@ Setup Recording PC for using Recording Manager
 
 This part describes how to set up the Recording PC to use the custom Python scripts and GUI that interfaces with the Raspberry Pis and handles the Open Ephys data.
 
-Install the dependencies for the scripts
-----------------------------------------
 
-Install the necessary packages with the following terminal commands:
+Installation of the Python package is straightforward:
 
 .. code-block:: none
     
-    sudo apt-get install python-qt4 python-dev python-pip python-scipy python-pygame python-psutil
-    sudo apt-get install python-opencv # Alternatively install from source, but not necessary
-    sudo pip install paramiko
-    sudo pip install pyzmq # This assumes you have already installed ZMQ for OpenEphys GUI
-    pip install h5py # This assumes you have already installed libhdf5-serial-dev for OpenEphys GUI
+    pip install openEPhys_DACQ
+    
+    openEPhys_Configuration  # Starts package configuration script
 
-Additionally install ``pyqtgraph`` latest version from their website (Here 0.10.0-1 was used). Go to `pyqtgraph website <www.pyqtgraph.org>`_ and download the latest version of Debian/Ubuntu package. Install it by right click on the downloaded *.deb* file -> Open With -> GDebi Package Installer. Click on Install button.
-
-Create folder structure in the home folder with the following terminal commands:
+To start the Recording Manager, use terminal command:
 
 .. code-block:: none
     
-    cd ~/
-    mkdir RecordingData
-    cd RecordingData
-    mkdir RecordingManagerData
-
-Obtain Barry-lab repository ``openEPhys_DACQ`` manually and place them it in your home folder in a folder of the same name, or run the following terminal command:
-
-.. code-block:: none
-    
-    cd ~/
-    git clone https://github.com/Barry-lab/openEPhys_DACQ
-
-You will need a github.com username and password that has access to the repository.
-
-Make changes in the scripts to suit your PC
--------------------------------------------
-
-Open ``~/openEPhys_DACQ/RecordingManager.py`` with text editor like SublimeText and edit the following lines in the *RecordingManager* class *__init__* function:
-
-.. code-block:: none
-    
-    # Set GUI environment
-    self.scripts_root = os.path.expanduser('~') + '/openEPhys_DACQ'
-    self.pt_root_folder.setPlainText(os.path.expanduser('~') + '/RecordingData')
-    self.file_server_path = '/media/qnap/room418'
-
-, such that they would reflect the folder structure on your Recording PC. Note that ``os.path.expanduser('~')`` refers to your Home folder. If you set everything up as instructed in the documentation, nothing but file server path should need changing.
-
-Similarly as you did for the OpenEphysGUI, you can create a shortcut for RecordingManager.py application in the home folder. Use terminal command ``gedit ~/RecordingManager`` to create the file and add these lines to the file:
-
-.. code-block:: none
-    
-    #!/bin/bash
-    cd ~/openEPhys_DACQ
-    python RecordingManager.py
-
-Run this terminal command to make the file executable
-
-.. code-block:: none
-    
-    chmod +x ~/RecordingManager
-
-You can now run RecordingManager.py by opening the terminal (by default it starts in your home folder) and typing in command ``./RecordingManager``.
-
-Now the Recording PC is ready to use the Python scripts for managing Open Ephys recordings and Raspberry Pis, if the networking and Raspberry Pis are set up as well. To do this, follow this guide : :ref:`cameraRPiSetup`.
+    openEPhys_RecordingManager
