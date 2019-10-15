@@ -28,7 +28,7 @@ Fix slow shutdown issue
 This is an optional step, if this issue occurs with your PC setup. It may happen that after installation shutdown process is very slow, which you would notice as you restart your PC. In this case during shutdown, when you see Ubuntu loading logo, hit F12 on the keyboard. If over the next few minutes check if you see similar error messages to the following:
 
 .. code-block::
-
+    
     ata2.00: exception Emask 0x0 SAct 0x0 SErr 0x0 action 0x6 frozen
     ata2.00: status: { DRDY}
     ata2.00: revalidation failed (errno=-5)
@@ -44,23 +44,23 @@ This is a temoporary fix. It could be a hardware configuration incompatibility w
 Connect to the local network
 ----------------------------
 
-It may be possible to connect to the local network automatically by connecting the PC to a network socket or simply by selecting a WiFi network.
+The Recording PC will need to be connected to the internet for installing software, even if not for later work. Setting up networking to connect to the internet can influence how the associated devices (Camera and other Raspberry Pis) can be connected to the Recording PC. This manual describes how to achieve this, assuming that the networking on the Recording PC is set up in the ``/etc/network/interfaces`` file, as described below.
 
-If may be necessary to manually assign network settings. This can be done by editing ``/etc/network/interfaces`` with the terminal command ``sudo gedit /etc/network/interfaces``. An example file will look like this:
+Recording PC should be connected to the internet by editing ``/etc/network/interfaces`` with the terminal command ``sudo gedit /etc/network/interfaces``. An example file will look like this:
 
 .. code-block:: none
-
-    # interfaces(5) file used by ifup(8) and ifdown(8)
+    
+    # Static IP for internet connection
     auto lo
     iface lo inet loopback
-    auto enp2s0
-    iface enp2s0 inet static
-    address 128.40.50.165
+    auto enp0s31f6
+    iface enp0s31f6 inet static
+    address 128.40.57.144
     netmask 255.255.255.0
     gateway 128.40.50.245
-    dns-nameservers 128.40.200.1 128.40.200.2 8.8.4.4 8.8.8.8
+    dns-nameservers 144.82.250.1 193.160.250.1
 
-You can get the correct values for these numbers from the network administrator. The value `enp2s0` here is the network adapter name. This is usually the first adapter in the output for the terminal commant ``ifconfig``.
+You can get the correct values for these numbers from the network administrator. The value `enp0s31f6` here is the network adapter name. This is usually the first adapter in the output for the terminal commant ``ifconfig``.
 
 .. _UpdateTheSystem:
 
@@ -70,7 +70,7 @@ Update the system
 Use the terminal commands:
 
 .. code-block:: none
-
+    
     sudo apt-get update        # Fetches the list of available updates
     sudo apt-get upgrade       # Strictly upgrades the current packages
     sudo apt-get dist-upgrade  # Installs updates (new ones)
@@ -108,7 +108,7 @@ Use `this guide to mapping a network drive <http://ubuntuhandbook.org/index.php/
 Here are the steps using as an example a server named QNAP:
 
 .. code-block:: none
-
+    
     sudo apt-get install cifs-utils 
     sudo mkdir /media/QNAP
     sudo gedit /etc/nsswitch.conf
@@ -116,19 +116,19 @@ Here are the steps using as an example a server named QNAP:
 Find the line looks like:
 
 .. code-block:: none
-
+    
     hosts:          files mdns4_minimal [NOTFOUND=return] dns
 
 change it into:
 
 .. code-block:: none
-
+    
     hosts:          files mdns4_minimal [NOTFOUND=return] wins dns
 
 Run below terminal command so that your Ubuntu can resolve Windows computer name on a DHCP network.
 
 .. code-block:: none
-
+    
     sudo apt-get install libnss-winbind winbind
 
 Reboot Ubuntu
@@ -136,21 +136,21 @@ Reboot Ubuntu
 Enter your username and credentials into a text file ``.smbcredentials`` using gedit with terminal command ``gedit ~/.smbcredentials`` as follows:
 
 .. code-block:: none
-
+    
     username=enter_your_networkdrive_username_here
     password=enter_your_networkdrive_password_here
 
 Now get values for your **gid** and **uid** by typing into terminal ``id enter_your_pc_username_here``. Use these values to edit ``fstab`` file by typing into terminal:
 
 .. code-block:: none
-
+    
     sudo cp /etc/fstab /etc/fstab_old
     sudo gedit /etc/fstab
 
 Add to the end of this file as a single line the following after modifying it to your configuration:
 
 .. code-block:: none
-
+    
     //192.168.1.5/share /media/QNAP cifs credentials=/home/enter_your_pc_username_here/.smbcredentials,iocharset=utf8,gid=1000,uid=1000,file_mode=0777,dir_mode=0777 0 0
 
 - 192.168.1.5/data - should be replaced by the IP of your server and the shared folder if applicable.
@@ -163,7 +163,7 @@ Save the file.
 You can now mount the drive with terminal command:
 
 .. code-block:: none
-
+    
     sudo mount -a
 
 This may need to be run each time you reboot.
@@ -200,13 +200,13 @@ Install QT Designer for editing GUIs
 Install Qt4 and Qt4 Designer with the following terminal command:
 
 .. code-block:: none
-
+    
     sudo apt-get install python-qt4 pyqt4-dev-tools qt4-designer
 
 Now you can edit the *.ui* files with QtDesigner by opening it from Dash, as you search for ``designer``. Within the application you can open existing *.ui* files, edit and save them. You will then have to compile the *.ui* file to a python script using pyuic4. For example, if you had saved your design as ``design.ui``, then you can use the following terminal command in the directory where your file is:
 
 .. code-block:: none
-
+    
     pyuic4 design.ui -o design.py
 
 With the existing scripts, such as RecordingManager.py, the naming convention for the *.ui* and *.py* files is as in this example.
@@ -224,7 +224,7 @@ Install convenient brightness controller
 During experiments you may wish to reduce any excess illumination coming from the computer screen(s). Install `Brightness Controller <http://lordamit.github.io/Brightness/>`_ to tune screen brightness from inside Ubuntu, instead of using the monitor controls. To do this, use the following terminal commands:
 
 .. code-block:: none
-
+    
     sudo add-apt-repository ppa:apandada1/brightness-controller
     sudo apt-get update
     sudo apt-get install brightness-controller
@@ -244,7 +244,7 @@ OpenEphys plugin-GUI is being developed rapidly, and the latest developmental ve
 To install the latest version of **plugin-GUI** from `OpenEphys github <https://github.com/open-ephys>`_ run the required scripts in your home folder:
 
 .. code-block:: none
-
+    
     mkdir Programs
     cd Programs
     mkdir OpenEphysGUI
@@ -260,13 +260,13 @@ To install the latest version of **plugin-GUI** from `OpenEphys github <https://
 Install More dependencies with terminal commands:
 
 .. code-block:: none
-
+    
     sudo apt-get install libtool pkg-config build-essential autoconf automake libudev0:i386
 
 Install libsodium with terminal commands:
 
 .. code-block:: none
-
+    
     git clone git://github.com/jedisct1/libsodium.git
     cd libsodium
     ./autogen.sh
@@ -278,7 +278,7 @@ Install libsodium with terminal commands:
 Install More dependencies with terminal commands:
 
 .. code-block:: none
-
+    
     sudo apt-get install libxrandr-dev # To fix a compilation error in JUCE library
     sudo apt-get install libzmq3-dev # ZeroMQ version 3 is required
     sudo apt-get install libhdf5-serial-dev # HDF version 1.8.12, or higher, is required
@@ -297,13 +297,13 @@ Install Open Ephys
 First you need to add some text to the code that compiles the main GUI  and also the one that compiles the plug-ins. Open the first file with the terminal command ``gedit ~/Programs/OpenEphysGUI/plugin-GUI/Builds/Linux/Makefile``. Find the place in the file, where CPPFLAGS are defined, such as:
 
 .. code-block:: none
-
+    
     CPPFLAGS := $(DEPFLAGS) -D "LINUX=1" -D "DEBUG=1" -D "_DEBUG=1" -D "JUCER_LINUX_MAKE_7346DA2A=1" -D "JUCE_APP_VERSION=0.4.1" -D
 
 There should be 2 such occurances. They might not be exactly identical to this example, but ``CPPFLAGS :=`` should definitely be there. Add ``-D "JUCE_DISABLE_NATIVE_FILECHOOSERS=1"`` to the list of CPPFLAGS. See the below for an example how the above code was changed:
 
 .. code-block:: none
-
+    
     CPPFLAGS := $(DEPFLAGS) -D "LINUX=1" -D "JUCE_DISABLE_NATIVE_FILECHOOSERS=1" -D "DEBUG=1" -D "_DEBUG=1" -D "JUCER_LINUX_MAKE_7346DA2A=1" -D "JUCE_APP_VERSION=0.4.1" -D
 
 Save the edited Makefile and then also edit the Makefile.plugins file which you can open with the terminal command ``gedit ~/Programs/OpenEphysGUI/plugin-GUI/Builds/Linux/Makefile.plugins``. Make the same changes.
@@ -311,7 +311,7 @@ Save the edited Makefile and then also edit the Makefile.plugins file which you 
 You are now ready to compile Open Ephys. Do this with the following terminal commands:
 
 .. code-block:: none
-
+    
     cd ~/Programs/OpenEphysGUI/plugin-GUI/Builds/Linux/
     make
     make -f Makefile.plugins
@@ -319,7 +319,7 @@ You are now ready to compile Open Ephys. Do this with the following terminal com
 Create a shortcut for OpenEphys application in the home folder. Use terminal command ``gedit ~/OpenEphysGUI`` to create the file and add these lines to the file to link it to the compiled application:
 
 .. code-block:: none
-
+    
     #!/bin/bash
     cd ~/Programs/OpenEphysGUI/plugin-GUI/Builds/Linux/build
     ./open-ephys
@@ -327,7 +327,7 @@ Create a shortcut for OpenEphys application in the home folder. Use terminal com
 Run this terminal command to make the file executable
 
 .. code-block:: none
-
+    
     chmod +x ~/OpenEphysGUI
 
 You can now run Open Ephys GUI by opening the terminal (by default it starts in your home folder) and typing in command ``./OpenEphysGUI``.
@@ -366,7 +366,7 @@ Install the dependencies for the scripts
 Install the necessary packages with the following terminal commands:
 
 .. code-block:: none
-
+    
     sudo apt-get install python-qt4 python-dev python-pip python-scipy python-pygame python-psutil
     sudo apt-get install python-opencv # Alternatively install from source, but not necessary
     sudo pip install paramiko
@@ -378,7 +378,7 @@ Additionally install ``pyqtgraph`` latest version from their website (Here 0.10.
 Create folder structure in the home folder with the following terminal commands:
 
 .. code-block:: none
-
+    
     cd ~/
     mkdir RecordingData
     cd RecordingData
@@ -387,7 +387,7 @@ Create folder structure in the home folder with the following terminal commands:
 Obtain Barry-lab repository ``openEPhys_DACQ`` manually and place them it in your home folder in a folder of the same name, or run the following terminal command:
 
 .. code-block:: none
-
+    
     cd ~/
     git clone https://github.com/Barry-lab/openEPhys_DACQ
 
@@ -399,7 +399,7 @@ Make changes in the scripts to suit your PC
 Open ``~/openEPhys_DACQ/RecordingManager.py`` with text editor like SublimeText and edit the following lines in the *RecordingManager* class *__init__* function:
 
 .. code-block:: none
-
+    
     # Set GUI environment
     self.scripts_root = os.path.expanduser('~') + '/openEPhys_DACQ'
     self.pt_root_folder.setPlainText(os.path.expanduser('~') + '/RecordingData')
@@ -410,7 +410,7 @@ Open ``~/openEPhys_DACQ/RecordingManager.py`` with text editor like SublimeText 
 Similarly as you did for the OpenEphysGUI, you can create a shortcut for RecordingManager.py application in the home folder. Use terminal command ``gedit ~/RecordingManager`` to create the file and add these lines to the file:
 
 .. code-block:: none
-
+    
     #!/bin/bash
     cd ~/openEPhys_DACQ
     python RecordingManager.py
@@ -418,7 +418,7 @@ Similarly as you did for the OpenEphysGUI, you can create a shortcut for Recordi
 Run this terminal command to make the file executable
 
 .. code-block:: none
-
+    
     chmod +x ~/RecordingManager
 
 You can now run RecordingManager.py by opening the terminal (by default it starts in your home folder) and typing in command ``./RecordingManager``.

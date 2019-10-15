@@ -94,17 +94,42 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#software-setup">Software setup</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#installing-raspberry-pi-os-raspbian">Installing Raspberry Pi OS: Raspbian</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#connect-raspberry-pi-to-the-internet">Connect Raspberry Pi to the internet</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#update-all-software">Update all software</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install-simple-to-install-packages">Install simple to install packages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#connect-raspberry-pi-to-the-internet">Connect Raspberry Pi to the internet</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#use-internet-connection-through-recording-pc">Use internet connection through Recording PC</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#use-network-connection-instead-of-recording-pc">Use network connection instead of Recording PC</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="#enable-camera-module">Enable camera module</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install-opencv">Install OpenCV</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#install-zeromq">Install ZeroMQ</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#install-software">Install software</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#update-existing-software">Update existing software</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#install-dependencies">Install dependencies</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#create-python-3-virtual-environment">Create Python 3 virtual environment</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#verify-python-3-virtual-environment">Verify Python 3 virtual environment</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#install-packages-in-python-3-virtual-environment">Install packages in Python 3 virtual environment</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#compile-and-install-opencv-from-source">Compile and install OpenCV from source</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#increasing-swap">Increasing SWAP</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#installing-opencv">Installing OpenCV</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#decreasing-swap">Decreasing SWAP</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#setting-up-raspberry-pi-networking-with-recording-pc">Setting up Raspberry Pi networking with recording PC</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#configuring-raspberry-pi">Configuring Raspberry Pi</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#configuring-the-recording-pc">Configuring the Recording PC</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#choosing-correct-ip-addresses">Choosing correct IP addresses</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#configuring-raspberry-pi-connectivity-to-recording-pc">Configuring Raspberry Pi connectivity to Recording PC</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#enable-ssh">Enable SSH</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#revert-any-changes-made-to-default-network-settings">Revert any changes made to default network settings</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#set-up-static-ip-address-with-recording-pc">Set up static IP address with Recording PC</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#set-up-internet-access-via-recording-pc">Set up internet access via Recording PC</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#configuring-the-recording-pc-networking-with-raspberry-pis">Configuring the Recording PC networking with Raspberry Pis</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#create-an-internal-network-with-raspberry-pis">Create an internal network with Raspberry Pis</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#sharing-internet-connection-from-recording-pc-to-internal-raspberry-pi-network">Sharing internet connection from Recording PC to internal Raspberry Pi network</a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="#configure-ssh-keys-to-avoid-password-requests">Configure SSH keys to avoid Password requests</a></li>
 </ul>
 </li>
@@ -181,21 +206,43 @@
   <div class="section" id="camera-and-globalclock-raspberry-pi-setup">
 <span id="camerarpisetup"></span><h1>Camera and GlobalClock Raspberry Pi setup<a class="headerlink" href="#camera-and-globalclock-raspberry-pi-setup" title="Permalink to this headline">¶</a></h1>
 <p>The camera system is synchronised with the OpenEphys Acquisition board recording using regular TTL pulses from GlobalClock Raspberry Pi. This allows integrating any number of cameras into the system.</p>
+<p>The final setup</p>
+<ul class="simple">
+<li><dl class="simple">
+<dt>GlobalClock RPi</dt><dd><ul>
+<li><p>Connected to Recording PC over ethernet</p></li>
+<li><p>Connected to send TTL pulses to OpenEphys Acquisition Board and all the Camera RPis.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Camera RPis (as many as required)</dt><dd><ul>
+<li><p>Each with a camera</p></li>
+<li><p>Connected to Recording PC over ethernet</p></li>
+<li><p>Reading TTL pulses sent by GlobalClock RPi</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
 <p>The following procedures are identical for GlobalClock RPi and Camera RPis, unless specified otherwise.</p>
 <p>Most efficient way to set up multiple RPis is to set up a single Camera RPi using the instructions below and then make copies of it’s SD card for other RPis using this guide: <a class="reference internal" href="#duplicatingrpis"><span class="std std-ref">Making copies of Raspberry Pis</span></a>.</p>
-<p>This tutorial and related python modules are based on <a class="reference external" href="https://www.raspberrypi.org/products/raspberry-pi-3-model-b/">Raspberry Pi 3 Model B</a> with <a class="reference external" href="https://www.raspberrypi.org/products/camera-module-v2/">Camera Module V2</a>.</p>
+<p>This tutorial and related python modules are based on <a class="reference external" href="https://www.raspberrypi.org/products/raspberry-pi-4-model-b/">Raspberry Pi 4 Model B</a> with <a class="reference external" href="https://www.raspberrypi.org/products/camera-module-v2/">Camera Module V2</a>.</p>
 <div class="section" id="hardware-setup">
 <h2>Hardware setup<a class="headerlink" href="#hardware-setup" title="Permalink to this headline">¶</a></h2>
 <div class="section" id="assembling-raspberry-pi-camera-module">
 <h3>Assembling Raspberry Pi Camera Module<a class="headerlink" href="#assembling-raspberry-pi-camera-module" title="Permalink to this headline">¶</a></h3>
 <p>Installing a Camera Module to GlobalClock RPi is not necessary.</p>
-<p>The Raspberry Pi (RPi) Camera Module is usually bought and fitted separately to the RPi board. Preferably the camera should be used with HDMI cable extension sold on <a class="reference external" href="https://shop.pimoroni.com/products/pi-camera-hdmi-cable-extension">Pimoroni website</a>. This allows the camera to be positioned distant from the RPi and the angle manipulated more comfortably. Instructions for its assembly should be available from the provider.</p>
-<p>Regardless of whether the HDMI cable extension is used or not, a board with the flat camera cable attached will need to be assembled to the RPi board. Attach the flat cable to the interface right next to the HDMI output. Make sure the metal contacts on the cable touch the metal contact on the RPi interface. See image below. Push down on the clip on the interface to mechanically secure the connection.</p>
+<p>The Raspberry Pi (RPi) Camera Module is usually bought and fitted separately to the RPi board. The camera can be used with HDMI cable extension sold on <a class="reference external" href="https://shop.pimoroni.com/products/pi-camera-hdmi-cable-extension">Pimoroni website</a>. This allows the camera to be positioned distant from the RPi and the angle manipulated more comfortably. Instructions for its assembly should be available from the provider.</p>
+<p>Regardless of whether the HDMI cable extension is used or not, the flat camera cable will need to be assembled to the RPi board, as per manufacturers guidelines. Attach the flat cable to the interface right next to the HDMI output. Make sure the metal contacts on the cable touch the metal contact on the RPi interface. Push down on the clip on the interface to mechanically secure the connection.</p>
 </div>
 <div class="section" id="wiring-for-globalclock-ttl-pulses">
 <h3>Wiring for GlobalClock TTL pulses<a class="headerlink" href="#wiring-for-globalclock-ttl-pulses" title="Permalink to this headline">¶</a></h3>
 <p><a class="reference external" href="https://uk.rs-online.com/web/p/breadboard-jumper-wire-kits/7916454/">Standard GPIO suitable breadboard jumper wires</a> and a breaboard can be used to conveniently connect Camera and GlobalClock Raspberry Pis and a BNC connector for OpenEphys into a single circuit for synchronization with the GlobalClock TTL pulses.</p>
-<p>By default python scripts expect the BCM pin 18 is used on all devices, but this is especially important for the GlobalClock RPi, which can only used a limited selection of RPi pins for producing its very regular signal. See <a class="reference external" href="https://pinout.xyz/">https://pinout.xyz/</a> for information on which pin is the BCM 18 pin on your Raspberry Pi. Any ground pin on RPi can be used for this circuit. See below for wiring diagram as well as an image of actual setup with GlobalClock RPi and 4 Camera RPis. Any number of Camera RPis can be added to the circuit.</p>
+<p>BCM pin 18 must be used for signal channel on all devices, as it is hardcoded in the Python scripts. This is especially important for the GlobalClock RPi, which can only used a limited selection of RPi pins for producing its very regular signal. See <a class="reference external" href="https://pinout.xyz/">https://pinout.xyz/</a> for information on which pin is the BCM 18 pin on your Raspberry Pi.</p>
+<p>Any ground pin on RPi can be used for the ground in this circuit.</p>
+<p>See below for wiring diagram as well as an image of actual setup with GlobalClock RPi and 4 Camera RPis. Any number of Camera RPis can be added to the circuit.</p>
 <img alt="_images/GlobalClockWiring.jpg" src="_images/GlobalClockWiring.jpg" />
 </div>
 </div>
@@ -203,17 +250,28 @@
 <h2>Software setup<a class="headerlink" href="#software-setup" title="Permalink to this headline">¶</a></h2>
 <div class="section" id="installing-raspberry-pi-os-raspbian">
 <span id="installingraspbian"></span><h3>Installing Raspberry Pi OS: Raspbian<a class="headerlink" href="#installing-raspberry-pi-os-raspbian" title="Permalink to this headline">¶</a></h3>
-<p>Download <strong>Raspbian Stretch Lite</strong> (Here used version kernel version 4.14) from <a class="reference external" href="ttps://www.raspberrypi.org/downloads/raspbian/">Raspberry website</a>. Unpack the downloaded <em>.zip</em> file with <code class="docutils literal notranslate"><span class="pre">Archive</span> <span class="pre">Manager</span></code> to get access to the <em>.img</em> file.</p>
+<p>Download <strong>Raspbian Buster Lite</strong> from <a class="reference external" href="https://www.raspberrypi.org/downloads/raspbian/">Raspberry website</a>. Unpack the downloaded <em>.zip</em> file with <code class="docutils literal notranslate"><span class="pre">Archive</span> <span class="pre">Manager</span></code> to get access to the <em>.img</em> file.</p>
 <p>Download <strong>Etcher</strong> from this <a class="reference external" href="https://etcher.io/">website</a>. Unpack the downloaded <em>.zip</em> and run (double-click) the Etcher <em>.AppImage</em>. Select the Raspbian <em>.img</em> file and your inserted microSD card. Write the image (<em>Flash</em> button).</p>
 <p>Insert the microSD card into Raspberry Pi.</p>
 <p>Connect keyboard and monitor to Raspbery Pi.</p>
 </div>
 <div class="section" id="connect-raspberry-pi-to-the-internet">
 <h3>Connect Raspberry Pi to the internet<a class="headerlink" href="#connect-raspberry-pi-to-the-internet" title="Permalink to this headline">¶</a></h3>
-<p>It is not important how the RPi is connected to the internet, but below is one possible set of instructions to follow.</p>
+<p>It is not important how the RPi is connected to the internet, but below is are two options.</p>
+<div class="section" id="use-internet-connection-through-recording-pc">
+<h4>Use internet connection through Recording PC<a class="headerlink" href="#use-internet-connection-through-recording-pc" title="Permalink to this headline">¶</a></h4>
+<p>Networking can be set up such that the Raspberry Pis have access to the internet through Recording PC. For this, make sure to follow these guides:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#rpinetworkingwithrecordingpc"><span class="std std-ref">Configuring Raspberry Pi connectivity to Recording PC</span></a></p></li>
+<li><p><a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span class="std std-ref">Connect to the local network</span></a></p></li>
+</ul>
+<p>If you follow these steps, then you will already be setting up networking exactly as is described in this guide and will be able to skip these steps after installing the software on the Raspberry Pi.</p>
+</div>
+<div class="section" id="use-network-connection-instead-of-recording-pc">
+<h4>Use network connection instead of Recording PC<a class="headerlink" href="#use-network-connection-instead-of-recording-pc" title="Permalink to this headline">¶</a></h4>
 <p>This tutorial instructs you to connect the RPi to the internet using the same network connection as is used for your recording PC, if you used the following method to set it up: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span class="std std-ref">Connect to the local network</span></a>. This means you will not be able to use the Recording PC to access the internet, while you work through the part “Install necessary libraries on Raspberry Pi”. If you can use another means of achieving network connection on the RPi, you can ignore steps in this part relating to <strong>interfaces</strong> file. Otherwise, connect the RPi to the network with the same ethernet cable as you were so far using on the Recording PC.</p>
-<p>Add <code class="docutils literal notranslate"><span class="pre">/etc/network/interfaces</span></code> (as set up on the Recording PC in this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span class="std std-ref">Connect to the local network</span></a>) to the RPi <em>Home folder</em> (<code class="docutils literal notranslate"><span class="pre">/home/pi/</span></code>) with a USB stick.</p>
-<p>You may need to edit the <code class="docutils literal notranslate"><span class="pre">interfaces</span></code> file in your RPi home folder. Run the terminal command <code class="docutils literal notranslate"><span class="pre">ifconfig</span></code> on the RPi and make a note of the first device on the list. Devices are aligned to the left column. This is likely <code class="docutils literal notranslate"><span class="pre">eth0</span></code>. Replace the device name <code class="docutils literal notranslate"><span class="pre">enp2s0</span></code> in the <code class="docutils literal notranslate"><span class="pre">interfaces</span> <span class="pre">file</span></code> with the device you saw in <code class="docutils literal notranslate"><span class="pre">ifconfig</span></code> output. You can use a simple text editor by double clicking on the <code class="docutils literal notranslate"><span class="pre">interfaces</span></code> file in your home folder, making the changes and saving it.</p>
+<p>Add <code class="docutils literal notranslate"><span class="pre">/etc/network/interfaces</span></code> (as set up on the Recording PC in this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span class="std std-ref">Connect to the local network</span></a>) to the RPi <em>Home folder</em> (<code class="docutils literal notranslate"><span class="pre">/home/pi/</span></code>) with a USB stick. This can also be done by copying the file onto the RPi SDcard whilst it is plugged into the Recording PC (you’ll find <code class="docutils literal notranslate"><span class="pre">/home/pi</span></code> on the <code class="docutils literal notranslate"><span class="pre">rootfs</span></code> partition).</p>
+<p>You may need to edit the <code class="docutils literal notranslate"><span class="pre">interfaces</span></code> file in your RPi home folder. Run the terminal command <code class="docutils literal notranslate"><span class="pre">ifconfig</span></code> on the RPi and make a note of the first device on the list. Devices are aligned to the left column. This is likely <code class="docutils literal notranslate"><span class="pre">eth0</span></code>. Replace the device name <code class="docutils literal notranslate"><span class="pre">enp2s0</span></code> in the <code class="docutils literal notranslate"><span class="pre">interfaces</span> <span class="pre">file</span></code> with the device you saw in <code class="docutils literal notranslate"><span class="pre">ifconfig</span></code> output. You can <code class="docutils literal notranslate"><span class="pre">nano</span></code> to do this with the following command <code class="docutils literal notranslate"><span class="pre">nano</span> <span class="pre">/home/pi/interfaces</span></code>. To close <code class="docutils literal notranslate"><span class="pre">nano</span></code> after making the changes, hit <code class="docutils literal notranslate"><span class="pre">Ctrl</span> <span class="pre">+</span> <span class="pre">X</span></code>, type <code class="docutils literal notranslate"><span class="pre">Y</span></code> and press <code class="docutils literal notranslate"><span class="pre">Enter</span></code>.</p>
 <p>Apply the newly created <code class="docutils literal notranslate"><span class="pre">interfaces</span></code> file in the Raspberry Pi with terminal commands:</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo mv /etc/network/interfaces /etc/network/interfaces_old        # Makes a copy of the original version
 sudo mv ~/interfaces /etc/network/interfaces       # Replaces the previous interfaces file
@@ -221,161 +279,253 @@ sudo mv ~/interfaces /etc/network/interfaces       # Replaces the previous inter
 </div>
 <p>Reboot the Raspberry Pi for network changes to take effect.</p>
 </div>
-<div class="section" id="update-all-software">
-<h3>Update all software<a class="headerlink" href="#update-all-software" title="Permalink to this headline">¶</a></h3>
-<p>Assuming RPi is connected to the internet, update the RPi with terminal commands:</p>
+</div>
+<div class="section" id="enable-camera-module">
+<h3>Enable camera module<a class="headerlink" href="#enable-camera-module" title="Permalink to this headline">¶</a></h3>
+<p>Camera needs to be enabled in RPi settings. You can do this by accessing RPi settings via terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">raspi-config</span></code> and choosing <em>Interfacing Options</em> with arrow keys and pressing Enter. Select <em>Camera</em> option and choose to <em>Enable</em> it. Reboot the RPi.</p>
+</div>
+<div class="section" id="install-software">
+<h3>Install software<a class="headerlink" href="#install-software" title="Permalink to this headline">¶</a></h3>
+<p>While GlobalClock RPi does not require most of the software installations required for Camera RPi, it is easiest to set up Camera RPi and then just make a copy of the SD card for the GlobalClock RPi.</p>
+<p>Most of the steps in this installation are to do with installing OpenCV and based on <a class="reference external" href="https://www.pyimagesearch.com/2019/09/16/install-opencv-4-on-raspberry-pi-4-and-raspbian-buster/">this tutorial</a>, with the important exception of calling the virtual environment <code class="docutils literal notranslate"><span class="pre">python3</span></code> as this is hardcoded in the Python scripts.</p>
+<p>For the following steps to work RPi must be connected to the internet.</p>
+<div class="section" id="update-existing-software">
+<h4>Update existing software<a class="headerlink" href="#update-existing-software" title="Permalink to this headline">¶</a></h4>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo apt-get update
 sudo apt-get upgrade -y
 sudo apt-get dist-upgrade -y
 </pre></div>
 </div>
 </div>
-<div class="section" id="install-simple-to-install-packages">
-<h3>Install simple to install packages<a class="headerlink" href="#install-simple-to-install-packages" title="Permalink to this headline">¶</a></h3>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>wget https://bootstrap.pypa.io/get-pip.py
-sudo python get-pip.py
-pip install numpy --user
-pip install picamera --user
-pip install psutil --user
-sudo apt-get install pigpio # This should instull the related python package
-sudo systemctl enable pigpiod
-sudo apt-get install python-scipy
+<div class="section" id="install-dependencies">
+<h4>Install dependencies<a class="headerlink" href="#install-dependencies" title="Permalink to this headline">¶</a></h4>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo apt-get install -y build-essential cmake pkg-config
+sudo apt-get install -y libjpeg-dev libtiff5-dev libjasper-dev libpng-dev
+sudo apt-get install -y libavcodec-dev libavformat-dev libswscale-dev libv4l-dev
+sudo apt-get install -y libxvidcore-dev libx264-dev
+sudo apt-get install -y libfontconfig1-dev libcairo2-dev
+sudo apt-get install -y libgdk-pixbuf2.0-dev libpango1.0-dev
+sudo apt-get install -y libgtk2.0-dev libgtk-3-dev
+sudo apt-get install -y libatlas-base-dev gfortran
+sudo apt-get install -y libhdf5-dev libhdf5-serial-dev libhdf5-103
+sudo apt-get install -y libqtgui4 libqtwebkit4 libqt4-test python3-pyqt5
+sudo apt-get install -y python3-dev
+
+sudo apt-get install pigpio
+sudo systemctl enable pigpiod  # Ensures pigpio is started each time with RPi
 </pre></div>
 </div>
 </div>
-<div class="section" id="enable-camera-module">
-<h3>Enable camera module<a class="headerlink" href="#enable-camera-module" title="Permalink to this headline">¶</a></h3>
-<p>Camera needs to be enabled in RPi settings. You can do this by accessing RPi settings via terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">raspi-config</span></code> and choosing <em>Interfacing Options</em> with arrow keys and pressing Enter. Select <em>Camera</em> option and choose to <em>Enable</em> it. Reboot the RPi.</p>
+<div class="section" id="create-python-3-virtual-environment">
+<h4>Create Python 3 virtual environment<a class="headerlink" href="#create-python-3-virtual-environment" title="Permalink to this headline">¶</a></h4>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>wget https://bootstrap.pypa.io/get-pip.py
+sudo python3 get-pip.py
+sudo rm -rf ~/.cache/pip
+sudo pip3 install virtualenv virtualenvwrapper
+</pre></div>
 </div>
-<div class="section" id="install-opencv">
-<h3>Install OpenCV<a class="headerlink" href="#install-opencv" title="Permalink to this headline">¶</a></h3>
-<p>Installing OpenCV is not necessary for GlobalClockRPi.</p>
-<p>The following steps are based on <a class="reference external" href="https://www.pyimagesearch.com/2017/10/09/optimizing-opencv-on-the-raspberry-pi/">this tutorial</a>.</p>
-<p>To install OpenCV, it is recommended to increase swap space. This will enable you to compile OpenCV with all four cores of the Raspberry Pi without the compile hanging due to memory exhausting. Alternatively avoid using <code class="docutils literal notranslate"><span class="pre">-j4</span></code> flag in the make command for OpenCV.</p>
+<p>Once both <code class="docutils literal notranslate"><span class="pre">virtualenv</span></code> and <code class="docutils literal notranslate"><span class="pre">virtualenvwrapper</span></code> have been installed, open up your <code class="docutils literal notranslate"><span class="pre">~/.bashrc</span></code>  with <code class="docutils literal notranslate"><span class="pre">nano</span> <span class="pre">~/.bashrc</span></code> and append the following files to the bottom of the file:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span># virtualenv and virtualenvwrapper
+export WORKON_HOME=$HOME/.virtualenvs
+export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3
+source /usr/local/bin/virtualenvwrapper.sh
+source /home/pi/.virtualenvs/python3/bin/activate
+</pre></div>
+</div>
+<p>To activate the changes, either reboot the Pi or run command <code class="docutils literal notranslate"><span class="pre">source</span> <span class="pre">~/.bashrc</span></code>.</p>
+<p>Finally, create a Python 3 virtual environment called <code class="docutils literal notranslate"><span class="pre">python3</span></code> with the following command:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>mkvirtualenv python3 -p python3
+</pre></div>
+</div>
+</div>
+<div class="section" id="verify-python-3-virtual-environment">
+<h4>Verify Python 3 virtual environment<a class="headerlink" href="#verify-python-3-virtual-environment" title="Permalink to this headline">¶</a></h4>
+<p>To verify that installation is working as intended, test if the following command activates the <code class="docutils literal notranslate"><span class="pre">python3</span></code> environment:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>source /home/pi/.virtualenvs/python3/bin/activate
+</pre></div>
+</div>
+<p>This is crucial as the Python scripts are hardcoded to use this command to enter the environment.</p>
+<p>You are already in the <code class="docutils literal notranslate"><span class="pre">python3</span></code> environment, if your terminal window prompt is <code class="docutils literal notranslate"><span class="pre">(python3)</span> <span class="pre">pi&#64;raspberrypi</span></code>. If it is just <code class="docutils literal notranslate"><span class="pre">pi&#64;raspberrypi</span></code>, then you are not in the environment. If you are already in the <code class="docutils literal notranslate"><span class="pre">python3</span></code> environment, exit using the <code class="docutils literal notranslate"><span class="pre">deactivate</span></code> command, so you can verify that you are able to activate the environment using the above <code class="docutils literal notranslate"><span class="pre">source</span></code> command.</p>
+</div>
+<div class="section" id="install-packages-in-python-3-virtual-environment">
+<h4>Install packages in Python 3 virtual environment<a class="headerlink" href="#install-packages-in-python-3-virtual-environment" title="Permalink to this headline">¶</a></h4>
+<p>For here on, all actions on the RPi should be taken while in <code class="docutils literal notranslate"><span class="pre">python3</span></code> virtual environment.</p>
+<p>Install python packages (some of these commands can take a long time):</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>pip install numpy
+pip install picamera
+pip install psutil
+pip install scipy
+pip install ipython
+pip install pyzmq
+pip install Pillow
+pip install pigpio
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="compile-and-install-opencv-from-source">
+<h3>Compile and install OpenCV from source<a class="headerlink" href="#compile-and-install-opencv-from-source" title="Permalink to this headline">¶</a></h3>
+<p>Ensure you are in <code class="docutils literal notranslate"><span class="pre">python3</span></code> virtual environment.</p>
+<div class="section" id="increasing-swap">
+<h4>Increasing SWAP<a class="headerlink" href="#increasing-swap" title="Permalink to this headline">¶</a></h4>
+<p>To install OpenCV, it is recommended to increase swap space, if you have less than 3 GB of memory. If you are using a Raspberry Pi version with 3 GB of memory or more, then you should skip this step. With low memory, increasing SWAP space will enable you to compile OpenCV with all four cores of the Raspberry Pi without the compile hanging due to memory exhausting. Alternatively avoid using <code class="docutils literal notranslate"><span class="pre">-j4</span></code> flag in the make command for OpenCV.</p>
 <p>Open up your <code class="docutils literal notranslate"><span class="pre">/etc/dphys-swapfile</span></code>  file and then edit the <code class="docutils literal notranslate"><span class="pre">CONF_SWAPSIZE</span></code> variable to <code class="docutils literal notranslate"><span class="pre">1024</span></code>. You can do this with command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">nano</span> <span class="pre">/etc/dphys-swapfile</span></code>. Now make sure to restart the swap service:</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo /etc/init.d/dphys-swapfile stop
 sudo /etc/init.d/dphys-swapfile start
 </pre></div>
 </div>
-<p>Then run the following commands to download, compile and install OpenCV</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo apt-get install -y build-essential cmake pkg-config
-sudo apt-get install -y libjpeg-dev libtiff5-dev libjasper-dev libpng12-dev
-sudo apt-get install -y libavcodec-dev libavformat-dev libswscale-dev libv4l-dev
-sudo apt-get install -y libxvidcore-dev libx264-dev
-sudo apt-get install -y libgtk2.0-dev libgtk-3-dev
-sudo apt-get install -y libcanberra-gtk*
-sudo apt-get install -y libatlas-base-dev gfortran
-sudo apt-get install -y python2.7-dev python3-dev
-# OpenCV versions specificed below
-wget -O opencv.zip https://github.com/opencv/opencv/archive/3.4.1.zip
-wget -O opencv_contrib.zip https://github.com/opencv/opencv_contrib/archive/3.4.1.zip
+</div>
+<div class="section" id="installing-opencv">
+<h4>Installing OpenCV<a class="headerlink" href="#installing-opencv" title="Permalink to this headline">¶</a></h4>
+<p>Then run the following commands to download and prepare OpenCV version <code class="docutils literal notranslate"><span class="pre">4.1.1</span></code>:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>cd ~
+wget -O opencv.zip https://github.com/opencv/opencv/archive/4.1.1.zip
+wget -O opencv_contrib.zip https://github.com/opencv/opencv_contrib/archive/4.1.1.zip
 unzip opencv.zip
 unzip opencv_contrib.zip
-cd ~/opencv-3.4.1/ # OpenCV versions specificed
+mv opencv-4.1.1 opencv
+mv opencv_contrib-4.1.1 opencv_contrib
+cd ~
+</pre></div>
+</div>
+<p>The following commands will compile and install the downloaded OpenCV with optimisations to Raspberry Pi. Note, these commands require internet access as part of the build process.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>cd ~/opencv
 mkdir build
 cd build
-# OpenCV versions specificed below
 cmake -D CMAKE_BUILD_TYPE=RELEASE \
     -D CMAKE_INSTALL_PREFIX=/usr/local \
-    -D OPENCV_EXTRA_MODULES_PATH=~/opencv_contrib-3.4.1/modules \
+    -D OPENCV_EXTRA_MODULES_PATH=~/opencv_contrib/modules \
     -D ENABLE_NEON=ON \
     -D ENABLE_VFPV3=ON \
     -D BUILD_TESTS=OFF \
     -D INSTALL_PYTHON_EXAMPLES=OFF \
+    -D OPENCV_ENABLE_NONFREE=ON \
+    -D CMAKE_SHARED_LINKER_FLAGS=-latomic \
     -D BUILD_EXAMPLES=OFF ..
+
 make -j4
+
 sudo make install
 sudo ldconfig
+
+cd /usr/local/lib/python3.7/site-packages/cv2/python-3.7
+sudo mv cv2.cpython-37m-arm-linux-gnueabihf.so cv2.so
+cd ~/.virtualenvs/python3/lib/python3.7/site-packages/
+ln -s /usr/local/lib/python3.7/site-packages/cv2/python-3.7/cv2.so cv2.so
+cd ~
 </pre></div>
 </div>
-<p>To test if OpenCV is working, open <code class="docutils literal notranslate"><span class="pre">python</span></code> interpreter and check if the output of the following commands is ‘3.4.1’:</p>
+<p>To test if OpenCV is working, open <code class="docutils literal notranslate"><span class="pre">python</span></code> interpreter and check if the output of the following commands is ‘4.1.1’:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">cv2</span>
 <span class="k">print</span><span class="p">(</span><span class="n">cv2</span><span class="o">.</span><span class="n">__version__</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Make sure to revert changes to <code class="docutils literal notranslate"><span class="pre">/etc/dphys-swapfile</span></code> by setting <code class="docutils literal notranslate"><span class="pre">CONF_SWAPSIZE</span></code> back to <code class="docutils literal notranslate"><span class="pre">100</span></code>.</p>
 </div>
-<div class="section" id="install-zeromq">
-<h3>Install ZeroMQ<a class="headerlink" href="#install-zeromq" title="Permalink to this headline">¶</a></h3>
-<p>To install ZeroMQ use the following terminal commands, as copied from <a class="reference external" href="https://github.com/MonsieurV/ZeroMQ-RPi">https://github.com/MonsieurV/ZeroMQ-RPi</a></p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo apt-get install libtool pkg-config build-essential autoconf automake
-wget https://github.com/jedisct1/libsodium/releases/download/1.0.3/libsodium-1.0.3.tar.gz
-tar -zxvf libsodium-1.0.3.tar.gz
-cd libsodium-1.0.3/
-./configure
-make
-sudo make install
-cd ~/
-wget http://download.zeromq.org/zeromq-4.1.3.tar.gz
-tar -zxvf zeromq-4.1.3.tar.gz
-cd zeromq-4.1.3/
-./configure
-make
-sudo make install
-sudo ldconfig
-sudo apt-get install python-dev
-sudo pip install pyzmq --user
-cd ~/
-</pre></div>
+<div class="section" id="decreasing-swap">
+<h4>Decreasing SWAP<a class="headerlink" href="#decreasing-swap" title="Permalink to this headline">¶</a></h4>
+<p>If you followed the steps earlier to increase SWAP, make sure to revert changes to <code class="docutils literal notranslate"><span class="pre">/etc/dphys-swapfile</span></code> by setting <code class="docutils literal notranslate"><span class="pre">CONF_SWAPSIZE</span></code> back to <code class="docutils literal notranslate"><span class="pre">100</span></code>. This will return SWAP settings back to normal.</p>
 </div>
 </div>
 </div>
 <div class="section" id="setting-up-raspberry-pi-networking-with-recording-pc">
 <h2>Setting up Raspberry Pi networking with recording PC<a class="headerlink" href="#setting-up-raspberry-pi-networking-with-recording-pc" title="Permalink to this headline">¶</a></h2>
 <p>This part describes setting up networking between the recording PC and one or multiple Raspberry Pis. This setup is based on having two network adapters on the Recording PC. One of them connected to the internet, as in this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span class="std std-ref">Connect to the local network</span></a>. The other can be a USB network adapter or a PCIe card that is then connected to the RPi or to a network switch that has multiple RPis connected to it. (Ubuntu should recognise and automatically install any necessary drivers for a network adapter. This can be verified if a new device shows up in <code class="docutils literal notranslate"><span class="pre">ifconfig</span></code>) When connecting multiple RPis, the setup is identical, only that each RPi has a different static IP address assigned (see below on how to change <code class="docutils literal notranslate"><span class="pre">dhcpcd.conf</span></code>).</p>
-<p>Note that for the devices to see each other, the static IP addresses of the devices in the internal network must all have the same values, apart from the last digits after the last separator, e.g. <code class="docutils literal notranslate"><span class="pre">192.168.0.1</span></code> and <code class="docutils literal notranslate"><span class="pre">192.168.0.22</span></code>. These first unchanged parts of the IP addresses should not match those of the external network as set up in this guide: <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span class="std std-ref">Connect to the local network</span></a>. We chose the <code class="docutils literal notranslate"><span class="pre">192.168.0.xx</span></code> address as it did not match the external network IP and made it easiest to work with a WiFi router for Wireless internal network.</p>
-<div class="section" id="configuring-raspberry-pi">
-<h3>Configuring Raspberry Pi<a class="headerlink" href="#configuring-raspberry-pi" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="choosing-correct-ip-addresses">
+<h3>Choosing correct IP addresses<a class="headerlink" href="#choosing-correct-ip-addresses" title="Permalink to this headline">¶</a></h3>
+<p>For the devices to see each other, the static IP addresses of the devices in the internal network must all have the same values, apart from the last digits after the last separator, e.g. <code class="docutils literal notranslate"><span class="pre">192.168.0.1</span></code> and <code class="docutils literal notranslate"><span class="pre">192.168.0.22</span></code>.</p>
+<p>These first unchanged parts of the IP addresses should not match those of the external network as set up in the guide <a class="reference internal" href="recordingPCandOpenEphysGUI.html#recpcnetworkinterfaces"><span class="std std-ref">Connect to the local network</span></a>. We chose the <code class="docutils literal notranslate"><span class="pre">192.168.0.xx</span></code> address as it did not match the external network IP and made it easiest to work with a WiFi router for Wireless internal network.</p>
+</div>
+<div class="section" id="configuring-raspberry-pi-connectivity-to-recording-pc">
+<span id="rpinetworkingwithrecordingpc"></span><h3>Configuring Raspberry Pi connectivity to Recording PC<a class="headerlink" href="#configuring-raspberry-pi-connectivity-to-recording-pc" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="enable-ssh">
+<h4>Enable SSH<a class="headerlink" href="#enable-ssh" title="Permalink to this headline">¶</a></h4>
 <p>SSH needs to be enabled. You can do this by accessing RPi settings via terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">raspi-config</span></code> and choosing <em>Interfacing Options</em> with arrow keys and pressing Enter. Select <em>SSH</em> option and choose to <em>Enable</em> it. Reboot Raspberry Pi.</p>
-<p>Restore the original interfaces file with the following commands</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo mv /etc/network/interfaces /etc/network/interfaces_MainLine
+</div>
+<div class="section" id="revert-any-changes-made-to-default-network-settings">
+<h4>Revert any changes made to default network settings<a class="headerlink" href="#revert-any-changes-made-to-default-network-settings" title="Permalink to this headline">¶</a></h4>
+<p>To install the software, it was necessary to obtain internet connection. Whatever method was used, make sure to revert all related changes. If you used the suggested changes to the <code class="docutils literal notranslate"><span class="pre">interfaces</span></code> file, then restore the original interfaces file with the following commands</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>sudo rm /etc/network/interfaces
 sudo mv /etc/network/interfaces_old /etc/network/interfaces
 </pre></div>
 </div>
+</div>
+<div class="section" id="set-up-static-ip-address-with-recording-pc">
+<h4>Set up static IP address with Recording PC<a class="headerlink" href="#set-up-static-ip-address-with-recording-pc" title="Permalink to this headline">¶</a></h4>
 <p>To set up a static IP address, you will need to edit the <code class="docutils literal notranslate"><span class="pre">dhcpcd.conf</span></code>. You can do this with the following terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">leafpad</span> <span class="pre">/etc/dhcpcd.conf</span></code>. Add the following lines to the end of this file and Save it.</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span># Static IP for connection to Recording PC
 interface eth0
-static ip_address=192.168.0.20/24
-static routers=192.168.0.11
-static domain_name_servers=192.168.0.11
+static ip_address=192.168.0.20
+static routers=192.168.0.10
+static domain_name_servers=144.82.250.1 193.160.250.1
 </pre></div>
 </div>
 <p>Here again the <code class="docutils literal notranslate"><span class="pre">interface</span></code> variable is set to <code class="docutils literal notranslate"><span class="pre">eth0</span></code>. This is likely the primary ethernet adapter identity on your RPi, but you can check this using the <code class="docutils literal notranslate"><span class="pre">ifconfig</span></code> terminal command. The first value on the left column should be used as the <code class="docutils literal notranslate"><span class="pre">interface</span></code> value in <code class="docutils literal notranslate"><span class="pre">dhcpcd.conf</span></code>.</p>
-<p>Note that if you have multiple RPis connected to the Recording PC through a switch, they should have different <code class="docutils literal notranslate"><span class="pre">static</span> <span class="pre">ip_address</span></code> values in the <code class="docutils literal notranslate"><span class="pre">dhcpcd.conf</span></code>. These could be for example <code class="docutils literal notranslate"><span class="pre">192.168.0.20/24</span></code> and <code class="docutils literal notranslate"><span class="pre">192.168.0.21/24</span></code>. We used the IP values 20 and up for tracking RPis 1, 2, 3 etc.</p>
-<p>The <code class="docutils literal notranslate"><span class="pre">interfaces</span></code> file will also need to be slightly edited. Open it using the terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">leafpad</span> <span class="pre">/etc/network/interfaces</span></code>. Find the line that says <code class="docutils literal notranslate"><span class="pre">iface</span> <span class="pre">eth0</span> <span class="pre">inet</span> <span class="pre">manual</span></code>, or whatever the correct primary network adapter identity is. Put a <code class="docutils literal notranslate"><span class="pre">#</span></code> in front of that line, commenting it out. Just below the line add a new line: <code class="docutils literal notranslate"><span class="pre">auto</span> <span class="pre">eth0</span></code> or whatever the correct primary network adapter identity is. Save the file. So the two edited lines in the file would look like this:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span># iface eth0 inet manual
-auto eth0
-</pre></div>
-</div>
-<p>With this setup the SSH login may be slow. This can be fixed by editing the <code class="docutils literal notranslate"><span class="pre">sshd_config</span></code> file. Open it with terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">leafpad</span> <span class="pre">/etc/ssh/sshd_config</span></code> and add this line to the very end:</p>
+<p>Note that if you have multiple RPis connected to the Recording PC through a switch, they should have different <code class="docutils literal notranslate"><span class="pre">static</span> <span class="pre">ip_address</span></code> values in the <code class="docutils literal notranslate"><span class="pre">dhcpcd.conf</span></code>. These could be for example <code class="docutils literal notranslate"><span class="pre">192.168.0.20</span></code> and <code class="docutils literal notranslate"><span class="pre">192.168.0.21</span></code>. We used the IP values 20 and up for tracking RPis 1, 2, 3 etc.</p>
+<p>With this setup the SSH login may be slow. This can be fixed by editing the <code class="docutils literal notranslate"><span class="pre">sshd_config</span></code> file. Open it with terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">nano</span> <span class="pre">/etc/ssh/sshd_config</span></code> and add the following line to the very end:</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>UseDNS no
 </pre></div>
 </div>
 <p>Now after you restart the RPi, it should be ready for connecting to the Recording PC and to be used with the Recording Manager.</p>
 </div>
-<div class="section" id="configuring-the-recording-pc">
-<span id="recpcnetworkinterfacesforinternalnetwork"></span><h3>Configuring the Recording PC<a class="headerlink" href="#configuring-the-recording-pc" title="Permalink to this headline">¶</a></h3>
-<p>These instructions are based on <a class="reference external" href="https://www.thomas-krenn.com/en/wiki/Two_Default_Gateways_on_One_System">this blog post</a>.</p>
+<div class="section" id="set-up-internet-access-via-recording-pc">
+<h4>Set up internet access via Recording PC<a class="headerlink" href="#set-up-internet-access-via-recording-pc" title="Permalink to this headline">¶</a></h4>
+<p>Raspberry Pis can also be given access to the internet, if the Recording PC networking is configured correctly, based on the guide <a class="reference internal" href="#recpcnetworkinterfacesforinternalnetwork"><span class="std std-ref">Configuring the Recording PC networking with Raspberry Pis</span></a>. The two key things for this to work are the following:</p>
+<ul class="simple">
+<li><p>The <code class="docutils literal notranslate"><span class="pre">static</span> <span class="pre">routers</span></code> address given to RPi matches the <code class="docutils literal notranslate"><span class="pre">address</span></code> given to Recording PC network interface that is connected to the local Raspberry Pi network.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">static</span> <span class="pre">domain_name_servers</span></code> given to RPi matches the <code class="docutils literal notranslate"><span class="pre">dns-nameservers</span></code> on the Recording PC.</p></li>
+</ul>
+</div>
+</div>
+<div class="section" id="configuring-the-recording-pc-networking-with-raspberry-pis">
+<span id="recpcnetworkinterfacesforinternalnetwork"></span><h3>Configuring the Recording PC networking with Raspberry Pis<a class="headerlink" href="#configuring-the-recording-pc-networking-with-raspberry-pis" title="Permalink to this headline">¶</a></h3>
+<p>These instructions are based on <a class="reference external" href="https://www.thomas-krenn.com/en/wiki/Two_Default_Gateways_on_One_System">this blog post</a> and <a class="reference external" href="https://unix.stackexchange.com/a/544356/374837">this StackExchange answer</a>.</p>
+<div class="section" id="create-an-internal-network-with-raspberry-pis">
+<h4>Create an internal network with Raspberry Pis<a class="headerlink" href="#create-an-internal-network-with-raspberry-pis" title="Permalink to this headline">¶</a></h4>
 <p>Changes need to be made to the <code class="docutils literal notranslate"><span class="pre">interfaces</span></code> file. Open this using terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">gedit</span> <span class="pre">/etc/network/interfaces</span></code>. Add the following lines to the end of the file:</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span># Network adapter interfacing with RPis
-allow-hotplug eth1
-iface eth1 inet static
+auto enx00249b233bda
+iface enx00249b233bda inet static
 address 192.168.0.10
 netmask 255.255.255.0
-gateway 192.168.0.11
-dns-nameservers 8.8.8.8
-post-up ip route add 192.168.0.0/24 dev eth1 src 192.168.0.10 table rt2
-post-up ip route add default via 192.168.0.11 dev eth1 table rt2
-post-up ip rule add from 192.168.0.10/32 table rt2
-post-up ip rule add to 192.168.0.10/32 table rt2
 </pre></div>
 </div>
-<p>Note that the word <code class="docutils literal notranslate"><span class="pre">eth1</span></code> occurs 4 times in this block. This needs to be replaced by the identity of the network adapter that is connected to the RPis. You can find the identiy with the terminal command <code class="docutils literal notranslate"><span class="pre">ifconfig</span></code> and checking which adapter identiy (left column) appears and disappears as you change as you connect and disconnect the network adapter from the PC. It should be the second on the list.</p>
-<p>The <code class="docutils literal notranslate"><span class="pre">rt_tables</span></code> file also needs to be edited. Open it with terminal command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">gedit</span> <span class="pre">/etc/iproute2/rt_tables</span></code>. Add the following line to the very end of the file:</p>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>1 rt2
+<p>So that the full <code class="docutils literal notranslate"><span class="pre">interfaces</span></code> file should now look like this:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span># Static IP for internet connection
+auto lo
+iface lo inet loopback
+auto enp0s31f6
+iface enp0s31f6 inet static
+address 128.40.57.144
+netmask 255.255.255.0
+gateway 128.40.50.245
+dns-nameservers 144.82.250.1 193.160.250.1
+
+# Network adapter interfacing with RPis
+auto enx00249b233bda
+iface enx00249b233bda inet static
+address 192.168.0.10
+netmask 255.255.255.0
 </pre></div>
 </div>
-<p>Now after you restart the Recording PC you should be able to connect to the RPi using the terminal command <code class="docutils literal notranslate"><span class="pre">ssh</span> <span class="pre">pi&#64;192.168.0.20</span></code> or whatever was your chosen static IP address for the RPi. The first time you do this from the Recording PC, it may say <em>The authenticity of host ‘192.168.0.20 (192.168.0.20)’ can’t be established. -//- Are you sure you want to continue connecting (yes/no)?*</em> Type <strong>yes</strong> and hit Enter. The default password for the RPi is <code class="docutils literal notranslate"><span class="pre">raspberry</span></code>.</p>
+<p>Note that the word <code class="docutils literal notranslate"><span class="pre">enx00249b233bda</span></code> needs to be replaced by the identity of the network adapter that is connected to the RPis. You can find the identiy with the terminal command <code class="docutils literal notranslate"><span class="pre">ifconfig</span></code> and checking which adapter identiy (left column) appears and disappears as you change as you connect and disconnect the network adapter from the PC. It is most likely the second on the list.</p>
+<p>Now after you restart the Recording PC you should be able to connect to the RPi using the terminal command <code class="docutils literal notranslate"><span class="pre">ssh</span> <span class="pre">pi&#64;192.168.0.20</span></code> or whatever was your chosen static IP address for the RPi. The first time you do this to any new Raspberry Pi, it may say <em>The authenticity of host ‘192.168.0.20 (192.168.0.20)’ can’t be established. -//- Are you sure you want to continue connecting (yes/no)?*</em> Type <strong>yes</strong> and hit Enter. The default password for the RPi is <code class="docutils literal notranslate"><span class="pre">raspberry</span></code>.</p>
+</div>
+<div class="section" id="sharing-internet-connection-from-recording-pc-to-internal-raspberry-pi-network">
+<h4>Sharing internet connection from Recording PC to internal Raspberry Pi network<a class="headerlink" href="#sharing-internet-connection-from-recording-pc-to-internal-raspberry-pi-network" title="Permalink to this headline">¶</a></h4>
+<p>The following commands will set up IP masquerading and IP forwarding:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>iptables -w -t nat -A POSTROUTING -s 192.168.0.0/24 -o enp0s31f6 -j MASQUERADE
+iptables -w -t filter -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -w -t filter -A FORWARD -i enx00249b233bda -j ACCEPT
+</pre></div>
+</div>
+<p>To ensure these changes are persistent when the Recording PC is restarted, install <code class="docutils literal notranslate"><span class="pre">iptables-persistent</span></code> with command <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">apt-get</span> <span class="pre">install</span> <span class="pre">iptables-persistent</span></code>. During initialisation you should be able to choose to save current settings, choose <code class="docutils literal notranslate"><span class="pre">YES</span></code> (assuming you have just set iptables settings with the commands above and have not restarted since).</p>
+<p>All of the above will be completely ineffective until you activate the IPv4 routing master switch. First, make sure that <code class="docutils literal notranslate"><span class="pre">/etc/sysctl.conf</span></code> file has the following line and it is not commented out:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>net.ipv4.ip_forward=1
+</pre></div>
+</div>
+<p>After making changes to <code class="docutils literal notranslate"><span class="pre">/etc/sysctl.conf</span></code> restart the Recording PC for changes to take effect.</p>
+<p>It is recommended to not have Raspberry Pis accessible to the internet as they are not particularly well prodected devices. If you don’t need internet access on the Raspberry Pis (e.g. after installing the software), then you can turn this feature off by setting the <code class="docutils literal notranslate"><span class="pre">net.ipv4.ip_forward</span></code> to <code class="docutils literal notranslate"><span class="pre">0</span></code> in the <code class="docutils literal notranslate"><span class="pre">/etc/sysctl.conf</span></code> file as you just edited it. Make sure to reboot the Recording PC again, after such changes.</p>
+</div>
 </div>
 <div class="section" id="configure-ssh-keys-to-avoid-password-requests">
 <h3>Configure SSH keys to avoid Password requests<a class="headerlink" href="#configure-ssh-keys-to-avoid-password-requests" title="Permalink to this headline">¶</a></h3>
