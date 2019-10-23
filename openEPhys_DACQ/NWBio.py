@@ -686,7 +686,7 @@ def save_list_of_dicts_to_group(h5file, path, dlist, overwrite=False, list_suffi
                                                 overwrite=overwrite, list_suffix=list_suffix)
 
 
-def recursively_save_dict_contents_to_group(h5file, path, dic, overwrite=False, list_suffix='_NWBLIST'):
+def recursively_save_dict_contents_to_group(h5file, path, dic, overwrite=False, list_suffix='_NWBLIST', verbose=False):
     """
     h5file - h5py.File
     path   - str       - path to group in h5file. Must end with '/'
@@ -694,11 +694,14 @@ def recursively_save_dict_contents_to_group(h5file, path, dic, overwrite=False, 
                          Default is False, if elements already exist in NWB file, error is raised.
     list_suffix - str  - suffix used to highlight paths created from lists of dictionaries.
                          Must be consistent when saving and loading data.
+    verbose - bool     - If True (default is False), h5file path used is printed for each recursion
 
     Only works with: numpy arrays, numpy int64 or float64, strings, bytes, lists of strings and dictionaries these are contained in.
     Also works with lists dictionaries as part of the hierachy.
     Long lists of dictionaries are discouraged, as individual groups are created for each element.
     """
+    if verbose:
+        print(path)
     if len(dic) == 0:
         if path in h5file:
             del h5file[path]
@@ -713,7 +716,8 @@ def recursively_save_dict_contents_to_group(h5file, path, dic, overwrite=False, 
             h5file[path + key] = item
         elif isinstance(item, dict):
             recursively_save_dict_contents_to_group(h5file, path + key + '/', item,
-                                                    overwrite=overwrite, list_suffix=list_suffix)
+                                                    overwrite=overwrite, list_suffix=list_suffix,
+                                                    verbose=verbose)
         elif isinstance(item, list):
             if all(isinstance(i, str) for i in item):
                 if overwrite:
@@ -846,17 +850,18 @@ def load_settings(filename, path='/', ignore=()):
 
     return data
 
+
 def check_if_settings_available(filename, path='/'):
     """
     Returns whether settings information exists in NWB file
     Specify path='/General/badChan/' to check for specific settings
     """
     full_path = '/general/data_collection/Settings' + path
-    with h5py.File(filename,'r') as h5file:
+    with h5py.File(filename, 'r') as h5file:
         return full_path in h5file
 
 
-def save_analysis(filename, data, overwrite=False, complete_overwrite=False):
+def save_analysis(filename, data, overwrite=False, complete_overwrite=False, verbose=False):
     """Stores analysis results from nested dictionary to /analysis path in NWB file.
 
     See :py:func:`NWBio.recursively_save_dict_contents_to_group` for details on supported data structures.
@@ -868,11 +873,12 @@ def save_analysis(filename, data, overwrite=False, complete_overwrite=False):
                            Default is False.
     :param bool complete_overwrite: if True, all previous analysis data is discarded before writing.
                                     Default is False.
+    :param bool verbose: if True (default is False), the path in file for each element is printed.
     """
     with h5py.File(filename, 'r+') as h5file:
         if complete_overwrite:
             del h5file['/analysis']
-        recursively_save_dict_contents_to_group(h5file, '/analysis/', data, overwrite=overwrite)
+        recursively_save_dict_contents_to_group(h5file, '/analysis/', data, overwrite=overwrite, verbose=verbose)
 
 
 def load_analysis(filename, ignore=()):
