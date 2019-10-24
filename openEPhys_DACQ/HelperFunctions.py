@@ -11,10 +11,15 @@ import threading
 from time import sleep
 import psutil
 from datetime import datetime
+import codecs
 
 
 def time_string():
     return datetime.now().strftime('%H:%M:%S')
+
+
+def encode_bytes(x):
+    return x if isinstance(x, bytes) else codecs.latin_1_encode(x)[0]
 
 
 class CPU_availability_tracker(object):
@@ -413,6 +418,24 @@ def test_pinging_address(address='localhost'):
         return False
 
 
+def closest_argmin(a, b):
+    """Returns the closest matching element indices in b for each element in a.
+
+    :param numpy.ndarray a: shape (N,)
+    :param numpy.ndarray b: shape (M,)
+    :return: closest_b_indices
+    :rtype: numpy.ndarray
+    """
+    b_length = b.size
+    sorted_idx_b = b.argsort()
+    sorted_b = b[sorted_idx_b]
+    sorted_idx = np.searchsorted(sorted_b, a)
+    sorted_idx[sorted_idx == b_length] = b_length - 1
+    mask = (sorted_idx > 0) & (np.abs(a - sorted_b[sorted_idx-1]) < np.abs(a - sorted_b[sorted_idx]))
+
+    return sorted_idx_b[sorted_idx-mask]
+
+
 def openSingleFileDialog(load_save, directory_path=os.path.expanduser("~"), suffix='', caption='Choose File'):
     """Opens a GUI dialog for browsing files when closed returns full path to file.
 
@@ -490,16 +513,3 @@ def clearLayout(layout, keep=0):
                 widget.deleteLater()
             else:
                 clearLayout(item.layout())
-
-
-if sys.version_info < (3,):
-
-    def b(x):
-        return x
-
-else:
-
-    import codecs
-
-    def b(x):
-        return x if isinstance(x, bytes) else codecs.latin_1_encode(x)[0]

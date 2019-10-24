@@ -8,14 +8,11 @@
 
 ### By Sander Tanni, May 2017, UCL
 
-import os
-from multiprocessing import Process
 from itertools import combinations
-import argparse
 
 import numpy as np
 from scipy.spatial.distance import euclidean
-import h5py
+from openEPhys_DACQ import NWBio
 from tqdm import tqdm
 
 
@@ -113,40 +110,6 @@ def combineCamerasData(cameraPos, lastCombPos, cameraIDs, CameraSettings, arena_
 
     return combPos
 
-def estimate_OpenEphys_timestamps_for_tracking_data(OE_GC_times, RPi_GC_times, RPi_frame_times, verbose=False):
-    '''
-    Estimates Open Ephys timestamps for each tracking data datapoint.
-    OE_GC_times - Global Clock timestamps in Open Ephys time
-    RPi_GC_times - Global Clock timestamps in RPi time
-    RPi_frame_times - Frame timestamps in RPi time
-    '''
-    GlobalClock_TTL_Channel = 1
-    RPiTime2Sec = 10 ** 6 # This values is used to convert RPi times to seconds
-    # Crop data if more timestamps recorded on either system.
-    if OE_GC_times.size > RPi_GC_times.size:
-        OE_GC_times = OE_GC_times[:RPi_GC_times.size]
-        print('[ Warning ] OpenEphys recorded more GlobalClock TTL pulses than RPi.\n' + 
-              'Dumping extra timestamps from the end.')
-    elif OE_GC_times.size < RPi_GC_times.size:
-        RPi_GC_times = RPi_GC_times[:OE_GC_times.size]
-        print('[ Warning ] RPi recorded more GlobalClock TTL pulses than Open Ephys.\n' + 
-              'Dumping extra timestamps from the end.')
-    # Find closest RPi GlobalClock timestamp to each RPi frame timestamp
-    if verbose:
-        print('Estimating camera timestamps in OpenEPhys time')
-    RPtimes_idx = []
-    for RPFtime in (tqdm(RPi_frame_times) if verbose else RPi_frame_times):
-        RPtimes_idx.append(np.argmin(np.abs(RPi_GC_times - RPFtime)))
-    # Compute difference from the GlobalClock timestamps for each frame
-    RPtimes_full = RPi_GC_times[RPtimes_idx]
-    RPF_RP_times_delta = RPi_frame_times - RPtimes_full
-    # Convert this difference to seconds as Open Ephys timestamps
-    RPF_RP_times_delta_in_seconds = RPF_RP_times_delta / float(RPiTime2Sec)
-    # Use frame and GlobalClock timestamp diffence to estimate OpenEphys timepoints
-    OEtimes_full = OE_GC_times[RPtimes_idx]
-    RPi_frame_in_OE_times = OEtimes_full + RPF_RP_times_delta_in_seconds
-
-    return RPi_frame_in_OE_times
 
 def remove_tracking_data_outside_boundaries(posdata, arena_size, max_error=20):
     NotNaN = np.where(np.logical_not(np.isnan(posdata[:,1])))[0]
@@ -210,11 +173,13 @@ def iteratively_combine_multicamera_data_for_recording(
             posdata['OnlineTrackerData_timestamps'] = np.delete(posdata['OnlineTrackerData_timestamps'], 
                                                                 np.where(idx_None)[0], axis=0)
             # Compute position data timestamps in OpenEphys time
-            RPi_frame_times = posdata['OnlineTrackerData_timestamps']
-            RPi_GC_times = posdata['GlobalClock_timestamps']
-            RPi_frame_in_OE_times = estimate_OpenEphys_timestamps_for_tracking_data(
-                OE_GC_times, RPi_GC_times, RPi_frame_times, verbose=verbose
+            RPi_frame_in_OE_times = NWBio.estimate_open_ephys_timestamps_from_other_timestamps(
+                OE_GC_times,
+                posdata['GlobalClock_timestamps'],
+                posdata['OnlineTrackerData_timestamps'],
+                other_times_divider=10 ** 6
             )
+
             # Combine timestamps and position data into a single array
             posdata = np.concatenate((RPi_frame_in_OE_times.astype(np.float64)[:, None], posdata['OnlineTrackerData']), axis=1)
             posdatas[i] = posdata

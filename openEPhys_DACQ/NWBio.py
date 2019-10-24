@@ -4,7 +4,7 @@ import h5py
 import numpy as np
 import os
 import sys
-from openEPhys_DACQ.HelperFunctions import tetrode_channels, channels_tetrode
+from openEPhys_DACQ.HelperFunctions import tetrode_channels, channels_tetrode, closest_argmin
 from pprint import pprint
 from copy import copy
 import argparse
@@ -1153,6 +1153,52 @@ def check_if_channel_maps_are_same(channel_map_1, channel_map_2):
             return False
 
     return True
+
+
+def estimate_open_ephys_timestamps_from_other_timestamps(open_ephys_global_clock_times, other_global_clock_times,
+                                                         other_times, other_times_divider=None):
+    """Returns Open Ephys timestamps for each timestamp from another device by synchronising with global clock.
+
+    Note, other times must be in same units as open_ephys_global_clock_times. Most likely seconds.
+    For example, Raspberry Pi camera timestamps would need to be divided by 10 ** 6
+
+    :param numpy.ndarray open_ephys_global_clock_times: shape (N,)
+    :param numpy.ndarray other_global_clock_times: shape (M,)
+    :param numpy.ndarray other_times: shape (K,)
+    :param int other_times_divider: if provided, timestamps from the other devices are divided by this value
+        before matching to Open Ephys time. This allows inputting timestamps from other device in original units.
+        In case of Raspberry Pi camera timestamps, this value should be 10 ** 6.
+        If this value is not provided, all provided timestamps must be in same units.
+    :return: open_ephys_times
+    :rtype: numpy.ndarray
+    """
+
+    # Crop data if more timestamps recorded on either system.
+    if open_ephys_global_clock_times.size > other_global_clock_times.size:
+        open_ephys_global_clock_times = open_ephys_global_clock_times[:other_global_clock_times.size]
+        print('[ Warning ] OpenEphys recorded more GlobalClock TTL pulses than other system.\n' +
+              'Dumping extra OpenEphys timestamps from the end.')
+    elif open_ephys_global_clock_times.size < other_global_clock_times.size:
+        other_global_clock_times = other_global_clock_times[:open_ephys_global_clock_times.size]
+        print('[ Warning ] Other system recorded more GlobalClock TTL pulses than Open Ephys.\n' +
+              'Dumping extra other system timestamps from the end.')
+
+    # Find closest other_global_clock_times indices to each other_times
+    other_times_gc_indices = closest_argmin(other_times, other_global_clock_times)
+
+    # Compute difference from the other_global_clock_times for each value in other_times
+    other_times_nearest_global_clock_times = other_global_clock_times[other_times_gc_indices]
+    other_times_global_clock_delta = other_times - other_times_nearest_global_clock_times
+
+    # Convert difference values to Open Ephys timestamp units
+    if not (other_times_divider is None):
+        other_times_global_clock_delta = other_times_global_clock_delta / float(other_times_divider)
+
+    # Use other_times_global_clock_delta to estimate timestamps in OpenEphys time
+    other_times_nearest_open_ephys_global_clock_times = open_ephys_global_clock_times[other_times_gc_indices]
+    open_ephys_times = other_times_nearest_open_ephys_global_clock_times + other_times_global_clock_delta
+
+    return open_ephys_times
 
 
 def extract_recording_info(filename, selection='default'):

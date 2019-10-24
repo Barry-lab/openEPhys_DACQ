@@ -494,33 +494,33 @@ def write_file_in_axona_format(filename, header, header_keyorder, data):
                 stringval = header[key]
                 while len(stringval) < 10:
                     stringval += ' '
-                f.write(hfunct.b(key + ' ' + stringval + '\r\n'))
+                f.write(hfunct.encode_bytes(key + ' ' + stringval + '\r\n'))
             elif 'num_pos_samples' in key:
                 # Replicate spaces following num_pos_samples in original dacq files
                 stringval = header[key]
                 while len(stringval) < 10:
                     stringval += ' '
-                f.write(hfunct.b(key + ' ' + stringval + '\r\n'))
+                f.write(hfunct.encode_bytes(key + ' ' + stringval + '\r\n'))
             elif 'duration' in key:
                 # Replicate spaces following duration in original dacq files
                 stringval = header[key]
                 while len(stringval) < 10:
                     stringval += ' '
-                f.write(hfunct.b(key + ' ' + stringval + '\r\n'))
+                f.write(hfunct.encode_bytes(key + ' ' + stringval + '\r\n'))
             else:
-                f.write(hfunct.b(key + ' ' + header[key] + '\r\n'))
+                f.write(hfunct.encode_bytes(key + ' ' + header[key] + '\r\n'))
         # Write the start token string
-        f.write(hfunct.b(DATA_START_TOKEN))
+        f.write(hfunct.encode_bytes(DATA_START_TOKEN))
         # Write the data into the file in binary format
         data.tofile(f)
         # Write the end token string
-        f.write(hfunct.b(DATA_END_TOKEN))
+        f.write(hfunct.encode_bytes(DATA_END_TOKEN))
 
 
 def write_clusterIDs_in_CLU_format(clusterIDs, cluFileName):
-    lines = [hfunct.b(str(max(clusterIDs)) + '\r\n')]
+    lines = [hfunct.encode_bytes(str(max(clusterIDs)) + '\r\n')]
     for nclu in list(clusterIDs):
-        lines.append(hfunct.b(str(nclu) + '\r\n'))
+        lines.append(hfunct.encode_bytes(str(nclu) + '\r\n'))
     with open(cluFileName, 'wb') as file:
         file.writelines(lines)
 
@@ -532,8 +532,8 @@ def write_set_file(setFileName, new_values_dict):
     # Correct lines based on new_values_dict
     for key in new_values_dict.keys():
         for nl, line in enumerate(lines):
-            if hfunct.b(key + ' ') in line:
-                lines[nl] = hfunct.b(key + ' ' + new_values_dict[key] + '\r\n')
+            if hfunct.encode_bytes(key + ' ') in line:
+                lines[nl] = hfunct.encode_bytes(key + ' ' + new_values_dict[key] + '\r\n')
                 break
     # Write the .set file with corrected lines
     with open(setFileName, 'wb') as file:
