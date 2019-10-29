@@ -20,7 +20,7 @@ class PackageConfiguration(object):
         'root_folder': os.path.join(os.path.expanduser('~'), 'RecordingData'),
         'recording_manager_settings_subfolder': 'RecordingManagerSettings',
         'klustakwik_path': 
-            os.path.join(os.path.expanduser('~'), 'Programs', 'klustakwik', 'KlustaKwik')
+            os.path.join(os.path.expanduser('~'), 'Programs', 'klustakwik', 'KlustaKwik'),
         'kilosort_path': '',
         'npy_matlab_path': ''
     }
