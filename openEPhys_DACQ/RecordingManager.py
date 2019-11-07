@@ -272,6 +272,7 @@ class RecordingManager(object):
             assert isinstance(value, bool) or (isinstance(value, np.ndarray) and value.dtype == np.bool)
         elif key in ('arena_size',):
             assert isinstance(value, (list, np.ndarray)) and len(value) == 2
+            assert all([isinstance(x, (int, float)) for x in value])
         elif key in ('channel_map',):
             assert isinstance(value, dict)
         else:
@@ -1047,7 +1048,9 @@ class RecordingManagerGUI(QtWidgets.QMainWindow):
             'Arena size',
             self.recording_manager.general_settings['arena_size'][0],
             self.recording_manager.general_settings['arena_size'][1],
-            lambda text: self.recording_manager.update_general_settings('arena_size', text),
+            lambda text: self.recording_manager.update_general_settings(
+                'arena_size', np.array(list(map(lambda x: float(x) if len(x) > 0 else np.nan, text)))
+            ),
             self.general_settings_widget, self.general_settings_layout
         )
         add_text_setting_to_widget(
