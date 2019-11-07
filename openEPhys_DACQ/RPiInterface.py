@@ -353,7 +353,7 @@ class onlineTrackingData(object):
         self.posDatas = [None for i in range(len(self.cameraIDs))]
         self.multiprocess_manager = multiprocessing.Manager()
         self.combPosHistory = self.multiprocess_manager.list([])
-        # self.sockSUBs = onlineTrackingData.setupSockets(self.cameraIDs, self.CameraSettings)
+        self.sockSUBs = onlineTrackingData.setupSockets(self.cameraIDs, self.CameraSettings)
         # Initialize Locks to avoid errors
         self.posDatasLock = Lock()
         # Initialize histogram
@@ -404,13 +404,8 @@ class onlineTrackingData(object):
         while self.KeepGettingData:
             # Wait for position data update
             try:
-                # message = self.sockSUBs[nRPi].recv()  # Receive message
-                # message = message.decode()  # Decode bytes into string
-
-                x = np.random.randint(0, 100)
-                y = np.random.randint(0, 100)
-                message = json.dumps([x, x + 5, y, y - 5, 150, 100])
-
+                message = self.sockSUBs[nRPi].recv()  # Receive message
+                message = message.decode()  # Decode bytes into string
             except:
                 message = 'no message'
             if message != 'no message':
@@ -535,8 +530,8 @@ class onlineTrackingData(object):
         for T in self.T_updatePosDatas:
             T.join()
         self.T_updateCombPosHistory.join()
-        # for sockSUB in self.sockSUBs:
-        #     sockSUB.close()
+        for sockSUB in self.sockSUBs:
+            sockSUB.close()
 
 
 class RewardControl(object):

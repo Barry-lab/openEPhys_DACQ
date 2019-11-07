@@ -5,10 +5,9 @@
 
 import sys
 import pyqtgraph as pg
-from PyQt5 import QtWidgets
+from PyQt5 import QtWidgets, QtGui
 import numpy as np
-import multiprocessing
-from PyQt5.QtCore import QTimer, QThread
+from PyQt5.QtCore import QTimer
 from time import sleep
 from scipy import ndimage
 from copy import copy, deepcopy
@@ -28,17 +27,7 @@ def angle_clockwise(p1, p2, invertedY=True):
     return angle_deg
 
 
-class QOneShotThread(QThread):
-
-    def __init__(self, target):
-        self._target = target
-        super().__init__()
-
-    def run(self) -> None:
-        self._target()
-
-
-class PosPlot(object):
+class PosPlot(QtWidgets.QWidget):
     """
     Displays position data as provided by OnlineTracker class.
 
@@ -48,6 +37,7 @@ class PosPlot(object):
     def __init__(self, processed_position_list, position_histogram_dict,
                  position_histogram_update_parameters, position_histogram_dict_updating,
                  online_tracker_is_alive, arena_size, LED_angle=None):
+        super().__init__()
 
         self.processed_position_list = processed_position_list
         self.position_histogram_dict = position_histogram_dict
@@ -99,11 +89,10 @@ class PosPlot(object):
         self.showPathButton.clicked.connect(self.showPath)
 
         # Put all plots into main window and display
-        self.mainWindow = QtWidgets.QWidget()
-        self.mainWindow.setWindowTitle('Cumulative Position Plot')
+        self.setWindowTitle('Cumulative Position Plot')
         XandYratio = (float(self.arena_size[0])
                       / float(self.arena_size[1]))
-        self.mainWindow.resize(int(700 * XandYratio) + 200, 700)
+        self.resize(int(700 * XandYratio) + 200, 700)
         vboxWidget = QtWidgets.QWidget()
         vboxWidget.setFixedWidth(100)
         vbox = QtWidgets.QVBoxLayout(vboxWidget)
@@ -129,11 +118,11 @@ class PosPlot(object):
         vbox.addWidget(QtWidgets.QLabel('in cm'))
         vbox.addWidget(self.marginsBox)
         vbox.addWidget(self.showPathButton)
-        hbox = QtWidgets.QHBoxLayout(self.mainWindow)
+        hbox = QtWidgets.QHBoxLayout(self)
         hbox.addWidget(self.PlotGraphicsWidget)
         hbox.addWidget(self.ColormapGraphicsWidget)
         hbox.addWidget(vboxWidget)
-        self.mainWindow.show()
+        self.show()
 
         # Prepare plot
         self.prepareColormap()
@@ -142,27 +131,21 @@ class PosPlot(object):
         self.arrow = pg.ArrowItem(pos=(0, 0), angle=0, headLen=0, tailLen=0, headWidth=0, tailWidth=0)
         self.plotBox.addItem(self.arrow)
 
-        print('Starting PosPlot updating')
-
         # Start constant update of the plot
         self.keep_updating_plot = True
-        plotUpdateInterval = 100 # This sets the plot update interval in milliseconds
+        plotUpdateInterval = 100  # This sets the plot update interval in milliseconds
         self.cumulativePlot_timer = QTimer()
-        self.cumulativePlot_timer.timeout.connect(lambda: self.updatePlot())
+        self.cumulativePlot_timer.timeout.connect(self.updatePlot)
         self.cumulativePlot_timer.start(plotUpdateInterval)
 
-        print('Started PosPlot updating')
-
         # Keep track of whether Online Tracker is still alive. If not, close position plot
-        self.online_tracker_alive_checker_thread = QOneShotThread(self.close_if_online_tracker_not_alive)
-        self.online_tracker_alive_checker_thread.finished.connect(self.close)
-        self.online_tracker_alive_checker_thread.start()
-
-        print('PosPlot initialized')
+        self.online_tracking_data_alive_checker_timer = QTimer()
+        self.online_tracking_data_alive_checker_timer.timeout.connect(self.close_if_online_tracker_not_alive)
+        self.online_tracking_data_alive_checker_timer.start(100)
 
     def close_if_online_tracker_not_alive(self):
-        while self.keep_updating_plot and self.online_tracker_is_alive.get():
-            sleep(0.5)
+        if not self.keep_updating_plot or not self.online_tracker_is_alive.get():
+            self.close()
 
     def updatePlotAxes(self):
         binSize = self.histogramParameters['binSize']
@@ -299,12 +282,16 @@ class PosPlot(object):
                                           brush=pg.mkBrush('b'))
                 self.plotBox.addItem(self.arrow)
 
+    def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
+        self.close()
+        super(PosPlot, self).closeEvent(a0)
+
     def close(self):
-        print('Close PosPlot')
         if self.keep_updating_plot:
             # Close the update loop, RPi Position tracking loop and application window
             self.keep_updating_plot = False
             self.cumulativePlot_timer.stop()
-            sleep(1)
-            self.mainWindow.close()
+            self.online_tracking_data_alive_checker_timer.stop()
+            sleep(0.25)
             print('Stopped Cumulative Position Plot.')
+        super(PosPlot, self).close()
