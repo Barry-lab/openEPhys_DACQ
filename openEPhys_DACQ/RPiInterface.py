@@ -353,15 +353,19 @@ class onlineTrackingData(object):
         self.posDatas = [None for i in range(len(self.cameraIDs))]
         self.multiprocess_manager = multiprocessing.Manager()
         self.combPosHistory = self.multiprocess_manager.list([])
-        self.sockSUBs = onlineTrackingData.setupSockets(self.cameraIDs, self.CameraSettings)
+        # self.sockSUBs = onlineTrackingData.setupSockets(self.cameraIDs, self.CameraSettings)
         # Initialize Locks to avoid errors
         self.posDatasLock = Lock()
         # Initialize histogram
         self.position_histogram_dict = self.multiprocess_manager.dict()
-        self.initializePosHistogram(HistogramParameters, update=False)
+        self.position_histogram_update_parameters = self.multiprocess_manager.dict(HistogramParameters)
+        self.position_histogram_dict_updating = self.multiprocess_manager.Value(bool, True)
+        self.update_histogram_parameters(init=True)
         # Start updating position data and storing it in history
         self.T_updateCombPosHistory = Thread(target=self.updateCombPosHistory)
         self.T_updateCombPosHistory.start()
+
+        self.is_alive = self.multiprocess_manager.Value(bool, True)
 
     @staticmethod
     def setupSocket(address, port):
@@ -400,8 +404,13 @@ class onlineTrackingData(object):
         while self.KeepGettingData:
             # Wait for position data update
             try:
-                message = self.sockSUBs[nRPi].recv()  # Receive message
-                message = message.decode()  # Decode bytes into string
+                # message = self.sockSUBs[nRPi].recv()  # Receive message
+                # message = message.decode()  # Decode bytes into string
+
+                x = np.random.randint(0, 100)
+                y = np.random.randint(0, 100)
+                message = json.dumps([x, x + 5, y, y - 5, 150, 100])
+
             except:
                 message = 'no message'
             if message != 'no message':
@@ -430,32 +439,33 @@ class onlineTrackingData(object):
 
         return lastCombPos
 
-    def initializePosHistogram(self, HistogramParameters, update=False):
+    def update_histogram_parameters(self, init=False):
         # Initialise histogram edgesrameters
-        margins = HistogramParameters['margins']
-        binSize = HistogramParameters['binSize']
+        margins = self.position_histogram_update_parameters['margins']
+        binSize = self.position_histogram_update_parameters['binSize']
         xHistogram_edges = np.append(np.arange(-margins, self.arena_size[0] + margins, binSize), 
                                      self.arena_size[0] + margins)
         yHistogram_edges = np.append(np.arange(-margins, self.arena_size[1] + margins, binSize), 
                                      self.arena_size[1] + margins)
         # If update requested with new parameters, recompute histogram
-        if update:
+        if init:
+            histmap = np.zeros((yHistogram_edges.size - 1, xHistogram_edges.size - 1), dtype=np.float32)
+        else:
             combPos = np.array(self.combPosHistory)
             # Keep datapoints above speed limit
             one_second_steps = int(np.round(1 / self.combPos_update_interval))
             idx_keep = np.zeros(combPos.shape[0], dtype=bool)
             for npos in range(one_second_steps, combPos.shape[0] - 1):
                 lastDistance = euclidean(combPos[npos,:2], combPos[npos - one_second_steps,:2])
-                if lastDistance > HistogramParameters['speedLimit']:
+                if lastDistance > self.position_histogram_update_parameters['speedLimit']:
                     idx_keep[npos] = True
             combPos = combPos[idx_keep, :]
             histmap, _1, _2 = np.histogram2d(combPos[:,1], combPos[:,0], [yHistogram_edges, xHistogram_edges])
-        else:
-            histmap = np.zeros((yHistogram_edges.size - 1, xHistogram_edges.size - 1), dtype=np.float32)
         # Update shared data
         self.position_histogram_dict['data'] = histmap
-        self.position_histogram_dict['parameters'] = HistogramParameters
+        self.position_histogram_dict['parameters'] = self.position_histogram_update_parameters
         self.position_histogram_dict['edges'] = {'x': xHistogram_edges, 'y': yHistogram_edges}
+        self.position_histogram_dict_updating.set(False)
 
     def updateCombPosHistory(self):
         # Initialize RPi position data listening, unless synthetic data requested
@@ -487,6 +497,8 @@ class onlineTrackingData(object):
         time_of_last_datapoint = time()
         # Update the data at specific interval
         while self.KeepGettingData:
+            if self.position_histogram_dict_updating.value:
+                self.update_histogram_parameters()
             time_since_last_datapoint = time() - time_of_last_datapoint
             if time_since_last_datapoint > self.combPos_update_interval:
                 # If enough time has passed since last update, append to combPosHistory list
@@ -515,14 +527,17 @@ class onlineTrackingData(object):
             else:
                 sleep(self.combPos_update_interval * 0.1)
 
+        self.is_alive.set(False)
+
     def close(self):
         # Closes the updatePosDatas thread and ZeroMQ socket for position listening
         self.KeepGettingData = False
         for T in self.T_updatePosDatas:
             T.join()
         self.T_updateCombPosHistory.join()
-        for sockSUB in self.sockSUBs:
-            sockSUB.close()
+        # for sockSUB in self.sockSUBs:
+        #     sockSUB.close()
+
 
 class RewardControl(object):
     # This class allows control of FEEDERs

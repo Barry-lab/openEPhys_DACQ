@@ -9,7 +9,6 @@ import random
 from PyQt5 import QtWidgets, QtGui
 import warnings
 from copy import copy, deepcopy
-import multiprocessing
 
 from openEPhys_DACQ.audioSignalGenerator import createAudioSignal
 from openEPhys_DACQ.sshScripts import ssh
@@ -3015,72 +3014,3 @@ class Core(object):
         close_pygame()
 
         self._closed = True
-
-
-class CoreInSeparateProcess(object):
-    """
-    This class can be used instead of the :py:class:`Core` to allow the task to run in a separate process.
-
-    Inputs to the task must be functional in a separate process created with multiprocessing package.
-    """
-
-    def __init__(self, *args):
-        """
-        Same input arguments as for :py:class:`Core`.
-        """
-
-        command_receiver_pipe, self._command_sender_pipe = multiprocessing.Pipe()
-
-        args = (command_receiver_pipe,) + args
-        self._core_process = multiprocessing.Process(target=self.core_process_method, args=args)
-        self._core_process.start()
-
-        while not self._command_sender_pipe.poll(0.1):
-            if self._command_sender_pipe.recv() == 'initialization successful':
-                print('Task started successfully in separate process.')
-            else:
-                raise Exception('Unknown input from task process.')
-
-    @staticmethod
-    def core_process_method(command_receiver_pipe, *args):
-        """This method initializes :py:class:`Core` and runs until it has completed `close` command.
-        Any strings received via `command_receiver_pipe` are executed as `Core` class method names.
-
-        :param multiprocessing.connection command_receiver_pipe:
-        :param args: all other arguments passed on to :py:class:`Core`
-        """
-
-        core = Core(*args)
-
-        command_receiver_pipe.send('initialization successful')
-
-        while not core.closed:
-
-            if command_receiver_pipe.poll(0.1):
-
-                method_name = command_receiver_pipe.recv()
-
-                ret = getattr(core, method_name)()
-
-                command_receiver_pipe.send(ret)
-
-    def run(self):
-        """
-        Same functionality as for :py:class:`Core`.
-        """
-        if self._core_process.is_alive():
-            self._command_sender_pipe.send('run')
-            return self._command_sender_pipe.recv()
-        else:
-            raise Exception('Task Process is not running. Can not receive commands.')
-
-    def stop(self):
-        """
-        Same functionality as for :py:class:`Core`.
-        """
-        if self._core_process.is_alive():
-            self._command_sender_pipe.send('stop')
-            self._core_process.join()
-            return self._command_sender_pipe.recv()
-        else:
-            raise Exception('Task Process is not running. Can not receive commands.')

@@ -478,23 +478,23 @@ class RecordingManager(object):
         if self.recording_initialized:
             raise RecordingManagerException('Recording already initialized.')
 
-        self.check_if_ready_to_initialize()
+        # self.check_if_ready_to_initialize()
 
         # Initialize tracking
         if self.general_settings['Tracking']:
 
-            print('Connecting to GlobalClock RPi...')
-            args = (self.camera_settings['General']['global_clock_ip'],
-                    self.camera_settings['General']['ZMQcomms_port'],
-                    self.camera_settings['General']['username'],
-                    self.camera_settings['General']['password'])
-            self.global_clock_controller = RPiInterface.GlobalClockControl(*args)
-            print('Connecting to GlobalClock RPi Successful')
-
-            # Connect to tracking RPis
-            print('Connecting to tracking RPis...')
-            self.tracking_controller = RPiInterface.TrackingControl(self.camera_settings)
-            print('Connecting to tracking RPis Successful')
+            # print('Connecting to GlobalClock RPi...')
+            # args = (self.camera_settings['General']['global_clock_ip'],
+            #         self.camera_settings['General']['ZMQcomms_port'],
+            #         self.camera_settings['General']['username'],
+            #         self.camera_settings['General']['password'])
+            # self.global_clock_controller = RPiInterface.GlobalClockControl(*args)
+            # print('Connecting to GlobalClock RPi Successful')
+            #
+            # # Connect to tracking RPis
+            # print('Connecting to tracking RPis...')
+            # self.tracking_controller = RPiInterface.TrackingControl(self.camera_settings)
+            # print('Connecting to tracking RPis Successful')
 
             # Initialize onlineTrackingData class
             print('Initializing Online Tracking Data Processor...')
@@ -506,16 +506,16 @@ class RecordingManager(object):
             )
             print('Initializing Tracking Data Processor Successful')
 
-        # Initialize talking to OpenEphysGUI
-        self.open_ephys_messenger = OpenEphysMessenger()
-
-        # Initialize Task
-        if self.general_settings['TaskActive']:
-
-            print('Initializing Task...')
-            task_module = import_module('Tasks.' + self.task_settings['name'] + '.Task')
-            self.current_task = task_module.Core(*self.create_task_arguments())
-            print('Initializing Task Successful')
+        # # Initialize talking to OpenEphysGUI
+        # self.open_ephys_messenger = OpenEphysMessenger()
+        #
+        # # Initialize Task
+        # if self.general_settings['TaskActive']:
+        #
+        #     print('Initializing Task...')
+        #     task_module = import_module('Tasks.' + self.task_settings['name'] + '.Task')
+        #     self.current_task = task_module.Core(*self.create_task_arguments())
+        #     print('Initializing Task Successful')
 
         self.recording_initialized = True
         print('Recording Initialization Successful')
@@ -553,6 +553,17 @@ class RecordingManager(object):
         self.recording_initialized = False
         print('Recording Initialization Cancelled successfully')
 
+    def create_position_plot_arguments(self):
+        return (
+            self.online_tracking_processor.combPosHistory,
+            self.online_tracking_processor.position_histogram_dict,
+            self.online_tracking_processor.position_histogram_update_parameters,
+            self.online_tracking_processor.position_histogram_dict_updating,
+            self.online_tracking_processor.is_alive,
+            self.general_settings['arena_size'],
+            self.camera_settings['General']['LED_angle']
+        )
+
     def start_rec(self):
 
         if self.recording_active or self.recording_closing:
@@ -563,43 +574,43 @@ class RecordingManager(object):
         else:
             self.recording_initialized = False
 
-        # Start Open Ephys GUI recording
-        print('Starting Open Ephys GUI Recording...')
-        recording_folder_root = os.path.join(self.general_settings['root_folder'], self.general_settings['animal'])
-        command = 'StartRecord RecDir=' + recording_folder_root + ' CreateNewDir=1'
-        self.open_ephys_messenger.send_message_to_open_ephys(command)
-
-        # Make sure OpenEphys is recording
-        recording_file = get_recording_file_path(recording_folder_root)
-        while not recording_file:
-            sleep(0.1)
-            recording_file = get_recording_file_path(recording_folder_root)
-        while not check_if_nwb_recording(recording_file):
-            sleep(0.1)
-        self.general_settings['rec_file_path'] = recording_file
-        print('Starting Open Ephys GUI Recording Successful')
-
-        # Start the tracking scripts on all RPis
-        if self.general_settings['Tracking']:
-            print('Starting tracking RPis...')
-            self.tracking_controller.start()
-            print('Starting tracking RPis Successful')
-            # Tracking controller start command should not complete before RPis have really executed the command
-            print('Starting GlobalClock RPi...')
-            self.global_clock_controller.start()
-            print('Starting GlobalClock RPi Successful')
+        # # Start Open Ephys GUI recording
+        # print('Starting Open Ephys GUI Recording...')
+        # recording_folder_root = os.path.join(self.general_settings['root_folder'], self.general_settings['animal'])
+        # command = 'StartRecord RecDir=' + recording_folder_root + ' CreateNewDir=1'
+        # self.open_ephys_messenger.send_message_to_open_ephys(command)
+        #
+        # # Make sure OpenEphys is recording
+        # recording_file = get_recording_file_path(recording_folder_root)
+        # while not recording_file:
+        #     sleep(0.1)
+        #     recording_file = get_recording_file_path(recording_folder_root)
+        # while not check_if_nwb_recording(recording_file):
+        #     sleep(0.1)
+        # self.general_settings['rec_file_path'] = recording_file
+        # print('Starting Open Ephys GUI Recording Successful')
+        #
+        # # Start the tracking scripts on all RPis
+        # if self.general_settings['Tracking']:
+        #     print('Starting tracking RPis...')
+        #     self.tracking_controller.start()
+        #     print('Starting tracking RPis Successful')
+        #     # Tracking controller start command should not complete before RPis have really executed the command
+        #     print('Starting GlobalClock RPi...')
+        #     self.global_clock_controller.start()
+        #     print('Starting GlobalClock RPi Successful')
 
         # Start cumulative plot
         if self.general_settings['Tracking']:
             print('Starting Position Plot...')
-            self.position_plot = PosPlot(self.online_tracking_processor, self.camera_settings['General']['LED_angle'])
+            self.position_plot_process = PosPlot(*self.create_position_plot_arguments())
             print('Starting Position Plot Successful')
 
-        # Start task
-        if self.general_settings['TaskActive']:
-            print('Starting Task...')
-            self.current_task.run()
-            print('Starting Task Successful')
+        # # Start task
+        # if self.general_settings['TaskActive']:
+        #     print('Starting Task...')
+        #     self.current_task.run()
+        #     print('Starting Task Successful')
 
         self.recording_active = True
 
@@ -665,15 +676,12 @@ class RecordingManager(object):
 
         self.compile_recording_data()
 
-        # Stop cumulative plot
-        if self.general_settings['Tracking']:
-            if hasattr(self, 'PosPlot'):
-                print('Stopping Position Plot...')
-                self.position_plot.close()
-                print('Stopping Position Plot Successful')
-
         # Close connection with OpenEphysGUI
         self.open_ephys_messenger.close()
+
+        # Position plot should have close automatically after tracking was closed
+        if self.general_settings['Tracking']:
+            self.position_plot_process.PosPlot.close()
 
         self.recording_closing = False
 

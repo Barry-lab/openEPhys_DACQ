@@ -3,13 +3,15 @@
 
 ### By Sander Tanni, January 2018, UCL
 
+import sys
 import pyqtgraph as pg
 from PyQt5 import QtWidgets
 import numpy as np
-from PyQt5.QtCore import QTimer
-import time
+import multiprocessing
+from PyQt5.QtCore import QTimer, QThread
+from time import sleep
 from scipy import ndimage
-from copy import copy
+from copy import copy, deepcopy
 
 
 def angle_clockwise(p1, p2, invertedY=True):
@@ -26,14 +28,41 @@ def angle_clockwise(p1, p2, invertedY=True):
     return angle_deg
 
 
+class QOneShotThread(QThread):
+
+    def __init__(self, target):
+        self._target = target
+        super().__init__()
+
+    def run(self) -> None:
+        self._target()
+
+
 class PosPlot(object):
-    def __init__(self, online_tracking_processor, LED_angle=None):
-        self.online_tracking_processor = online_tracking_processor
-        self.histogramParameters = copy(self.online_tracking_processor.position_histogram_dict['parameters'])
+    """
+    Displays position data as provided by OnlineTracker class.
+
+    Closes automatically when OnlineTracker class is no longer active.
+    """
+
+    def __init__(self, processed_position_list, position_histogram_dict,
+                 position_histogram_update_parameters, position_histogram_dict_updating,
+                 online_tracker_is_alive, arena_size, LED_angle=None):
+
+        self.processed_position_list = processed_position_list
+        self.position_histogram_dict = position_histogram_dict
+        self.position_histogram_update_parameters = position_histogram_update_parameters
+        self.position_histogram_dict_updating = position_histogram_dict_updating
+        self.online_tracker_is_alive = online_tracker_is_alive
+        self.arena_size = arena_size
         self.LED_angle = LED_angle
-        # Only continue once first two position datas are obtained
-        while len(self.online_tracking_processor.combPosHistory) < 2:
-            time.sleep(0.1)
+
+        self.histogramParameters = copy(self.position_histogram_dict['parameters'])
+
+        # Only continue once first two position samples are available
+        while len(self.processed_position_list) < 2:
+            sleep(0.1)
+
         # Initialize plot window
         self.PlotGraphicsWidget = pg.GraphicsLayoutWidget()
         self.plotBox = self.PlotGraphicsWidget.addViewBox(enableMouse=False)
@@ -41,6 +70,7 @@ class PosPlot(object):
         self.imageItem = pg.ImageItem()
         self.plotBox.addItem(self.imageItem)
         self.plotBox.invertY(True)
+
         # Create color map box
         self.ColormapGraphicsWidget = pg.GraphicsLayoutWidget()
         self.ColormapGraphicsWidget.setFixedWidth(50)
@@ -48,6 +78,7 @@ class PosPlot(object):
         self.colorMapBox.setAspectLocked(False)
         self.colorMapImageItem = pg.ImageItem()
         self.colorMapBox.addItem(self.colorMapImageItem)
+
         # Create UI controls
         self.maxValueBox = QtWidgets.QLineEdit('10')
         self.thresholdValueBox = QtWidgets.QLineEdit('2')
@@ -66,11 +97,12 @@ class PosPlot(object):
         self.showPathButton.setCheckable(True)
         self.showPathButton.setChecked(False)
         self.showPathButton.clicked.connect(self.showPath)
+
         # Put all plots into main window and display
         self.mainWindow = QtWidgets.QWidget()
         self.mainWindow.setWindowTitle('Cumulative Position Plot')
-        XandYratio = (float(self.online_tracking_processor.arena_size[0])
-                      / float(self.online_tracking_processor.arena_size[1]))
+        XandYratio = (float(self.arena_size[0])
+                      / float(self.arena_size[1]))
         self.mainWindow.resize(int(700 * XandYratio) + 200, 700)
         vboxWidget = QtWidgets.QWidget()
         vboxWidget.setFixedWidth(100)
@@ -102,24 +134,41 @@ class PosPlot(object):
         hbox.addWidget(self.ColormapGraphicsWidget)
         hbox.addWidget(vboxWidget)
         self.mainWindow.show()
+
         # Prepare plot
         self.prepareColormap()
         self.updatePlotAxes()
         self.draw_arena_boundaries()
-        self.arrow = pg.ArrowItem(pos=(0,0), angle=0, headLen=0, tailLen=0,headWidth=0,tailWidth=0)
+        self.arrow = pg.ArrowItem(pos=(0, 0), angle=0, headLen=0, tailLen=0, headWidth=0, tailWidth=0)
         self.plotBox.addItem(self.arrow)
+
+        print('Starting PosPlot updating')
+
         # Start constant update of the plot
         self.keep_updating_plot = True
         plotUpdateInterval = 100 # This sets the plot update interval in milliseconds
         self.cumulativePlot_timer = QTimer()
-        self.cumulativePlot_timer.timeout.connect(lambda:self.updatePlot())
+        self.cumulativePlot_timer.timeout.connect(lambda: self.updatePlot())
         self.cumulativePlot_timer.start(plotUpdateInterval)
+
+        print('Started PosPlot updating')
+
+        # Keep track of whether Online Tracker is still alive. If not, close position plot
+        self.online_tracker_alive_checker_thread = QOneShotThread(self.close_if_online_tracker_not_alive)
+        self.online_tracker_alive_checker_thread.finished.connect(self.close)
+        self.online_tracker_alive_checker_thread.start()
+
+        print('PosPlot initialized')
+
+    def close_if_online_tracker_not_alive(self):
+        while self.keep_updating_plot and self.online_tracker_is_alive.get():
+            sleep(0.5)
 
     def updatePlotAxes(self):
         binSize = self.histogramParameters['binSize']
         margins = self.histogramParameters['margins']
-        xRange = (0, (self.online_tracking_processor.arena_size[0] + 2 * margins) / binSize)
-        yRange = (0, (self.online_tracking_processor.arena_size[1] + 2 * margins) / binSize)
+        xRange = (0, (self.arena_size[0] + 2 * margins) / binSize)
+        yRange = (0, (self.arena_size[1] + 2 * margins) / binSize)
         self.plotBox.setRange(xRange=xRange, yRange=yRange)
 
     def prepareColormap(self):
@@ -159,10 +208,10 @@ class PosPlot(object):
     def draw_arena_boundaries(self):
         # Draw boundaries of the arena to the plot
         boundaries = np.array([[0, 0],
-                               [self.online_tracking_processor.arena_size[0], 0],
-                               [self.online_tracking_processor.arena_size[0],
-                                self.online_tracking_processor.arena_size[1]],
-                               [0, self.online_tracking_processor.arena_size[1]],
+                               [self.arena_size[0], 0],
+                               [self.arena_size[0],
+                                self.arena_size[1]],
+                               [0, self.arena_size[1]],
                                [0, 0]])
         boundaries = boundaries + self.histogramParameters['margins']
         boundaries = boundaries / float(self.histogramParameters['binSize'])
@@ -176,23 +225,24 @@ class PosPlot(object):
         self.smoothingValue = float(str(self.smoothingValueBox.text()))
 
     def updateHistogramParameters(self):
-        # Load parameters into dictionary
-        speedLimit = float(str(self.speedLimitBox.text()))
-        binSize = float(str(self.binSizeBox.text()))
-        margins = float(str(self.marginsBox.text()))
-        histogramParameters = {'margins': margins, 
-                               'binSize': binSize, 
-                               'speedLimit': speedLimit}
+
         # Initiate update function
-        self.online_tracking_processor.initializePosHistogram(histogramParameters, update=True)
-        self.histogramParameters = copy(self.online_tracking_processor.position_histogram_dict['parameters'])
+        self.position_histogram_update_parameters['margins'] = float(str(self.marginsBox.text()))
+        self.position_histogram_update_parameters['binSize'] = float(str(self.binSizeBox.text()))
+        self.position_histogram_update_parameters['speedLimit'] = float(str(self.speedLimitBox.text()))
+        self.position_histogram_dict_updating.set(True)
+        while self.position_histogram_dict_updating.get():
+            sleep(0.1)
+
+        # Use new established histogram parameters
+        self.histogramParameters = deepcopy(self.position_histogram_dict['parameters'])
         self.updatePlotAxes()
         self.plotBox.removeItem(self.boundaryBox)
         self.draw_arena_boundaries()
 
     def showPath(self):
         if self.showPathButton.isChecked():
-            posHistory = copy(self.online_tracking_processor.combPosHistory[0:])
+            posHistory = copy(self.processed_position_list[0:])
             posHistory = [i for i in posHistory if i is not None]
             posHistory = np.array(posHistory)[:, :2]
             posHistory = posHistory + self.histogramParameters['margins']
@@ -205,14 +255,12 @@ class PosPlot(object):
             self.plotBox.removeItem(self.trackedPath)
 
     def updatePlot(self):
-        if self.keep_updating_plot:
+        if self.keep_updating_plot and self.online_tracker_is_alive.get():
             binSize = self.histogramParameters['binSize']
             margins = self.histogramParameters['margins']
             # Get latest position data
-            combPosHistory = copy(self.online_tracking_processor.combPosHistory[:-2])
-            pastPos = combPosHistory[-2]
-            currPos = combPosHistory[-1]
-            positionHistogram = self.online_tracking_processor.position_histogram_dict['data']
+            pastPos, currPos = copy(self.processed_position_list[-2:])
+            positionHistogram = self.position_histogram_dict['data']
             # Smooth histogram
             smoothGaussStd = self.smoothingValue / float(binSize)
             image = ndimage.gaussian_filter(positionHistogram.T, sigma=(smoothGaussStd, smoothGaussStd), order=0)
@@ -252,9 +300,11 @@ class PosPlot(object):
                 self.plotBox.addItem(self.arrow)
 
     def close(self):
-        # Close the update loop, RPi Position tracking loop and application window
-        self.keep_updating_plot = False
-        self.cumulativePlot_timer.stop()
-        time.sleep(1)
-        self.mainWindow.close()
-        print('Stopped Cumulative Position Plot.')
+        print('Close PosPlot')
+        if self.keep_updating_plot:
+            # Close the update loop, RPi Position tracking loop and application window
+            self.keep_updating_plot = False
+            self.cumulativePlot_timer.stop()
+            sleep(1)
+            self.mainWindow.close()
+            print('Stopped Cumulative Position Plot.')

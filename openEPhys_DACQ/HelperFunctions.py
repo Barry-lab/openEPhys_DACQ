@@ -6,7 +6,7 @@ import numpy as np
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QThread, pyqtSignal
 import subprocess
-import multiprocessing as mp
+import multiprocessing
 import threading
 from time import sleep
 import psutil
@@ -28,7 +28,7 @@ class CPU_availability_tracker(object):
     """
     def __init__(self, n_cores):
         self._available_cores = [False for i in range(n_cores)] # Start unavailable to debug locks
-        self._core_locks = [mp.Lock() for i in range(n_cores)]
+        self._core_locks = [multiprocessing.Lock() for i in range(n_cores)]
         self._T__check_locks = threading.Thread(target=self._check_locks)
         self._T__check_locks.daemon = True
         self._T__check_locks.start()
@@ -93,10 +93,10 @@ class multiprocess(object):
     use the map method as an example how to use run and results methods.
     """
     def __init__(self):
-        self.CPU_availability_tracker = CPU_availability_tracker(mp.cpu_count()-1 or 1)
-        self.multiprocessingManager = mp.Manager()
+        self.CPU_availability_tracker = CPU_availability_tracker(multiprocessing.cpu_count()-1 or 1)
+        self.multiprocessingManager = multiprocessing.Manager()
         self.output_list = self.multiprocessingManager.list([])
-        self.output_list_Lock = mp.Lock()
+        self.output_list_Lock = multiprocessing.Lock()
         self.processor_list = []
         self.run_Lock = threading.Lock()
 
@@ -144,9 +144,9 @@ class multiprocess(object):
                 list_pos = len(self.output_list)
                 self.output_list.append(None)
             # Start independent processor
-            p = mp.Process(target=multiprocess.processor, 
-                           args=(self.output_list, self.output_list_Lock, list_pos, 
-                                 cpu_lock, f, args, kwargs))
+            p = multiprocessing.Process(target=multiprocess.processor,
+                                        args=(self.output_list, self.output_list_Lock, list_pos,
+                                              cpu_lock, f, args, kwargs))
             p.start()
             self.processor_list.append(p)
 
@@ -513,3 +513,87 @@ def clearLayout(layout, keep=0):
                 widget.deleteLater()
             else:
                 clearLayout(item.layout())
+
+
+class ClassInSeparateProcess(object):
+    """
+    This class can be used to instantiate and control another class in a separate process.
+
+    The controlled class must have a `closed` attribute that indicates
+    if the class has been closed after instantiation.
+
+    Inputs to the task must be functional in a separate process created with multiprocessing package.
+    """
+
+    def __init__(self, cls, args=None, kwargs=None):
+        """
+        :param cls: class with `close` attribute to indicate if class has been closed after instantiation
+        :param tuple args: positional arguments to pass into class
+        :param dict kwargs: keyword arguments to pass into class
+        """
+
+        command_receiver_pipe, self._command_sender_pipe = multiprocessing.Pipe()
+
+        self._class_process = multiprocessing.Process(target=self.class_process_method,
+                                                      args=(cls, command_receiver_pipe,
+                                                            () if args is None else args,
+                                                            {} if kwargs is None else kwargs))
+        self._class_process.start()
+
+        while True:
+            if self._command_sender_pipe.poll(0.1):
+                if self._command_sender_pipe.recv() == 'initialization successful':
+                    print('Class {} started successfully in separate process.'.format(cls))
+                    break
+                else:
+                    raise Exception('Unknown input from class {} process.'.format(cls))
+
+    @property
+    def class_process_active(self):
+        """Returns True if the processes with class instance is active and False otherwise.
+
+        :return: alive_bool
+        :rtype: bool
+        """
+        return self._class_process.is_alive()
+
+    @staticmethod
+    def class_process_method(cls, command_receiver_pipe, args, kwargs):
+        """This method initializes the class and runs until it has completed `close` command.
+
+        Any string received via `command_receiver_pipe` are executed as class method names
+        and output returned via `command_receiver_pipe`.
+
+        :param cls: class with `close` attribute to indicate if class has been closed after instantiation
+        :param multiprocessing.connection command_receiver_pipe:
+        :param tuple args: positional arguments to pass into class
+        :param dict kwargs: keyword arguments to pass into class
+        """
+
+        class_instance = cls(*args, **kwargs)
+
+        command_receiver_pipe.send('initialization successful')
+
+        while not class_instance.closed:
+
+            if command_receiver_pipe.poll(0.1):
+
+                method_name = command_receiver_pipe.recv()
+
+                ret = getattr(class_instance, method_name)()
+
+                command_receiver_pipe.send(ret)
+
+    def call_class_method(self, name):
+        """Calls the named method on the class running in another process and returns output.
+
+        This method blocks until the method in another process returns.
+
+        :param str name: name of the method to be called
+        :return: return_from_method
+        """
+        if self.class_process_active:
+            self._command_sender_pipe.send(name)
+            return self._command_sender_pipe.recv()
+        else:
+            raise Exception('Class Process is not running. Can not receive commands.')

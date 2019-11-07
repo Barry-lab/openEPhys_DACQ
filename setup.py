@@ -43,7 +43,7 @@ except ImportError:
     pass
 
 __project__      = 'openEPhys_DACQ'
-__version__      = '0.85'
+__version__      = '0.86'
 __author__       = 'Barry-lab'
 __author_email__ = 'caswellbarry@ucl.ac.uk'
 __url__          = 'https://barry-lab.github.io/openEPhys_DACQ/'
