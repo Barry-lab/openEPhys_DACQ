@@ -506,6 +506,7 @@ class RecordingManager(object):
             self.open_ephys_messenger.open_ephys_message_pipe,
             self.online_tracking_processor.combPosHistory,
             self.online_tracking_processor.combPos_update_interval,
+            self.online_tracking_processor.position_histogram_array,
             self.online_tracking_processor.position_histogram_dict
         )
 
@@ -598,9 +599,8 @@ class RecordingManager(object):
     def create_position_plot_arguments(self):
         return (
             self.online_tracking_processor.combPosHistory,
+            self.online_tracking_processor.position_histogram_array,
             self.online_tracking_processor.position_histogram_dict,
-            self.online_tracking_processor.position_histogram_update_parameters,
-            self.online_tracking_processor.position_histogram_dict_updating,
             self.online_tracking_processor.is_alive,
             self.general_settings['arena_size'],
             self.camera_settings['General']['LED_angle']

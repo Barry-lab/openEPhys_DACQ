@@ -802,8 +802,9 @@ class PelletChoice(object):
     Use PelletChoice.next() method to choose next feeder.
     """
 
-    def __init__(self, PelletRewardDevices, position_histogram_dict, arena_size):
+    def __init__(self, PelletRewardDevices, position_histogram_array, position_histogram_dict, arena_size):
         self.PelletRewardDevices = PelletRewardDevices
+        self.position_histogram_array = position_histogram_array
         self.position_histogram_dict = position_histogram_dict
         self.arena_size = arena_size
         self.next()
@@ -867,8 +868,9 @@ class PelletChoice(object):
         self._ensure_nearest_feeder_map_valid(IDs_active)
         if len(IDs_active) > 1:
             # Get occupancy information from position_histogram_dict
-            histmap = self.position_histogram_dict['data']
-            # Crop histogram to relavant parts
+            histmap = np.reshape(self.position_histogram_array,
+                                 self.position_histogram_dict['array_shape'])
+            # Crop histogram to relevant parts
             histmap = histmap[self.histogramPfeederMap['idx_crop_Y'], self.histogramPfeederMap['idx_crop_X']]
             # Find mean occupancy in bins nearest to each feeder
             feeder_bin_occupancy = np.zeros(len(IDs_active), dtype=np.float64)
@@ -2772,13 +2774,14 @@ class UserEventHandler(object):
 class Core(object):
 
     def __init__(self, TaskSettings, open_ephys_message_pipe, processed_position_list,
-                 processed_position_update_interval, position_histogram_dict):
+                 processed_position_update_interval, position_histogram_array, position_histogram_dict):
         """Initializes all possible devices to prepare for start command.
 
         :param TaskSettings:
         :param multiprocessing.connection open_ephys_message_pipe:
         :param multiprocessing.managers.List processed_position_list:
         :param int processed_position_update_interval:
+        :param multiprocessing.Array position_histogram_array:
         :param multiprocessing.managers.Dict position_histogram_dict:
         """
 
@@ -2789,6 +2792,7 @@ class Core(object):
         self.open_ephys_message_pipe = open_ephys_message_pipe
         self.processed_position_list = processed_position_list
         self.processed_position_update_interval = processed_position_update_interval
+        self.position_histogram_array = position_histogram_array
         self.position_histogram_dict = position_histogram_dict
 
         self._closed = False
@@ -2833,8 +2837,8 @@ class Core(object):
 
         # Initialize Pellet Game
         if self.TaskSettings['games_active']['pellet']:
-            self.PelletChoice = PelletChoice(self.PelletRewardDevices, position_histogram_dict,
-                                             self.TaskSettings['arena_size'])
+            self.PelletChoice = PelletChoice(self.PelletRewardDevices, self.position_histogram_array,
+                                             self.position_histogram_dict, self.TaskSettings['arena_size'])
         else:
             self.PelletChoice = None
 

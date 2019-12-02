@@ -8,7 +8,7 @@ import pyqtgraph as pg
 from PyQt5 import QtWidgets, QtGui
 import numpy as np
 from PyQt5.QtCore import QTimer
-from time import sleep
+from time import sleep, time
 from scipy import ndimage
 from copy import copy, deepcopy
 
@@ -34,20 +34,18 @@ class PosPlot(QtWidgets.QWidget):
     Closes automatically when OnlineTracker class is no longer active.
     """
 
-    def __init__(self, processed_position_list, position_histogram_dict,
-                 position_histogram_update_parameters, position_histogram_dict_updating,
+    def __init__(self, processed_position_list, position_histogram_array, position_histogram_dict,
                  online_tracker_is_alive, arena_size, LED_angle=None):
         super().__init__()
 
         self.processed_position_list = processed_position_list
-        self.position_histogram_dict = position_histogram_dict
-        self.position_histogram_update_parameters = position_histogram_update_parameters
-        self.position_histogram_dict_updating = position_histogram_dict_updating
+        self.position_histogram_array = position_histogram_array
         self.online_tracker_is_alive = online_tracker_is_alive
         self.arena_size = arena_size
         self.LED_angle = LED_angle
 
-        self.histogramParameters = copy(self.position_histogram_dict['parameters'])
+        self.histogram_array_shape = position_histogram_dict['array_shape']
+        self.histogramParameters = position_histogram_dict['parameters']
 
         # Only continue once first two position samples are available
         while len(self.processed_position_list) < 2:
@@ -76,12 +74,6 @@ class PosPlot(QtWidgets.QWidget):
         self.thresholdValueBox.returnPressed.connect(self.prepareColormap)
         self.smoothingValueBox = QtWidgets.QLineEdit('3')
         self.smoothingValueBox.returnPressed.connect(self.updateSmoothingValue)
-        self.speedLimitBox = QtWidgets.QLineEdit(str(self.histogramParameters['speedLimit']))
-        self.speedLimitBox.returnPressed.connect(self.updateHistogramParameters)
-        self.binSizeBox = QtWidgets.QLineEdit(str(self.histogramParameters['binSize']))
-        self.binSizeBox.returnPressed.connect(self.updateHistogramParameters)
-        self.marginsBox = QtWidgets.QLineEdit(str(self.histogramParameters['margins']))
-        self.marginsBox.returnPressed.connect(self.updateHistogramParameters)
         self.updateSmoothingValue()
         self.showPathButton = QtWidgets.QPushButton('Show Path')
         self.showPathButton.setCheckable(True)
@@ -108,15 +100,6 @@ class PosPlot(QtWidgets.QWidget):
         vbox.addWidget(QtWidgets.QLabel('Smoothing'))
         vbox.addWidget(QtWidgets.QLabel('in cm'))
         vbox.addWidget(self.smoothingValueBox)
-        vbox.addWidget(QtWidgets.QLabel('Speed lim'))
-        vbox.addWidget(QtWidgets.QLabel('in cm/s'))
-        vbox.addWidget(self.speedLimitBox)
-        vbox.addWidget(QtWidgets.QLabel('Bin size'))
-        vbox.addWidget(QtWidgets.QLabel('in cm'))
-        vbox.addWidget(self.binSizeBox)
-        vbox.addWidget(QtWidgets.QLabel('Margins'))
-        vbox.addWidget(QtWidgets.QLabel('in cm'))
-        vbox.addWidget(self.marginsBox)
         vbox.addWidget(self.showPathButton)
         hbox = QtWidgets.QHBoxLayout(self)
         hbox.addWidget(self.PlotGraphicsWidget)
@@ -207,22 +190,6 @@ class PosPlot(QtWidgets.QWidget):
         # This is in centimeters
         self.smoothingValue = float(str(self.smoothingValueBox.text()))
 
-    def updateHistogramParameters(self):
-
-        # Initiate update function
-        self.position_histogram_update_parameters['margins'] = float(str(self.marginsBox.text()))
-        self.position_histogram_update_parameters['binSize'] = float(str(self.binSizeBox.text()))
-        self.position_histogram_update_parameters['speedLimit'] = float(str(self.speedLimitBox.text()))
-        self.position_histogram_dict_updating.set(True)
-        while self.position_histogram_dict_updating.get():
-            sleep(0.1)
-
-        # Use new established histogram parameters
-        self.histogramParameters = deepcopy(self.position_histogram_dict['parameters'])
-        self.updatePlotAxes()
-        self.plotBox.removeItem(self.boundaryBox)
-        self.draw_arena_boundaries()
-
     def showPath(self):
         if self.showPathButton.isChecked():
             posHistory = copy(self.processed_position_list[0:])
@@ -239,24 +206,27 @@ class PosPlot(QtWidgets.QWidget):
 
     def updatePlot(self):
         if self.keep_updating_plot and self.online_tracker_is_alive.get():
-            binSize = self.histogramParameters['binSize']
-            margins = self.histogramParameters['margins']
+
             # Get latest position data
-            pastPos, currPos = copy(self.processed_position_list[-2:])
-            positionHistogram = self.position_histogram_dict['data']
+            pastPos, currPos = self.processed_position_list[-2:]
+            positionHistogram = np.reshape(self.position_histogram_array,
+                                           self.histogram_array_shape)
+
             # Smooth histogram
-            smoothGaussStd = self.smoothingValue / float(binSize)
-            image = ndimage.gaussian_filter(positionHistogram.T, sigma=(smoothGaussStd, smoothGaussStd), order=0)
+            smoothGaussStd = self.smoothingValue / float(self.histogramParameters['binSize'])
+            image = ndimage.gaussian_filter(np.float32(positionHistogram.T),
+                                            sigma=(smoothGaussStd, smoothGaussStd),
+                                            order=0)
             # Set image data maximum value as requested
-            image = np.float32(image)
             image[image > self.hist_max_range] = np.float32(self.hist_max_range)
             # Display image of histogram
             image = np.uint8(image / np.float32(self.hist_max_range) * 255)
             self.imageItem.setImage(image, autoLevels=False, lut=self.CMapLut)
             # Draw arrow for position if position data available
-            self.plotBox.removeItem(self.arrow) # Remove previous arrow
+            self.plotBox.removeItem(self.arrow)  # Remove previous arrow
             if not (currPos is None) and not (pastPos is None):
-                arrowPos = ((currPos[0] + margins) / binSize, (currPos[1] + margins) / binSize)
+                arrowPos = ((currPos[0] + self.histogramParameters['margins']) / self.histogramParameters['binSize'],
+                            (currPos[1] + self.histogramParameters['margins']) / self.histogramParameters['binSize'])
                 if not (self.LED_angle is None) and not np.any(np.isnan(currPos[2:])):
                     # Compute arrow angle with to align the line connecting the points
                     head_angle = angle_clockwise(currPos[:2], currPos[2:]) + 90 + self.LED_angle
