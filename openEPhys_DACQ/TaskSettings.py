@@ -131,7 +131,7 @@ class TaskSettingsGUI(QtWidgets.QDialog):
 
     def load_task_specific_gui(self, current_task):
         # Load the GUI for currently selected task
-        task_module = import_module('Tasks.' + current_task + '.Task')
+        task_module = import_module('openEPhys_DACQ.Tasks.' + current_task + '.Task')
         clearLayout(self.general_settings_layout)
         clearLayout(self.further_settings_layout)
         self.task_specific_gui = task_module.SettingsGUI(self.general_settings_layout,

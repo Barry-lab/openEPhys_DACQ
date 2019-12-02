@@ -159,6 +159,19 @@ class RecordingManagerException(Exception):
 
 
 class OpenEphysMessenger(object):
+    """
+    Provides open_ephys_message_pipe that allows message communication with OpenEphysGUI
+    across multiple processes.
+
+    .. warning::
+        open_ephys_message_pipe can only server a single receiver.
+
+    String messages can be sent into open_ephys_message_pipe with `open_ephys_message_pipe.send` command.
+    Messages from OpenEphysGUI can be polled with `open_ephys_message_pipe.poll` and received with
+    `open_ephys_message_pipe.recv`. The message is only available to the first process to call `recv`.
+    It is therefore possible to only have a single receiver of OpenEphysGUI messages, while there can be
+    many senders.
+    """
 
     def __init__(self):
 
@@ -177,10 +190,19 @@ class OpenEphysMessenger(object):
         self._publisher_thread.start()
 
     def send_message_to_open_ephys(self, msg):
+        """Sends message to OpenEphysGUI via ZMQ to be logged with a timestamp.
+
+        :param str msg: message logged in OpenEphysGUI
+        """
         self._publisher.sendMessage(msg)
 
     @property
     def closed(self):
+        """Returns True if connection to OpenEphysGUI is closed and False otherwise.
+
+        :return: state
+        :rtype: bool
+        """
         return self._closed
 
     def publisher_thread_method(self):
@@ -189,6 +211,8 @@ class OpenEphysMessenger(object):
                 self._publisher.sendMessage(self._pipe.recv())
 
     def close(self):
+        """Close ZMQ connections to OpenEphysGUI.
+        """
         self._subscriber.disconnect()
         self._publisher.close()
         self._closed = True
@@ -263,6 +287,21 @@ class RecordingManager(object):
     open_ephys_messenger = None
     current_task = None
     position_plot = None
+
+    simulation = False
+
+    def set_simulation_state(self, state):
+        """Sets the :py:class:`RecordingManager` simulation state. This can be useful for testing methods.
+
+        Allows testing :py:class:`RecordingManager` without need for OpenEphysGUI or any other peripheral devices.
+
+        .. Usage::
+            Set Tracking active and only one Camera active with address "localhost".
+            This way tracking data will be simulated locally.
+
+        :param bool state:
+        """
+        self.simulation = state
 
     def update_general_settings(self, key, value):
 
@@ -483,17 +522,19 @@ class RecordingManager(object):
         # Initialize tracking
         if self.general_settings['Tracking']:
 
-            print('Connecting to GlobalClock RPi...')
-            args = (self.camera_settings['General']['global_clock_ip'],
-                    self.camera_settings['General']['ZMQcomms_port'],
-                    self.camera_settings['General']['username'],
-                    self.camera_settings['General']['password'])
-            self.global_clock_controller = RPiInterface.GlobalClockControl(*args)
-            print('Connecting to GlobalClock RPi Successful')
+            if not self.simulation:
+                print('Connecting to GlobalClock RPi...')
+                args = (self.camera_settings['General']['global_clock_ip'],
+                        self.camera_settings['General']['ZMQcomms_port'],
+                        self.camera_settings['General']['username'],
+                        self.camera_settings['General']['password'])
+                self.global_clock_controller = RPiInterface.GlobalClockControl(*args)
+                print('Connecting to GlobalClock RPi Successful')
 
             # Connect to tracking RPis
             print('Connecting to tracking RPis...')
-            self.tracking_controller = RPiInterface.TrackingControl(self.camera_settings)
+            self.tracking_controller = RPiInterface.TrackingControl(self.camera_settings,
+                                                                    simulation=self.simulation)
             print('Connecting to tracking RPis Successful')
 
             # Initialize onlineTrackingData class
@@ -513,7 +554,7 @@ class RecordingManager(object):
         if self.general_settings['TaskActive']:
 
             print('Initializing Task...')
-            task_module = import_module('Tasks.' + self.task_settings['name'] + '.Task')
+            task_module = import_module('openEPhys_DACQ.Tasks.' + self.task_settings['name'] + '.Task')
             self.current_task = task_module.Core(*self.create_task_arguments())
             print('Initializing Task Successful')
 
@@ -528,9 +569,10 @@ class RecordingManager(object):
         # Initialize tracking
         if self.general_settings['Tracking']:
 
-            print('Closing GlobalClock Controller...')
-            self.global_clock_controller.close()
-            print('Closing GlobalClock Controller Successful')
+            if not self.simulation:
+                print('Closing GlobalClock Controller...')
+                self.global_clock_controller.close()
+                print('Closing GlobalClock Controller Successful')
 
             print('Closing tracking RPis...')
             self.tracking_controller.close()
@@ -575,17 +617,19 @@ class RecordingManager(object):
             self.recording_initialized = False
 
         # Start Open Ephys GUI recording
-        print('Starting Open Ephys GUI Recording...')
-        recording_folder_root = os.path.join(self.general_settings['root_folder'], self.general_settings['animal'])
-        command = 'StartRecord RecDir=' + recording_folder_root + ' CreateNewDir=1'
-        self.open_ephys_messenger.send_message_to_open_ephys(command)
+        if not self.simulation:
+            print('Starting Open Ephys GUI Recording...')
+            recording_folder_root = os.path.join(self.general_settings['root_folder'], self.general_settings['animal'])
+            command = 'StartRecord RecDir=' + recording_folder_root + ' CreateNewDir=1'
+            self.open_ephys_messenger.send_message_to_open_ephys(command)
 
         # Make sure OpenEphys is recording
-        recording_file = get_recording_file_path(recording_folder_root)
+        recording_file = get_recording_file_path(recording_folder_root) if not self.simulation else 'simulation'
+
         while not recording_file:
             sleep(0.1)
             recording_file = get_recording_file_path(recording_folder_root)
-        while not check_if_nwb_recording(recording_file):
+        while not check_if_nwb_recording(recording_file) and not self.simulation:
             sleep(0.1)
         self.general_settings['rec_file_path'] = recording_file
         print('Starting Open Ephys GUI Recording Successful')
@@ -596,9 +640,10 @@ class RecordingManager(object):
             self.tracking_controller.start()
             print('Starting tracking RPis Successful')
             # Tracking controller start command should not complete before RPis have really executed the command
-            print('Starting GlobalClock RPi...')
-            self.global_clock_controller.start()
-            print('Starting GlobalClock RPi Successful')
+            if not self.simulation:
+                print('Starting GlobalClock RPi...')
+                self.global_clock_controller.start()
+                print('Starting GlobalClock RPi Successful')
 
         # Start task
         if self.general_settings['TaskActive']:
@@ -652,23 +697,27 @@ class RecordingManager(object):
             print('Closing Online Tracking Data...')
             self.online_tracking_processor.close()
             print('Closing Online Tracking Data Successful')
-            print('Closing GlobalClock Controller...')
-            self.global_clock_controller.stop()
-            self.global_clock_controller.close()
-            print('Closing GlobalClock Controller Successful')
+
+            if not self.simulation:
+                print('Closing GlobalClock Controller...')
+                self.global_clock_controller.stop()
+                self.global_clock_controller.close()
+                print('Closing GlobalClock Controller Successful')
+
             # Stop cameras
             print('Stopping tracking RPis...')
             self.tracking_controller.close()
             print('Stopping tracking RPis Successful')
 
         # Stop Open Ephys Recording
-        while check_if_nwb_recording(self.general_settings['rec_file_path']):
+        while check_if_nwb_recording(self.general_settings['rec_file_path']) and self.simulation:
             print('Stopping Open Ephys GUI Recording...')
             self.open_ephys_messenger.send_message_to_open_ephys('StopRecord')
             sleep(0.1)
         print('Stopping Open Ephys GUI Recording Successful')
 
-        self.compile_recording_data()
+        if not self.simulation:
+            self.compile_recording_data()
 
         # Close connection with OpenEphysGUI
         self.open_ephys_messenger.close()
@@ -1037,6 +1086,11 @@ class RecordingManagerGUI(QtWidgets.QMainWindow):
             lambda state: self.recording_manager.update_general_settings('TaskActive', state),
             checkboxes_widget, checkboxes_layout
         )
+        add_boolean_setting_to_widget(
+            'Simulation', False,
+            self.recording_manager.set_simulation_state,
+            checkboxes_widget, checkboxes_layout
+        )
 
         add_x_y_setting_to_widget(
             'Arena size',
@@ -1143,24 +1197,12 @@ class RecordingManagerGUI(QtWidgets.QMainWindow):
 
         HFunc.show_message(message, message_more=message_more)
 
-    def test_devices(self):
+    def test_devices_button_callback(self):
         try:
             device_status = self.recording_manager.test_devices()
             self.display_device_status_message(device_status)
         except RecordingManagerException as e:
             HFunc.show_message(str(e))
-
-    def test_devices_finished(self):
-        self.test_devices_button.setStyleSheet(self.default_button_style)
-        while self.test_devices_thread.isRunning():
-            sleep(0.01)
-        self.test_devices_thread = None
-
-    def test_devices_button_callback(self):
-        self.test_devices_button.setStyleSheet('background-color: red')
-        self.test_devices_thread = QOneShotThread(self.test_devices)
-        self.test_devices_thread.finished.connect(self.test_devices_finished)
-        self.test_devices_thread.start()
 
     def initialize_devices(self):
         try:

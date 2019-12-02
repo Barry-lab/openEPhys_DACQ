@@ -664,7 +664,6 @@ class CameraDisplayWidget(QtWidgets.QWidget):
         super(CameraDisplayWidget, self).close(*args, **kwargs)
 
 
-
 class CameraSettingsGUI(QtWidgets.QDialog):
     """
     GUI for CameraSettingsApp.

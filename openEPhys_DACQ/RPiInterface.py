@@ -148,12 +148,73 @@ class Camera_RPi_file_manager(object):
         print(['DEBUG', time_string(), 'Retrieving video data from ' + self.address + ' complete.'])
 
 
+class CameraSimulation(object):
+
+    def __init__(self, address, port):
+        self.zmq_publisher = None
+        self.init_zmq_publisher(address, port)
+        self.position_messaging_thread = Thread(target=self.position_messaging_loop)
+        self.keep_messaging = False
+
+    def init_zmq_publisher(self, address, port):
+        """
+        Sets up publishing messages with ZMQ at 'localhost'.
+        """
+        # For sending position data
+        contextpub = zmq.Context()
+        self.zmq_publisher = contextpub.socket(zmq.PUB)
+        self.zmq_publisher.bind('tcp://' + '*' + ':' + str(port))
+        sleep(0.5)  # Give time to establish sockets for ZeroMQ
+
+        print('DEBUG', 'bind to ', 'tcp://' + '*' + ':' + str(port))
+
+    def send_linedata(self, linedata):
+        message = json.dumps(linedata)  # Convert data to string format
+        message = message.encode()  # Convert data into bytes format
+        self.zmq_publisher.send(message)  # Send the message using ZeroMQ
+
+    def position_messaging_loop(self, interval=0.033):
+        while self.keep_messaging:
+            simulated_position = np.random.rand(2) * 50
+            self.send_linedata([simulated_position[0], simulated_position[1], None, None, 100, None])
+            sleep(interval)
+
+    def sendCommand(self, command, return_output=False):
+        if command in ('start_streaming', 'start_recording_video'):
+            return
+        ret = getattr(self, command)()
+        if return_output:
+            return ret
+
+    def start(self):
+        self.keep_messaging = True
+        self.position_messaging_thread.start()
+
+    def stop(self):
+        self.keep_messaging = False
+        self.position_messaging_thread.join()
+
+    def start_processing(self):
+        self.start()
+
+    def close(self):
+        self.keep_messaging = False
+        self.position_messaging_thread.join()
+        self.zmq_publisher.close()
+
+
 class CameraControl(object):
     def __init__(self, address, port, username='pi', password='raspberry', 
-                 resolution_option=None, OnlineTrackerParams=None, framerate=30):
+                 resolution_option=None, OnlineTrackerParams=None, framerate=30, simulation=False):
+
+        # This class skips some methods and uses CameraSimulation class instead of RemoteControl class
+        # if simulation is set True.
+        self.simulation = simulation
+
         # Make sure files on RPi are up to date
-        self.RPi_file_manager = Camera_RPi_file_manager(address, username)
-        self.RPi_file_manager.update_files_on_RPi()
+        if not simulation:
+            self.RPi_file_manager = Camera_RPi_file_manager(address, username)
+            self.RPi_file_manager.update_files_on_RPi()
         # Start initiation protocol and repeat if failed
         init_successful = False
         attempts = 0
@@ -172,6 +233,12 @@ class CameraControl(object):
 
     def _init_CameraController(self, address, port, username, password, 
                                resolution_option, OnlineTrackerParams, framerate, reboot=False):
+
+        if self.simulation:
+            address = '*' if address == 'localhost' else address
+            self.RemoteControl = CameraSimulation(address, OnlineTrackerParams['OnlineTracker_port'])
+            return True
+
         if hasattr(self, 'RemoteControl'):
             self.RemoteControl.close()
         self.RemoteControl = remote_object_controller(address, int(port))
@@ -180,7 +247,7 @@ class CameraControl(object):
         if init_successful:
             init_successful = self.RemoteControl.sendInitCommand(10, 
                                                                  resolution_option, 
-                                                                 framerate, 
+                                                                 framerate,
                                                                  OnlineTrackerParams)
 
         return init_successful
@@ -263,7 +330,7 @@ class CameraControl(object):
         return CameraControl(**kwargs)
 
     @staticmethod
-    def init_CameraControls_with_CameraSettings(CameraSettings):
+    def init_CameraControls_with_CameraSettings(CameraSettings, simulation=False):
         """
         Returns a dictionary where each CameraSettings['use_RPi_nrs'] element is a key
         to corresponding initialized CameraControl object. 
@@ -272,7 +339,8 @@ class CameraControl(object):
         cameraID_list = []
         for cameraID in CameraSettings['CameraSpecific'].keys():
             cameraID_list.append(cameraID)
-            args = (CameraSettings['CameraSpecific'][cameraID]['CalibrationData']['low']['calibrationTmatrix'], 
+            args = ((CameraSettings['CameraSpecific'][cameraID]['CalibrationData']['low']['calibrationTmatrix']
+                     if not simulation else np.ones((3, 3))),
                     CameraSettings['General']['tracking_mode'], 
                     CameraSettings['General']['smoothing_box'], 
                     CameraSettings['General']['motion_threshold'], 
@@ -281,13 +349,14 @@ class CameraControl(object):
                     CameraSettings['CameraSpecific'][cameraID]['address'], 
                     CameraSettings['General']['LED_separation'])
             OnlineTrackerParams = CameraControl.dict_OnlineTrackerParams(*args)
-            kwargs_list.append({'address': CameraSettings['CameraSpecific'][cameraID]['address'], 
-                                'port': CameraSettings['General']['ZMQcomms_port'], 
-                                'username': CameraSettings['General']['username'], 
-                                'password': CameraSettings['General']['password'], 
-                                'resolution_option': CameraSettings['General']['resolution_option'], 
-                                'framerate': CameraSettings['General']['framerate'], 
-                                'OnlineTrackerParams': OnlineTrackerParams
+            kwargs_list.append({'address': CameraSettings['CameraSpecific'][cameraID]['address'],
+                                'port': CameraSettings['General']['ZMQcomms_port'],
+                                'username': CameraSettings['General']['username'],
+                                'password': CameraSettings['General']['password'],
+                                'resolution_option': CameraSettings['General']['resolution_option'],
+                                'framerate': CameraSettings['General']['framerate'],
+                                'OnlineTrackerParams': OnlineTrackerParams,
+                                'simulation': simulation
                                 })
         pool = ThreadPool(len(kwargs_list))
         CameraControlsList = pool.map(CameraControl.CameraControl_unpackPool, kwargs_list)
@@ -301,8 +370,9 @@ class CameraControl(object):
 
 class TrackingControl(object):
 
-    def __init__(self, CameraSettings):
-        self.CameraControls = CameraControl.init_CameraControls_with_CameraSettings(CameraSettings)
+    def __init__(self, CameraSettings, simulation=False):
+        self.CameraControls = CameraControl.init_CameraControls_with_CameraSettings(CameraSettings,
+                                                                                    simulation=simulation)
 
     def start(self):
         T_list = []
@@ -373,8 +443,8 @@ class onlineTrackingData(object):
         context = zmq.Context()
         sockSUB = context.socket(zmq.SUB)
         sockSUB.setsockopt(zmq.SUBSCRIBE, ''.encode())
-        sockSUB.RCVTIMEO = 10 # maximum duration to wait for data (in milliseconds)
-        sockSUB.connect('tcp://' + address + ':' + str(port))
+        sockSUB.RCVTIMEO = 100  # maximum duration to wait for data (in milliseconds)
+        sockSUB.connect('tcp://{}:{}'.format(address, port))
 
         return sockSUB
 
@@ -390,7 +460,7 @@ class onlineTrackingData(object):
     def setupSockets(cameraIDs, CameraSettings):
         kwargs_list = []
         for cameraID in cameraIDs:
-            kwargs_list.append({'address': CameraSettings['CameraSpecific'][cameraID]['address'], 
+            kwargs_list.append({'address': CameraSettings['CameraSpecific'][cameraID]['address'],
                                 'port': CameraSettings['General']['OnlineTracker_port']})
         pool = ThreadPool(len(cameraIDs))
         sockSUBs = pool.map(onlineTrackingData.setupSocket_unpackPool, kwargs_list)
