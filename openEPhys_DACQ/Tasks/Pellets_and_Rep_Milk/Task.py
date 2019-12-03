@@ -3041,7 +3041,7 @@ class Core(object):
     def KillSwitch(self):
         """
         Allows shutting down all downstream and upstream processes.
-        Can be called by child proceses.
+        Can be called by child processes.
         """
         self.stop()
 

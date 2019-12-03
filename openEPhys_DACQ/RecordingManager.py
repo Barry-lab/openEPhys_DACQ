@@ -557,6 +557,7 @@ class RecordingManager(object):
             print('Initializing Task...')
             task_module = import_module('openEPhys_DACQ.Tasks.' + self.task_settings['name'] + '.Task')
             self.current_task = task_module.Core(*self.create_task_arguments())
+            # self.current_task = HFunc.ClassInSeparateProcess(task_module.Core, args=self.create_task_arguments())
             print('Initializing Task Successful')
 
         self.recording_initialized = True
