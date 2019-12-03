@@ -1490,13 +1490,75 @@ class MilkGame_Variables(Abstract_Variables):
         self._update_variable_states(variable_states, variable_state_names)
 
 
+class PositionList(object):
+    """
+    Keeps updating local position list in a separate thread.
+    """
+
+    def __init__(self, processed_position_list, TaskSettings, update_interval):
+
+        self._processed_position_list = processed_position_list
+
+        self.list_len = 1 + max([TaskSettings['distance_steps'],
+                                 TaskSettings['one_second_steps'],
+                                 TaskSettings['angular_distance_steps']])
+
+        while len(self._processed_position_list) <= self.list_len:
+            sleep(0.1)
+
+        self._position_list = self._processed_position_list[-self.list_len:]
+
+        self.lock = Lock()
+        self.updating = True
+        self.updating_thread = Thread(target=self.updating_worker, args=(update_interval,))
+        self.updating_thread.start()
+
+    def updating_worker(self, update_interval):
+
+        last_update = time()
+        while self.updating:
+
+            if time() - last_update < update_interval:
+                sleep(update_interval * 0.1)
+                continue
+
+            data = copy(self._processed_position_list[-self.list_len:])
+            with self.lock:
+                self._position_list = data
+
+            last_update = time()
+
+    @property
+    def position_list(self):
+        with self.lock:
+            return copy(self._position_list)
+
+    def __iter__(self):
+        return iter(self.position_list)
+
+    def __getitem__(self, key):
+        return self.position_list[key]
+
+    def __len__(self):
+        return len(self.position_list)
+
+    def close(self):
+        self.updating = False
+        self.updating_thread.join()
+
+
 class Variables(object):
-    def __init__(self, TaskSettings, processed_position_list, ChewingTracker=None,
-                 MilkRewardDevices=None, MilkGoal=None):
+
+    def __init__(self, TaskSettings, processed_position_list,
+                 ChewingTracker=None, MilkRewardDevices=None, MilkGoal=None,
+                 position_update_interval=0.1):
         self._names = []
         self._instances = {}
+        self.local_processed_position_list = PositionList(processed_position_list, TaskSettings,
+                                                          position_update_interval)
         # Instantiate Generic variables
-        self._instances['GenericGame_Variables'] = GenericGame_Variables(TaskSettings, processed_position_list)
+        self._instances['GenericGame_Variables'] = GenericGame_Variables(TaskSettings,
+                                                                         self.local_processed_position_list)
         self._names.append('GenericGame_Variables')
         # Instantiate Pellet Game variables if pellet game active
         if TaskSettings['games_active']['pellet']:
@@ -1504,7 +1566,8 @@ class Variables(object):
             self._names.append('PelletGame_Variables')
         # Instantiate Milk Game variables if milk game active
         if TaskSettings['games_active']['milk']:
-            self._instances['MilkGame_Variables'] = MilkGame_Variables(TaskSettings, processed_position_list,
+            self._instances['MilkGame_Variables'] = MilkGame_Variables(TaskSettings,
+                                                                       self.local_processed_position_list,
                                                                        MilkRewardDevices, MilkGoal)
             self._names.append('MilkGame_Variables')
 
@@ -1529,6 +1592,7 @@ class Variables(object):
         return self._instances
 
     def close(self):
+        self.local_processed_position_list.close()
         for name in self._names:
             self._instances[name].close()
 
