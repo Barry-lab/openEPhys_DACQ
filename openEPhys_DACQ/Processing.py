@@ -885,13 +885,15 @@ def main():
     OpenEphysDataPaths = args.paths
     if len(OpenEphysDataPaths) == 0:
         raise ValueError('Paths to file(s) required. Use --help for more info.')
+
     # If reprocessing tracking in directory is requested, just do that
     if args.reprocess_tracking_in_directory:
         if len(OpenEphysDataPaths) > 1:
             raise Exception('Only one root path should be specified if reprocess_tracking_in_directory is set.')
         recompute_tracking_data_for_all_files_in_directory_tree(OpenEphysDataPaths[0], verbose=args.verbose)
+
     # If datatree processing requested, use process_data_tree method
-    if args.datatree:
+    elif args.datatree:
         if args.only_keep_processor:
             only_keep_processor = args.only_keep_processor[0]
         else:
@@ -905,6 +907,7 @@ def main():
         else:
             delete_raw = False
         process_data_tree(OpenEphysDataPaths[0], only_keep_processor, downsample, delete_raw)
+
     else:
         # Get chan input variable
         if args.chan:
