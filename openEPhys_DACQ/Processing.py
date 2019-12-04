@@ -889,8 +889,7 @@ def main():
     if args.reprocess_tracking_in_directory:
         if len(OpenEphysDataPaths) > 1:
             raise Exception('Only one root path should be specified if reprocess_tracking_in_directory is set.')
-        recompute_tracking_data_for_all_files_in_directory_tree(OpenEphysDataPaths[0],
-                                                                verbose=args.verbose[0])
+        recompute_tracking_data_for_all_files_in_directory_tree(OpenEphysDataPaths[0], verbose=args.verbose)
     # If datatree processing requested, use process_data_tree method
     if args.datatree:
         if args.only_keep_processor:
