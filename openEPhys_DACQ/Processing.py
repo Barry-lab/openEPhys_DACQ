@@ -17,7 +17,7 @@ import numpy as np
 
 from openEPhys_DACQ.package_configuration import package_config, package_path
 from openEPhys_DACQ import NWBio
-from openEPhys_DACQ.createAxonaData import createAxonaData_for_NWBfile
+from openEPhys_DACQ.createAxonaData import createAxonaData_for_NWBfile, createAxonaData_for_multiple_NWBfiles
 from openEPhys_DACQ import HelperFunctions as hfunct
 from openEPhys_DACQ.KlustaKwikWrapper import applyKlustaKwik_on_spike_data_tet
 from openEPhys_DACQ.TrackingDataProcessing import (remove_tracking_data_jumps,
@@ -734,8 +734,9 @@ def process_raw_data_with_kilosort(OpenEphysDataPaths, channels, noise_cut_off=1
 
 def processing(OpenEphysDataPaths, processing_method='klustakwik', channel_map=None, 
                noise_cut_off=1000, threshold=50, make_AxonaData=False, 
-               axonaDataArgs=(None, False), max_clusters=31, 
+               axonaDataArgs=(None, None, None, False), max_clusters=31,
                force_position_processing=False, pos_data_processing_kwargs={}):
+
     # Ensure correct format for data paths
     if isinstance(OpenEphysDataPaths, str):
         OpenEphysDataPaths = [OpenEphysDataPaths]
@@ -743,15 +744,18 @@ def processing(OpenEphysDataPaths, processing_method='klustakwik', channel_map=N
     for fpath in OpenEphysDataPaths:
         if not NWBio.check_if_open_ephys_nwb_file(fpath):
             raise ValueError('Specified path {} does not lead to expected filetype.'.format(fpath))
+
     # Create ProcessedPos if not yet available
     for OpenEphysDataPath in OpenEphysDataPaths:
         if force_position_processing:
             process_position_data(OpenEphysDataPath, **pos_data_processing_kwargs)
         else:
             ensure_processed_position_data_is_available(OpenEphysDataPath, **pos_data_processing_kwargs)
+
     # Get channel_map if not available
     if channel_map is None:
         channel_map = get_channel_map(OpenEphysDataPaths)
+
     # Process spikes using specified method
     area_spike_datas = []
     print(hfunct.time_string(), 'DEBUG: Starting Processing', processing_method)
@@ -775,36 +779,53 @@ def processing(OpenEphysDataPaths, processing_method='klustakwik', channel_map=N
                                                                    noise_cut_off=noise_cut_off, threshold=5, 
                                                                    num_clusters=max_clusters))
     print(hfunct.time_string(), 'DEBUG: Finished Processing in ', time() - DEBUG_Time)
-    # Save data in Axona Format
+
     del area_spike_datas
+
+    # Save data in Axona Format
     if make_AxonaData:
+
         spike_name = NWBio.get_spike_name_for_processing_method(processing_method)
-        for OpenEphysDataPath in OpenEphysDataPaths:
-            createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name=spike_name, 
-                                        channel_map=channel_map, pixels_per_metre=axonaDataArgs[0], 
-                                        show_output=axonaDataArgs[1])
+        concatenatedDataPath = axonaDataArgs[2]
+
+        if concatenatedDataPath is None:
+            for OpenEphysDataPath in OpenEphysDataPaths:
+                createAxonaData_for_NWBfile(OpenEphysDataPath, spike_name=spike_name,
+                                            channel_map=channel_map, pixels_per_metre=axonaDataArgs[0],
+                                            eegChans=axonaDataArgs[1], show_output=axonaDataArgs[3])
+        else:
+            createAxonaData_for_multiple_NWBfiles(OpenEphysDataPaths, concatenatedDataPath, spike_name=spike_name,
+                                                  channel_map=channel_map, pixels_per_metre=axonaDataArgs[0],
+                                                  eegChans=axonaDataArgs[1], show_output=axonaDataArgs[3])
 
 
-def process_data_tree(root_path, only_keep_processor=None, downsample=False, delete_raw=False, max_clusters=31):
+def process_data_tree(root_path, processing_args, only_keep_processor=None, downsample=False, delete_raw=False):
     # Create list of dirnames skipped
     dir_names_skipped = []
     # Commence directory walk
     for dir_name, subdirList, fileList in os.walk(root_path):
         for fname in fileList:
+
             if 'Experiment' in dir_name:
+
                 if not (dir_name in dir_names_skipped):
                     dir_names_skipped.append(dir_name)
                     raise Warning('Experiment found in directory name, skipping: ' + dir_name)
+
             else:
-                fpath = os.path.join(dir_name, fname)
+
                 if fname == 'experiment_1.nwb':
+
+                    fpath = os.path.join(dir_name, fname)
+
                     AxonaDataExists = any(['AxonaData' in subdir for subdir in subdirList])
                     if not AxonaDataExists:
+
                         print(hfunct.time_string() + ' Applying KlustaKwik on ' + fpath)
-                        processing(fpath, processing_method='klustakwik',
-                                   noise_cut_off=1000, threshold=50, make_AxonaData=True,
-                                   axonaDataArgs=(None, False), max_clusters=max_clusters)
+                        processing(fpath, *processing_args)
+
                     if not (only_keep_processor is None):
+
                         # Get all processor paths in this file
                         processor_paths = NWBio.get_all_processor_paths(fpath)
                         # Check that the processor key requested to keep is available
@@ -817,7 +838,9 @@ def process_data_tree(root_path, only_keep_processor=None, downsample=False, del
                                 if not path.endswith(only_keep_processor):
                                     print('Deleting path: {}\n    in file: {}'.format(path, fpath))
                                     NWBio.delete_path_in_file(fpath, path)
+
                     if downsample:
+
                         if not NWBio.check_if_downsampled_data_available(fpath):
                             if NWBio.check_if_raw_data_available(fpath):
                                 print(hfunct.time_string() + ' Downsample ' + fpath)
@@ -826,7 +849,9 @@ def process_data_tree(root_path, only_keep_processor=None, downsample=False, del
                                 print('Warning', 'Neither Downsampled or Raw data is available, skipping ' + fpath)
                         else:
                             print('Warning', 'Downsampled data already available, skipping ' + fpath)
+
                     if delete_raw:
+
                         if NWBio.check_if_raw_data_available(fpath):
                             print(hfunct.time_string() + ' Repack ' + fpath)
                             delete_raw_data(fpath, only_if_downsampled_data_available=True)
@@ -835,7 +860,9 @@ def process_data_tree(root_path, only_keep_processor=None, downsample=False, del
 
 
 def main():
+
     # Input argument handling and help info
+
     parser = argparse.ArgumentParser(description='Apply KlustaKwik and export into Axona format.')
     parser.add_argument('paths', type=str, nargs='*', 
                         help='recording data folder(s) (can enter multiple paths separated by spaces to KlustaKwik simultaneously)')
@@ -853,8 +880,13 @@ def main():
                         help='use KiloSort to cluster spike data (this uses raw data only)')
     parser.add_argument('--noAxonaData', action='store_true',
                         help='to skip conversion into AxonaData format after processing')
+    parser.add_argument('--eegChans', type=int, nargs = '*',
+                        help='enter channel number to use for creating EEG data (count starts from 1)')
     parser.add_argument('--ppm', type=int, nargs = 1, 
                         help='(for AxonaData) enter pixels_per_metre to assume position data is in pixels')
+    parser.add_argument('--concatenatedDataPath', type=str, nargs = 1,
+                        help=('enter the path to folder where to write data concatenated Axona data '
+                              + 'from all specified recordings'))
     parser.add_argument('--force_position_processing', action='store_true',
                         help='instruct reprocessing position data and overwrite previous data')
     parser.add_argument('--position_postprocessing', action='store_true',
@@ -880,20 +912,101 @@ def main():
                         help='to delete raw data after downsampling. Only available with datatree and downsample option.')
     parser.add_argument('--verbose', action='store_true',
                         help='Verbosity of progress and warnings. Default is False (off).')
+
     args = parser.parse_args()
+
     # Get paths to recording files
     OpenEphysDataPaths = args.paths
     if len(OpenEphysDataPaths) == 0:
         raise ValueError('Paths to file(s) required. Use --help for more info.')
 
+    # Get chan input variable
+    if args.chan:
+        chan = [args.chan[0] - 1, args.chan[1]]
+        if np.mod(chan[1] - chan[0], 4) != 0:
+            raise ValueError('Channel range must cover full tetrodes')
+        area_name = 'Chan' + str(args.chan[0]) + '-' + str(args.chan[1])
+        channel_map = {area_name: {'list': list(range(chan[0], chan[1], 1))}}
+    else:
+        channel_map = None
+    # Rewrite default noisecut if specified
+    if args.noisecut:
+        noise_cut_off = args.noisecut[0]
+    else:
+        noise_cut_off = 1000
+    # Rewrite default threshold if specified
+    if args.threshold:
+        threshold = args.threshold[0]
+    else:
+        threshold = 50
+    # Specify processing_method
+    if args.klustakwik:
+        processing_method = 'klustakwik'
+    elif args.klustakwik_raw:
+        processing_method = 'klustakwik_raw'
+    elif args.kilosort:
+        processing_method = 'kilosort'
+    else:
+        processing_method = 'klustakwik'
+    # Specify target number of clusters
+    if args.max_clusters:
+        max_clusters = args.max_clusters[0]
+    else:
+        max_clusters = 31
+    # Specify position data processing options
+    if args.force_position_processing:
+        force_position_processing = True
+    else:
+        force_position_processing = False
+    pos_data_processing_kwargs = {}
+    if args.position_postprocessing:
+        pos_data_processing_kwargs['postprocess'] = True
+    else:
+        pos_data_processing_kwargs['postprocess'] = False
+    if args.position_maxjump:
+        pos_data_processing_kwargs['maxjump'] = args.position_maxjump[0]
+    # Specify axona data options
+    if args.noAxonaData:
+        make_AxonaData = False
+    else:
+        make_AxonaData = True
+    if args.eegChans:
+        eegChans = [x - 1 for x in args.eegChans]
+    else:
+        eegChans = None
+    if args.ppm:
+        pixels_per_metre = args.ppm[0]
+    else:
+        pixels_per_metre = None
+    if args.concatenatedDataPath:
+        concatenatedDataPath = args.concatenatedDataPath[0]
+    else:
+        concatenatedDataPath = None
+    if args.show_output:
+        show_output = True
+    else:
+        show_output = False
+
+    axonaDataArgs = (pixels_per_metre, eegChans, concatenatedDataPath, show_output)
+
+    processing_args = (processing_method, channel_map, noise_cut_off,
+                       threshold, make_AxonaData, axonaDataArgs, max_clusters,
+                       force_position_processing, pos_data_processing_kwargs)
+
     # If reprocessing tracking in directory is requested, just do that
     if args.reprocess_tracking_in_directory:
+
         if len(OpenEphysDataPaths) > 1:
             raise Exception('Only one root path should be specified if reprocess_tracking_in_directory is set.')
+
         recompute_tracking_data_for_all_files_in_directory_tree(OpenEphysDataPaths[0], verbose=args.verbose)
 
     # If datatree processing requested, use process_data_tree method
     elif args.datatree:
+
+        if len(OpenEphysDataPaths) > 1:
+            raise Exception('Only one root path should be specified if datatree option is set.')
+
         if args.only_keep_processor:
             only_keep_processor = args.only_keep_processor[0]
         else:
@@ -906,71 +1019,13 @@ def main():
             delete_raw = True
         else:
             delete_raw = False
-        process_data_tree(OpenEphysDataPaths[0], only_keep_processor, downsample, delete_raw)
+
+        process_data_tree(OpenEphysDataPaths[0], processing_args, only_keep_processor, downsample, delete_raw)
 
     else:
-        # Get chan input variable
-        if args.chan:
-            chan = [args.chan[0] - 1, args.chan[1]]
-            if np.mod(chan[1] - chan[0], 4) != 0:
-                raise ValueError('Channel range must cover full tetrodes')
-            area_name = 'Chan' + str(args.chan[0]) + '-' + str(args.chan[1])
-            channel_map = {area_name: {'list': list(range(chan[0], chan[1], 1))}}
-        else:
-            channel_map = None
-        # Rewrite default noisecut if specified
-        if args.noisecut:
-            noise_cut_off = args.noisecut[0]
-        else:
-            noise_cut_off = 1000
-        # Rewrite default threshold if specified
-        if args.threshold:
-            threshold = args.threshold[0]
-        else:
-            threshold = 50
-        # Specify processing_method
-        if args.klustakwik:
-            processing_method = 'klustakwik'
-        elif args.klustakwik_raw:
-            processing_method = 'klustakwik_raw'
-        elif args.kilosort:
-            processing_method = 'kilosort'
-        else:
-            processing_method = 'klustakwik'
-        # Specify position data processing options
-        if args.force_position_processing:
-            force_position_processing = True
-        else:
-            force_position_processing = False
-        pos_data_processing_kwargs = {}
-        if args.position_postprocessing:
-            pos_data_processing_kwargs['postprocess'] = True
-        else:
-            pos_data_processing_kwargs['postprocess'] = False
-        if args.position_maxjump:
-            pos_data_processing_kwargs['maxjump'] = args.position_maxjump[0]
-        # Specify axona data options
-        if args.noAxonaData:
-            make_AxonaData = False
-        else:
-            make_AxonaData = True
-        if args.ppm:
-            pixels_per_metre = args.ppm[0]
-        else:
-            pixels_per_metre = None
-        if args.max_clusters:
-            max_clusters = args.max_clusters[0]
-        else:
-            max_clusters = 31
-        if args.show_output:
-            show_output = True
-        else:
-            show_output = False
-        axonaDataArgs = (pixels_per_metre, show_output)
+
         # Run the script
-        processing(OpenEphysDataPaths, processing_method, channel_map, noise_cut_off, 
-                   threshold, make_AxonaData, axonaDataArgs, max_clusters, 
-                   force_position_processing, pos_data_processing_kwargs)
+        processing(OpenEphysDataPaths, *processing_args)
 
 
 if __name__ == '__main__':

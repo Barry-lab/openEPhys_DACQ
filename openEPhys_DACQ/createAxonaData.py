@@ -876,7 +876,7 @@ def main():
     parser.add_argument('--chan', type=int, nargs = 2, 
                         help='list the first and last channel to process (counting starts from 1)')
     parser.add_argument('--eegChans', type=int, nargs = '*', 
-                        help='enter channel number to use for creating EEG data')
+                        help='enter channel number to use for creating EEG data (count starts from 1)')
     parser.add_argument('--subfolder', type=str, nargs = 1, 
                         help='enter the name of subfolder to use for AxonaData')
     parser.add_argument('--spike_name', type=str, nargs = 1, 
