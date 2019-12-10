@@ -898,14 +898,12 @@ class CameraSettingsGUI(QtWidgets.QDialog):
         """
         self._update_settings_on_CameraSettingsApp()
         self.CameraSettingsApp.apply()
-        self.CameraSettingsApp.close()
         self.close()
 
     def cancel_button_callback(self):
         """
         Calls CameraSettingsApp.close, which in turn calls the close() method in CameraSettingsGUI.
         """
-        self.CameraSettingsApp.close()
         self.close()
 
     def addCameraButton_click(self):
@@ -920,6 +918,14 @@ class CameraSettingsGUI(QtWidgets.QDialog):
         keyorder = ['ID'] + keyorder
         self._add_camera_specific_settings(settings, keyorder)
 
+    def _close_CameraDisplayWidget_if_open(self):
+        if hasattr(self, 'CameraDisplayWidget') and not (self.CameraDisplayWidget is None):
+            self.CameraSettingsApp.stop_cameras_and_streaming()
+            self.CameraDisplayWidget.close()
+            self.camera_display_layout.removeWidget(self.CameraDisplayWidget)
+            self.CameraDisplayWidget.deleteLater()
+            self.CameraDisplayWidget = None
+        
     def initializeCamerasButton_click(self):
         """
         Enables and disables correct functions on GUI.
@@ -958,8 +964,7 @@ class CameraSettingsGUI(QtWidgets.QDialog):
                                                                 function_args=(self.CameraDisplayWidget.update_frame,))
         else:
             # Close CameraDisplayWidget class
-            self.CameraSettingsApp.stop_cameras_and_streaming()
-            self.CameraDisplayWidget.close()
+            self._close_CameraDisplayWidget_if_open()
             self.initializeCamerasButton.setStyleSheet(self.initializeCamerasButtonDefaultStyleSheet)
             self.initializeCamerasButton.setEnabled(True)
 
@@ -1018,3 +1023,8 @@ class CameraSettingsGUI(QtWidgets.QDialog):
 
     def testTrackingButton_click(self):
         raise NotImplementedError
+
+    def close(self, *args, **kwargs):
+        self._close_CameraDisplayWidget_if_open()
+        self.CameraSettingsApp.close()
+        super().close(*args, **kwargs)
