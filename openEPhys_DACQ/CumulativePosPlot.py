@@ -116,7 +116,7 @@ class PosPlot(QtWidgets.QWidget):
 
         # Start constant update of the plot
         self.keep_updating_plot = True
-        plotUpdateInterval = 100  # This sets the plot update interval in milliseconds
+        plotUpdateInterval = 200  # This sets the plot update interval in milliseconds
         self.cumulativePlot_timer = QTimer()
         self.cumulativePlot_timer.timeout.connect(self.updatePlot)
         self.cumulativePlot_timer.start(plotUpdateInterval)
