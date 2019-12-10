@@ -556,8 +556,9 @@ class RecordingManager(object):
 
             print('Initializing Task...')
             task_module = import_module('openEPhys_DACQ.Tasks.' + self.task_settings['name'] + '.Task')
-            self.current_task = task_module.Core(*self.create_task_arguments())
-            # self.current_task = HFunc.ClassInSeparateProcess(task_module.Core, args=self.create_task_arguments())
+            # self.current_task = task_module.Core(*self.create_task_arguments())
+            self.current_task = HFunc.ClassInSeparateProcess(task_module.Core,
+                                                             args=self.create_task_arguments())
             print('Initializing Task Successful')
 
         self.recording_initialized = True
@@ -591,7 +592,8 @@ class RecordingManager(object):
         if self.general_settings['TaskActive']:
 
             print('Closing Task...')
-            self.current_task.stop()
+            # self.current_task.stop()
+            self.current_task.call_class_method('stop')
             print('Closing Task Successful')
 
         self.recording_initialized = False
@@ -649,7 +651,8 @@ class RecordingManager(object):
         # Start task
         if self.general_settings['TaskActive']:
             print('Starting Task...')
-            self.current_task.run()
+            # self.current_task.run()
+            self.current_task.call_class_method('run')
             print('Starting Task Successful')
 
         self.recording_active = True
@@ -690,7 +693,8 @@ class RecordingManager(object):
         # Stop Task
         if self.general_settings['TaskActive']:
             print('Stopping Task...')
-            self.current_task.stop()
+            # self.current_task.stop()
+            self.current_task.call_class_method('stop')
             print('Stopping Task Successful')
 
         # Stop updating tracking system
@@ -711,7 +715,7 @@ class RecordingManager(object):
             print('Stopping tracking RPis Successful')
 
         # Stop Open Ephys Recording
-        while check_if_nwb_recording(self.general_settings['rec_file_path']) and self.simulation:
+        while check_if_nwb_recording(self.general_settings['rec_file_path']) and not self.simulation:
             print('Stopping Open Ephys GUI Recording...')
             self.open_ephys_messenger.send_message_to_open_ephys('StopRecord')
             sleep(0.1)
@@ -796,6 +800,8 @@ def add_x_y_setting_to_widget(label, x_val, y_val, value_change_callback, parent
     y_textbox.setFixedHeight(27)
 
     x_textbox.textChanged.connect(lambda: value_change_callback([x_textbox.toPlainText(),
+                                                                 y_textbox.toPlainText()]))
+    y_textbox.textChanged.connect(lambda: value_change_callback([x_textbox.toPlainText(),
                                                                  y_textbox.toPlainText()]))
 
     widget_layout = QtWidgets.QHBoxLayout(widget)
