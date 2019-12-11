@@ -619,9 +619,12 @@ class RewardControl(object):
     @staticmethod
     def update_files_on_RPi(FEEDER_type, address, username, verbose=False):
         if FEEDER_type == 'milk':
-            files = (os.path.join(package_path, 'milkFeederController.py'),)
+            files = (os.path.join(package_path, 'milkFeederController.py'),
+                     os.path.join(package_path, 'audioSignalGenerator.py'),
+                     os.path.join(package_path, 'ZMQcomms.py'))
         elif FEEDER_type == 'pellet':
-            files = (os.path.join(package_path, 'pelletFeederController.py'),)
+            files = (os.path.join(package_path, 'pelletFeederController.py'),
+                     os.path.join(package_path, 'ZMQcomms.py'))
         else:
             raise ValueError('Unexpected FEEDER_type argument.')
         write_files_to_RPi(files, address, username=username, verbose=verbose)

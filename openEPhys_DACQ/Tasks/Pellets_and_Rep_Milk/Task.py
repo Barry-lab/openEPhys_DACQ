@@ -453,7 +453,7 @@ class SettingsGUI(object):
         spacings = []
         for FEEDER in self.settings['FEEDERs']['milk']:
             if not (target_feeder is FEEDER):
-                other_pos = np.array(map(float, str(FEEDER['Position'].text()).split(','))).astype(np.float64)
+                other_pos = np.array(list(map(float, str(FEEDER['Position'].text()).split(',')))).astype(np.float64)
                 positions.append(other_pos)
                 spacings.append(float(str(FEEDER['Spacing'].text())))
         # Keep looking for new position until one matches criteria
@@ -2951,7 +2951,7 @@ class Core(object):
         AudioSignalMode = TaskSettings['AudioSignalMode']
         negativeAudioSignal = TaskSettings['NegativeAudioSignal']
         lightSignalIntensity = TaskSettings['lightSignalIntensity']
-        lightSignalPins = map(int, TaskSettings['lightSignalPins'].split(','))
+        lightSignalPins = list(map(int, TaskSettings['lightSignalPins'].split(',')))
         # Create settings for each feeder ID
         feeder_kwargs = {}
         for ID in FEEDERs.keys():
