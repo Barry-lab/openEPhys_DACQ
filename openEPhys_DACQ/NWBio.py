@@ -617,17 +617,22 @@ def get_spike_name_for_processing_method(processing_method):
 
     return spike_name
 
-def load_events(filename):
+def load_events(filename, internally_generated=False):
     # Outputs a dictionary timestamps and eventIDs for TTL signals received
     # timestamps are in seconds, aligned to timestamps of continuous recording
     # eventIDs indicate TTL channel number (starting from 1) and are positive for rising signals
+
+    if internally_generated:
+        ttl_type = 'ttl2'
+    else:
+        ttl_type = 'ttl1'
 
     # Load data file
     recordingKey = get_recordingKey(filename)
     with h5py.File(filename, 'r') as h5file:
         # Load timestamps and TLL signal info
-        timestamps = h5file['acquisition']['timeseries'][recordingKey]['events']['ttl1']['timestamps'][()]
-        eventID = h5file['acquisition']['timeseries'][recordingKey]['events']['ttl1']['data'][()]
+        timestamps = h5file['acquisition']['timeseries'][recordingKey]['events'][ttl_type]['timestamps'][()]
+        eventID = h5file['acquisition']['timeseries'][recordingKey]['events'][ttl_type]['data'][()]
         data = {'eventID': eventID, 'timestamps': timestamps}
 
     return data
@@ -638,6 +643,16 @@ def load_GlobalClock_timestamps(filename, GlobalClock_TTL_channel=1):
     """
     data = load_events(filename)
     return data['timestamps'][data['eventID'] == GlobalClock_TTL_channel]
+
+
+def load_open_ephys_generated_ttl_events(filename):
+    """Returns Open Ephys generated TTL pulse events with channel numbers and timestamps
+
+    :param str filename: full path to NWB file
+    :return: channel_event, timestamps
+    """
+    data = load_events(filename, internally_generated=True)
+    return data['eventID'], data['timestamps']
 
 
 def load_network_events(filename):
